@@ -1,3 +1,8 @@
+<img width="1200" height="1796" alt="shell" src="https://github.com/user-attachments/assets/8d52df68-ab0f-4e3b-826a-33f8e01c15d0" />
+<img width="1200" height="1810" alt="bricks" src="https://github.com/user-attachments/assets/e8cf1f2c-280f-4051-b826-3669cdfcb3c0" />
+<img width="1200" height="1793" alt="chat" src="https://github.com/user-attachments/assets/782b2ec2-74e2-42a8-af48-0b7fd8c68536" />
+<img width="1200" height="1799" alt="chess" src="https://github.com/user-attachments/assets/3ef64f03-ed15-4048-ae7f-aa57d674d884" />
+
 # ESP32 MicroDOS
 
 An advanced, retro-style retro-operating system and interactive environment designed for the **ESP32 Cheap Yellow Display (CYD)** and capacitive equivalents (JC3248). 
