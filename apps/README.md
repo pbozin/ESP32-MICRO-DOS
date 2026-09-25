@@ -58,3 +58,9 @@ Applications are compiled outside the core kernel image using **PlatformIO**:
    ```bash
    > EXEC BRICKS.BIN
    ```
+
+<img width="300" alt="bricks" src="https://github.com/user-attachments/assets/e8cf1f2c-280f-4051-b826-3669cdfcb3c0" />
+<img width="300" alt="chat" src="https://github.com/user-attachments/assets/782b2ec2-74e2-42a8-af48-0b7fd8c68536" />
+<img width="300" alt="chess" src="https://github.com/user-attachments/assets/3ef64f03-ed15-4048-ae7f-aa57d674d884" />
+
+
