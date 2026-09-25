@@ -1,13 +1,13 @@
 // main.c
 #include "microdos_api.h"
 
-// Explicit symbol mapping for your keyboard array grid
+// Explicit symbol mapping for keyboard array grid
 #define KEY_O 79   // Left movement toggle key
 #define KEY_P 80   // Right movement toggle key
-#define KEY_Q 113  // "q" key to quit back to DOS prompt safely
+#define KEY_Q 113  // "q" key to quit back to DOS prompt
 
 extern "C" int _start(int argc, char** argv, MicroDosAPI* api) {
-    // 1. Initialize Variables & Screen
+    // Initialize Variables & Screen
     int p = 140;       // Paddle X position
     int q = 300;       // Paddle Y position
     int x = 160;       // Ball X position
@@ -21,7 +21,7 @@ extern "C" int _start(int argc, char** argv, MicroDosAPI* api) {
     api->delay(1000);
     api->clear();
     
-    // 2. Initialize and draw the brick grid once (Allocated to address 0-19)
+    // Initialize and draw the brick grid once (Allocated to address 0-19)
     for (int i = 0; i < 10 * 5; i++) {
         api->poke(i, 1);
         int r = i / 10;
@@ -37,7 +37,7 @@ extern "C" int _start(int argc, char** argv, MicroDosAPI* api) {
     
     int running = 1;
     
-    // 3. Main Game Loop Context
+    // Main Game Loop Context
     while (running) {
         int k = api->inkey();
         

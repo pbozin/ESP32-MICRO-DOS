@@ -11,9 +11,9 @@ def extract_text_section(source, target, env):
     
     print(f"\n[MDB Loader] Adjusting segment partitions for: {bin_file}")
     
-    objcopy = "/home/bozin/.platformio/packages/toolchain-xtensa-esp32/bin/xtensa-esp32-elf-objcopy"
+    objcopy = "~/.platformio/packages/toolchain-xtensa-esp32/bin/xtensa-esp32-elf-objcopy"
     
-    # 🛠️ Extract elements matching our updated layout order:
+    # Extract elements matching layout order:
     # Header -> Instructions Only (.text) -> Data Block (.literal, .rodata, .data, .got)
     # 🛠️ Match the updated section footprint:
     cmd = [

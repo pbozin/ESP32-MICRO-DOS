@@ -2,7 +2,7 @@
 
 NEW_STRING(ollama_server, "192.168.0.131");
 NEW_STRING(ollama_model,  "qwen2.5-theory-24k:3b");
-NEW_STRING(system_prompt, "You are a multidisciplinary philosopher. Keep conversational explanations witty and insightful.");
+NEW_STRING(system_prompt, "You are a multidisciplinary philosopher. Keep conversational explanations witty and insightful.\n");
 
 int _start(int argc, char** argv, MicroDosAPI* api) {
     _global_api_ptr = api;    

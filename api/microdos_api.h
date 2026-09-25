@@ -101,6 +101,7 @@ static MicroDosAPI* _global_api_ptr = 0;
 #define DARKCYAN  12
 #define NAVY      13
 #define PINK      14
+
 // ============================================================================
 //   STRING ALIGNMENT AND CREATION UTILITIES
 // ============================================================================

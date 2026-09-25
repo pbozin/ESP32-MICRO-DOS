@@ -25,7 +25,8 @@ SYSTEM_PALETTE = {
     12: (0, 128, 128),    # TFT_DARKCYAN
     13: (0, 0, 128),      # TFT_NAVY
     14: (255, 192, 203),  # TFT_PINK
-    # 15 is strictly skipped for Transparency Key mapping
+
+    # 15 is skipped for Transparency Key mapping
     # 15: (0, 0, 0)         # TFT_DARKGREY
 }
 
@@ -33,7 +34,7 @@ def get_closest_palette_index(r, g, b):
     min_distance = float('inf')
     closest_idx = 1 # Default to White if matching fails
     
-    # Unpacking the color tuple elements (pr, pg, pb) directly inside the loop
+    # Unpacking the color tuple elements (pr, pg, pb)
     for idx, (pr, pg, pb) in SYSTEM_PALETTE.items():
         distance = (r - pr)**2 + (g - pg)**2 + (b - pb)**2
         if distance < min_distance:
@@ -61,20 +62,20 @@ for filename in os.listdir(INPUT_DIR):
         for x in range(TARGET_SIZE):
             r, g, b, a = resized_img.getpixel((x, y))
             
-            # 1. Transparency mask processing
+            # Transparency mask processing
             if a < 128:
                 pixel_idx = 15 # Index 15 is Chroma Key
             else:
-                # 2. Map pixel down to exact 15 system colors
+                # Map pixel down to exact 15 system colors
                 pixel_idx = get_closest_palette_index(r, g, b)
                 
-                # 3. Prevent collision corruption
+                # Prevent collision corruption
                 if pixel_idx == 15:
                     pixel_idx = 14 # Fallback to Pink
 
             pixel_indices.append(pixel_idx & 0x0F)
 
-    # 4. Pack pixel pairs sequentially into single bytes (High/Low Nibbles)
+    # Pack pixel pairs sequentially into single bytes (High/Low Nibbles)
     with open(out_path, "wb") as f:
         for i in range(0, len(pixel_indices), 2):
             high_nibble = pixel_indices[i]

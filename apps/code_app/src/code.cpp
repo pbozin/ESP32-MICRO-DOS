@@ -8,7 +8,7 @@ NEW_STRING(system_prompt, "You are an ESP32 BASIC compiler. "
                           "2. Every single line of BASIC code MUST have a line number.\n"
                           "3. NEVER put multiple line numbers on the same line. EVERY line number must start on a brand new newline (\\n).\n"
                           "Example:\n10 PRINT \"HI\"\n20 GOTO 10\n"
-                          "Keep conversational explanations extremely brief.");
+                          "Keep conversational explanations extremely brief.\n");
 
 int _start(int argc, char** argv, MicroDosAPI* api) {
     _global_api_ptr = api;    

@@ -26,12 +26,12 @@ for filename in os.listdir(INPUT_DIR):
             for x in range(TARGET_SIZE):
                 r, g, b, a = resized_img.getpixel((x, y))
                 
-                # Check transparency first
+                # Check transparency
                 if a < 128:
-                    # Value 128 is strictly reserved for transparency
+                    # Value 128 is reserved for transparency
                     pixel_8bit = 128
                 else:
-                    # 2. Convert 24-bit RGB down to 8-bit RGB 3:3:2 
+                    # Convert 24-bit RGB down to 8-bit RGB 3:3:2 
                     # Scale components to fit bit-widths
                     # (R: 3 bits, G: 3 bits, B: 2 bits)
                     r_3bit = (r >> 5) & 0x07
@@ -45,7 +45,6 @@ for filename in os.listdir(INPUT_DIR):
                     if pixel_8bit == 128:
                         pixel_8bit = 127
                         
-                # 4. Save to .spr binary file
                 f.write(struct.pack("B", pixel_8bit))
                         
 print("--- ALL 8-BIT RGB 3:3:2 SPRITES CONVERTED SUCCESSFULLY! ---")
