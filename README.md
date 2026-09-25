@@ -5,7 +5,7 @@
 
 # ESP32 MicroDOS
 
-An advanced, retro-style retro-operating system and interactive environment designed for the **ESP32 Cheap Yellow Display (CYD)** and capacitive equivalents (JC3248). 
+An advanced, retro-style retro-operating system and interactive environment designed for CYD clones [!https://www.lcdwiki.com/4.0inch_ESP32-32E_Display] and capacitive equivalents (JC3248). 
 
 Unlike typical monolithic microcontroller firmware, **MicroDOS** behaves like a classic 1980s disk operating system with modern AI features. It features a custom multi-statement **BASIC interpreter**, a **Universal Dynamic Linker/Loader** capable of running precompiled native C binaries from an SD card, an indexed **4-bit Sprite Game Engine**, and a memory-efficient **Ollama LLM live-streaming engine** that can autonomously re-program the host system on the fly.
 
@@ -109,7 +109,7 @@ extra_scripts = post:extract_bin.py     ; Extract packaged segment tracks automa
 ## 🚀 Getting Started
 
 ### Hardware Requirements
-* **ESP32 Cheap Yellow Display (CYD)** (ESP32-2432S028R) OR **JC3248 capacitive variant**.
+* **ESP32 Cheap Yellow Display (CYD)** (ESP32-3248) OR **JC3248 capacitive variant**.
 * Micro SD card (FAT32 formatted).
 * *Optional:* A `/WIFI.CFG` file stored on the SD root directory containing your network credentials (SSID on line 1, password on line 2) to unlock automated fallback network card provisioning.
 
