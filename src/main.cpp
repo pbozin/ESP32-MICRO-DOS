@@ -360,6 +360,11 @@ static char* activeContext = NULL;
 #define TERM_COLS   int(TFT_WIDTH / CHAR_WIDTH)
 #define TERM_ROWS   int(TFT_WIDTH / CHAR_HEIGHT)
 
+#define TOTAL_ROWS TERM_ROWS * 4  // Total capacity of historical terminal memory
+
+static char terminalBuffer[TOTAL_ROWS][TERM_COLS + 1];
+static uint8_t colorBuffer[TOTAL_ROWS][TERM_COLS];
+
 #define CURSOR_SIZE 2
 #define FILENAME_SIZE 20
 #define PROMPT_SIZE 40
@@ -387,8 +392,8 @@ static bool programHalted = false;
 static const char fTable[5] = { TKN_F1, TKN_F2, TKN_F3, TKN_F4, TKN_F5 };
 
 #define F_KEY_LABEL_SIZE 7
-static const char fKeyLabelsDefault[5][F_KEY_LABEL_SIZE] = { "  <-  ", "  ->  ", " CNCL ", "  ESC ", "  <X  " };
-static char fKeyLabels[5][F_KEY_LABEL_SIZE] = { "  <-  ", "  ->  ", " CNCL ", "  ESC ", "  <X  " };
+static const char fKeyLabelsDefault[5][F_KEY_LABEL_SIZE] = { "  <-  ", "  ->  ", "  ESC ", "  DEL ", "  <X  " };
+static char fKeyLabels[5][F_KEY_LABEL_SIZE] = { "  <-  ", "  ->  ", "  ESC ", "  DEL ", "  <X  " };
 
 static bool fKeysOverlayActive = false;
 
@@ -401,11 +406,6 @@ static bool fKeysOverlayActive = false;
 #define STATUS_Y_START  (TFT_HEIGHT - (KEY_ROWS*KEY_HEIGHT) - STATUS_HEIGHT)
 
 #define KEYBOARD_Y_START (TFT_HEIGHT - (KEY_ROWS*KEY_HEIGHT))
-
-#define TOTAL_ROWS TERM_ROWS * 4  // Total capacity of historical terminal memory
-
-static char terminalBuffer[TOTAL_ROWS][TERM_COLS + 1];
-static uint8_t colorBuffer[TOTAL_ROWS][TERM_COLS];
 
 static int scrollOffset = 0;
 static int activeRowIndex = 0;
@@ -4033,8 +4033,8 @@ void api_setup() {
       uint8_t* out_backup = (uint8_t*)tempSprite.frameBuffer(0);
       uint8_t* out_render = (uint8_t*)renderSprite.frameBuffer(0);
 
-      int bytesPerSpriteRow = SPRITE_SIZE / 2;
-      int bytesPerCanvasRow = TFT_WIDTH / 2;
+      int bytesPerSpriteRow = SPRITE_SIZE / (8 / COLOR_DEPTH);
+      int bytesPerCanvasRow = TFT_WIDTH / (8 / COLOR_DEPTH);
 
       int alignedX = x & ~1;
       int startByteX = alignedX >> 1;
@@ -4057,7 +4057,7 @@ void api_setup() {
 
     uint8_t* in = (uint8_t*)tempSprite.frameBuffer(0);
     uint8_t* out = (uint8_t*)renderSprite.frameBuffer(0);
-    int totalPackedBytes = (SPRITE_SIZE * SPRITE_SIZE) / 2;
+    int totalPackedBytes = (SPRITE_SIZE * SPRITE_SIZE) / (8 / COLOR_DEPTH);
 
     for (int c = 0; c < totalPackedBytes; c++) {
       uint8_t inByte  = in[c];
