@@ -921,13 +921,12 @@ char getKeyPress(bool blocking) {
       if (fIndex >= 0 && fIndex <= 4) {
         pressedKey = fTable[fIndex];
 
-        if (blocking) {
-            while (tft.getTouch(&touchX, &touchY)) { delay(10); }
-        }
+        delay(300);
+        tft.getTouch(&touchX, &touchY);
         return pressedKey;
       }
     }
-    else if (touchY >= KEYBOARD_Y_START && touchY < 480) {
+    else if (touchY >= KEYBOARD_Y_START && touchY < TFT_HEIGHT) {
       int localY = touchY - KEYBOARD_Y_START;
       int row = localY / KEY_HEIGHT;
       int col = touchX / KEY_WIDTH;
@@ -940,11 +939,12 @@ char getKeyPress(bool blocking) {
           symbolModeActive = !symbolModeActive;
           drawKeyboard();
           drawStatusBar();
-          delay(250);
+          while (tft.getTouch(&touchX, &touchY)) { delay(10); }
           return 0;
         }
         else if (pressedKey == '\t') {
-          delay(200);
+          delay(300);
+          tft.getTouch(&touchX, &touchY);
           return pressedKey;
         }
 
@@ -1368,6 +1368,7 @@ void renderFullWrappedInputLine() {
 void handleKeyPress(char key) {
     int inputLen = strlen(inputBuffer);
 
+    // Return
     if (key == '\n') {
       inputCursorPos = strlen(inputBuffer);
       renderFullWrappedInputLine();
@@ -1383,7 +1384,8 @@ void handleKeyPress(char key) {
       return;
     }
 
-    if (key == TKN_F1) {
+    // Left
+    else if (key == TKN_F1) {
         if (inputCursorPos > 0) {
             inputCursorPos--;
             renderFullWrappedInputLine();
@@ -1391,6 +1393,7 @@ void handleKeyPress(char key) {
         return;
     }
 
+    // Right
     else if (key == TKN_F2) {
         if (inputCursorPos < inputLen) {
             inputCursorPos++;
@@ -1399,28 +1402,54 @@ void handleKeyPress(char key) {
         return;
     }
 
+    // Escape
+    else if (key == TKN_F3) {
+      inputCursorPos = strlen(inputBuffer);
+      renderFullWrappedInputLine();
+      if (inputCursorPos >= (TERM_COLS - strlen(currentPrompt))) {
+	 activeRowIndex++;
+      }
+      memset(inputBuffer, 0, INPUT_BUF_SIZE);
+      int len = strlen(terminalBuffer[activeRowIndex]);
+      if (len > 0) {
+        terminalBuffer[activeRowIndex][len - 1] = '\0';
+      }
+      terminalPrintln("");
+      inputCursorPos = 0;
+      terminalPrint(currentPrompt);
+      terminalPrint(cursor);
+      return;
+    }
+
+    // Delete
+    else if (key == TKN_F4) {
+      if (inputCursorPos < inputLen) {
+        int elementsToShift = inputLen - inputCursorPos;
+        memmove(&inputBuffer[inputCursorPos], &inputBuffer[inputCursorPos + 1], elementsToShift);
+        renderFullWrappedInputLine();
+      }
+      return;
+    }
+
+    // Backspace
     else if (key == TKN_F5 || key == '\t') {
         if (inputCursorPos > 0) {
             int elementsToShift = inputLen - inputCursorPos + 1;
             memmove(&inputBuffer[inputCursorPos - 1], &inputBuffer[inputCursorPos], elementsToShift);
-
             inputCursorPos--;
             renderFullWrappedInputLine();
         }
         return;
     }
 
+    // Alphanumeric or symbol
     else if (key >= 32 && key <= 126) {
         if (inputLen < (INPUT_BUF_SIZE - strlen(currentPrompt) - strlen(cursor))) {
             int elementsToShift = inputLen - inputCursorPos + 1;
             memmove(&inputBuffer[inputCursorPos + 1], &inputBuffer[inputCursorPos], elementsToShift);
-
             inputBuffer[inputCursorPos] = key;
-
             colorBuffer[activeRowIndex][inputCursorPos] = currentActivePaletteId;
-
             inputCursorPos++;
-
             renderFullWrappedInputLine();
         }
     }
@@ -2291,7 +2320,7 @@ void processCommand(const char* rawCmd) {
             if (editLine < 1 || editLine > fileLineCount) {
               terminalPrintln("ERR: OUT OF RANGE");
 	    } else {
-              terminalPrintln("EDIT MODE. ENTER TO SAVE & EXIT.");
+              terminalPrintln("EDIT MODE. ENTER TO SAVE & EXIT. ESC TO CANCEL.");
               char tempPrompt[PROMPT_SIZE] = "";
               strncpy(tempPrompt, (String(editLine) + "* ").c_str(), PROMPT_SIZE);
               strncpy(currentPrompt, tempPrompt, PROMPT_SIZE);
@@ -2312,7 +2341,13 @@ void processCommand(const char* rawCmd) {
                 char pressedKey = getKeyPress(true);
                 if (pressedKey > 0) {
                   handleKeyPress(pressedKey);
-                  if (pressedKey == '\n') {
+                  if (pressedKey == TKN_F3) {
+		    terminalBuffer[activeRowIndex][strlen(terminalBuffer[activeRowIndex]) - strlen(currentPrompt) - strlen(cursor)] = '\0';
+                    strncpy(currentPrompt, "ED> ", PROMPT_SIZE);
+                    currentPrompt[PROMPT_SIZE - 1] = '\0';
+                    editingLine = false;
+		  }
+		  if (pressedKey == '\n') {
                     lines[editLine-1] =  String(inputBuffer);
                     memset(inputBuffer, 0, INPUT_BUF_SIZE);
                     strncpy(currentPrompt, "ED> ", PROMPT_SIZE);
