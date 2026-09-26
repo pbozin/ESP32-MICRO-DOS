@@ -387,8 +387,8 @@ static bool programHalted = false;
 static const char fTable[5] = { TKN_F1, TKN_F2, TKN_F3, TKN_F4, TKN_F5 };
 
 #define F_KEY_LABEL_SIZE 7
-static const char fKeyLabelsDefault[5][F_KEY_LABEL_SIZE] = { " left ", " rght ", "  up  ", " down ", " bksp " };
-static char fKeyLabels[5][F_KEY_LABEL_SIZE] = { "  <-  ", "  ->  ", "      ", "      ", "  <X  " };
+static const char fKeyLabelsDefault[5][F_KEY_LABEL_SIZE] = { "  <-  ", "  ->  ", " CNCL ", "  ESC ", "  <X  " };
+static char fKeyLabels[5][F_KEY_LABEL_SIZE] = { "  <-  ", "  ->  ", " CNCL ", "  ESC ", "  <X  " };
 
 static bool fKeysOverlayActive = false;
 
@@ -910,7 +910,6 @@ char getKeyPress(bool blocking) {
   unsigned long startTime = millis();
 
   if (tft.getTouch(&touchX, &touchY)) {
-    Serial.println(touchX);
 #ifdef BOARD_CYD
     touchX = TFT_WIDTH - touchX;
     touchY = TFT_HEIGHT - touchY;
@@ -1289,7 +1288,7 @@ void drawKeyboard() {
       if (key == '\n') {
         tft.drawString("RT", x + 6, y + 10);
       } else if (key == '\t') {
-        tft.drawString("BS", x + 6, y + 10);
+        tft.drawString("<X", x + 6, y + 10);
       } else if (key == '\r') {
         if (symbolModeActive) tft.drawString("AL", x + 6, y + 10);
         else tft.drawString("SY", x + 6, y + 10);
@@ -2478,7 +2477,7 @@ void processCommand(const char* rawCmd) {
       uint32_t* literalPool = (uint32_t*)iramStagingArea;
       size_t literalWordCount = header.iramSize / 4;
 
-#ifdef SERIAL_DEBUGGER
+#ifdef SERIAL_DEBUG
       Serial.printf("[MDB LOADER] Scanning IRAM literals up to size: %d bytes...\n\r", header.iramSize);
 #endif
 
@@ -2499,7 +2498,7 @@ void processCommand(const char* rawCmd) {
 
           if (targetSegment) {
               literalPool[i] = patchedAddr;
-#ifdef SERIAL_DEBUGGER
+#ifdef SERIAL_DEBUG
        //        Serial.printf("  Pool [%d] @ 0x%04X (Raw: 0x%08X) -> 🛠️  PATCHED %s: 0x%08X\n\r",
        //                     i, (i * 4) + iramStart, rawVal, targetSegment, patchedAddr);
 #endif
@@ -3699,7 +3698,7 @@ void api_setup() {
     }
 
     if (useFallback) {
-#ifdef SERIAL_DEBUGGER
+#ifdef SERIAL_DEBUG
       Serial.println("[SYS] Blank or placeholder credentials. Accessing SD fallback...");
 #endif
       File wifiFile = SD.open("/WIFI.CFG", FILE_READ);
@@ -3712,7 +3711,7 @@ void api_setup() {
 
         wifiFile.close();
       } else {
-#ifdef SERIAL_DEBUGGER
+#ifdef SERIAL_DEBUG
         Serial.println("[ERR] /WIFI.CFG not found!");
 #endif
         return -1;
@@ -3730,7 +3729,7 @@ void api_setup() {
 
     if (strlen(localSSID) == 0) return -1;
 
-#ifdef SERIAL_DEBUGGER
+#ifdef SERIAL_DEBUG
     Serial.printf("[SYS] Initiating Wi-Fi connection target: [%s]\n\r", localSSID);
 #endif
 
@@ -3744,7 +3743,7 @@ void api_setup() {
     }
 
     if (WiFi.status() == WL_CONNECTED) {
-#ifdef SERIAL_DEBUGGER
+#ifdef SERIAL_DEBUG
       Serial.printf("[SYS] Wi-Fi connected! Station IP address: %s\n\r", WiFi.localIP().toString().c_str());
 #endif
       return 0;
