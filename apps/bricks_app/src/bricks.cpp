@@ -39,6 +39,7 @@ extern "C" int _start(int argc, char** argv, MicroDosAPI* api) {
     
     // Main Game Loop Context
     while (running) {
+        api->flushGameMatrix();        
         int k = api->inkey();
         
         if (k == KEY_O) { // Move Paddle Left
@@ -121,10 +122,10 @@ extern "C" int _start(int argc, char** argv, MicroDosAPI* api) {
             api->delay(2000);
             running = 0;
         }
-        
         api->delay(8);
     }
     
+    api->flushGameMatrix();        
     api->color(GREEN);
     api->clear();
     return 0;

@@ -4,25 +4,249 @@
 #include <WiFiClient.h>
 #include <HTTPClient.h>
 #include <FS.h>
-#include <SD.h>
 #include <TJpg_Decoder.h>
 #include <string.h>
 
+
 #if defined(BOARD_CYD)
-  #include <TFT_eSPI.h>
-  TFT_eSPI tft = TFT_eSPI();
+#include <SD.h>
+#include <TFT_eSPI.h>
+TFT_eSPI tft = TFT_eSPI();
+SPIClass sdSPI(HSPI);
+
 #elif defined(BOARD_JC3248)
-  #include <Arduino_GFX_Library.h>
-  #include <Wire.h>
-  #define TFT_BLACK     0x0000
-  #define TFT_BLUE      0x001F
-  #define TFT_RED       0xF800
-  #define TFT_GREEN     0x07E0
-  #define TFT_CYAN      0x07FF
-  #define TFT_MAGENTA   0xF81F
-  #define TFT_YELLOW    0xFFE0
-  #define TFT_WHITE     0xFFFF
-  #define TFT_DARKGREY  0x7BEF
+#include <Arduino_GFX_Library.h>
+#include <Wire.h>
+#include <SD_MMC.h>
+#define SD SD_MMC
+#define TFT_BLACK     0x0000
+#define TFT_BLUE      0x001F
+#define TFT_RED       0xF800
+#define TFT_GREEN     0x07E0
+#define TFT_CYAN      0x07FF
+#define TFT_MAGENTA   0xF81F
+#define TFT_YELLOW    0xFFE0
+#define TFT_WHITE     0xFFFF
+#define TFT_DARKGREY  0x7BEF
+#define TFT_LIGHTGREY 0xD69A
+#define TFT_ORANGE    0xFD20
+#define TFT_MAROON    0x8000
+#define TFT_DARKGREEN 0x03E0
+#define TFT_DARKCYAN  0x03EF
+#define TFT_NAVY      0x000F
+#define TFT_PINK      0xFE19
+#endif
+
+
+static uint16_t currentActivePaletteId = TFT_GREEN;
+
+#if defined(BOARD_JC3248)
+  static Arduino_DataBus *bus = new Arduino_ESP32QSPI(
+    45 /* CS */, 47 /* SCK */, 21 /* D0 */, 48 /* D1 */, 40 /* D2 */, 39 /* D3 */
+  );
+
+  static Arduino_GFX *tft_base = new Arduino_AXS15231B(
+    bus, GFX_NOT_DEFINED /* RST */, 0 /* Rotation */, false /* IPS */, TFT_WIDTH, TFT_HEIGHT
+  );
+
+  static Arduino_Canvas *canvas_bridge = new Arduino_Canvas(
+    TFT_WIDTH, TFT_HEIGHT, tft_base, 0 /* output_x */, 0 /* output_y */, 0 /* rotation */
+  );
+
+  static Arduino_GFX *tft_driver = canvas_bridge;
+
+  class GFX_CompatibilityWrapper {
+  public:
+    void init() {
+
+      tft_driver->begin();
+      tft_driver->fillScreen(TFT_BLACK);
+
+      pinMode(3, INPUT);
+
+      Wire.begin(4 /* SDA */, 8 /* SCL */);
+      Wire.setClock(400000);
+
+      static const uint8_t AXS_READ_TOUCHPAD[8] = { 0xB5, 0xAB, 0xA5, 0x5A, 0x00, 0x00, 0x00, 0x08 };
+      Wire.beginTransmission(0x3B);
+      Wire.write(AXS_READ_TOUCHPAD, 8);
+      Wire.endTransmission();
+      delayMicroseconds(50);
+    }
+    void initDMA() {}
+    void setRotation(uint8_t r) { tft_driver->setRotation(r); }
+    void fillScreen(uint16_t color) { tft_driver->fillScreen(color); canvas_bridge->flush(); }
+    void fillRect(int16_t x, int16_t y, int16_t w, int16_t h, uint16_t c) { tft_driver->fillRect(x,y,w,h,c);}
+    void drawRect(int16_t x, int16_t y, int16_t w, int16_t h, uint16_t c) { tft_driver->drawRect(x,y,w,h,c);}
+    void drawLine(int16_t x0, int16_t y0, int16_t x1, int16_t y1, uint16_t c) { tft_driver->drawLine(x0,y0,x1,y1,c);}
+    void drawPixel(int16_t x, int16_t y, uint16_t c) { tft_driver->drawPixel(x,y,c); }
+    void fillCircle(int16_t x, int16_t y, int16_t r, uint16_t c) { tft_driver->fillCircle(x, y, r, c);}
+    void drawChar(char c, int16_t x, int16_t y) { tft_driver->drawChar(x, y, (unsigned char)c, currentActivePaletteId, TFT_BLACK);}
+
+    void setTextColor(uint16_t c) { tft_driver->setTextColor(c, TFT_BLACK); }
+    void setTextColor(uint16_t c, uint16_t b) { tft_driver->setTextColor(c, b); }
+
+    void setCursor(int16_t x, int16_t y) { tft_driver->setCursor(x, y); }
+
+    void print(const char* str) { tft_driver->print(str); }
+    void print(char c) { tft_driver->print(c); }
+
+    void setTextFont(uint8_t f) { }
+    void setTextSize(uint8_t s) { tft_driver->setTextSize(s); }
+    int16_t textWidth(const char* str) { return strlen(str) * 6; }
+    void drawString(const char* str, int16_t x, int16_t y) {
+      tft_driver->setCursor(x, y);
+      tft_driver->print(str);
+    }
+
+    void drawFastHLine(int16_t x, int16_t y, int16_t w, uint16_t c) { tft_driver->drawFastHLine(x, y, w, c);}
+    void drawFastVLine(int16_t x, int16_t y, int16_t h, uint16_t c) { tft_driver->drawFastVLine(x, y, h, c);}
+    int16_t width() { return TFT_WIDTH; }
+    int16_t height() { return TFT_HEIGHT; }
+    void pushImage(int16_t x, int16_t y, int16_t w, int16_t h, uint16_t* bitmap) {
+      tft_driver->draw16bitRGBBitmap(x, y, bitmap, w, h);
+      canvas_bridge->flush();
+    }
+    bool getTouch(uint16_t *x, uint16_t *y) {
+      Wire.requestFrom(0x3B, 8);
+      if (Wire.available() >= 8) {
+        uint8_t packet[8];
+        for (int i = 0; i < 8; i++) {
+          packet[i] = Wire.read();
+        }
+        if (packet[0] != 0x00 || packet[1] == 0x00) return false;
+
+        uint16_t rawX = ((uint16_t)(packet[2] & 0x0F) << 8) | packet[3];
+        uint16_t rawY = ((uint16_t)(packet[4] & 0x0F) << 8) | packet[5];
+
+        if (rawX < TFT_WIDTH && rawY < TFT_HEIGHT) {
+          *x = rawX;
+          *y = rawY;
+	  delay(33);
+          return true;
+        }
+      }
+      return false;
+    }
+  };
+  static GFX_CompatibilityWrapper tft;
+
+  class TFT_eSprite {
+  private:
+    int16_t _w = 0;
+    int16_t _h = 0;
+    uint8_t* _fb = nullptr;
+    uint16_t* _palette = nullptr;
+
+  public:
+    TFT_eSprite(void* tft_ptr) {}
+    ~TFT_eSprite() { deleteSprite(); }
+
+    uint8_t* frameBuffer(uint8_t component) { return _fb; }
+    int16_t width()  { return _w; }
+    int16_t height() { return _h; }
+    void setColorDepth(uint8_t d) { }
+
+    void createSprite(int16_t w, int16_t h) {
+      deleteSprite();
+      _w = w; _h = h;
+      int allocationSize = (_w * _h) / 2;
+      _fb = (uint8_t*)malloc(allocationSize);
+      if (_fb) memset(_fb, 0, allocationSize);
+    }
+
+    void deleteSprite() {
+      if (_fb) { free(_fb); _fb = nullptr; }
+      _w = 0; _h = 0;
+    }
+
+    void createPalette(uint16_t* paletteArray) { _palette = paletteArray; }
+
+    void fillSprite(uint16_t colorIndex) {
+      if (!_fb) return;
+      uint8_t packedByte = ((colorIndex & 0x0F) << 4) | (colorIndex & 0x0F);
+      memset(_fb, packedByte, (_w * _h) / 2);
+    }
+
+    void drawPixel(int16_t x, int16_t y, uint16_t colorIndex) {
+      if (!_fb || x < 0 || x >= _w || y < 0 || y >= _h) return;
+      int globalPixelIdx = (y * _w) + x;
+      int byteIdx = globalPixelIdx >> 1;
+      if ((globalPixelIdx & 1) == 0) {
+        _fb[byteIdx] = (_fb[byteIdx] & 0x0F) | ((colorIndex & 0x0F) << 4);
+      } else {
+        _fb[byteIdx] = (_fb[byteIdx] & 0xF0) | (colorIndex & 0x0F);
+      }
+    }
+
+    void fillRect(int16_t x, int16_t y, int16_t w, int16_t h, uint16_t colorIndex) {
+      for (int16_t j = y; j < y + h; j++) {
+        for (int16_t i = x; i < x + w; i++) {
+          drawPixel(i, j, colorIndex);
+        }
+      }
+    }
+
+    void drawLine(int16_t x0, int16_t y0, int16_t x1, int16_t y1, uint16_t colorIndex) {
+      int16_t dx = abs(x1 - x0), sx = x0 < x1 ? 1 : -1;
+      int16_t dy = -abs(y1 - y0), sy = y0 < y1 ? 1 : -1;
+      int16_t err = dx + dy, e2;
+      while (true) {
+        drawPixel(x0, y0, colorIndex);
+        if (x0 == x1 && y0 == y1) break;
+        e2 = 2 * err;
+        if (e2 >= dy) { err += dy; x0 += sx; }
+        if (e2 <= dx) { err += dx; y0 += sy; }
+      }
+    }
+
+    void fillCircle(int16_t x0, int16_t y0, int16_t r, uint16_t colorIndex) {
+      for (int16_t y = -r; y <= r; y++) {
+        for (int16_t x = -r; x <= r; x++) {
+          if (x*x + y*y <= r*r) {
+            drawPixel(x0 + x, y0 + y, colorIndex);
+          }
+        }
+      }
+    }
+
+    void print(const char* str) { tft_driver->print(str); }
+    void print(char c) { tft_driver->print(c); }
+
+    void pushImage(int16_t x, int16_t y, int16_t w, int16_t h, uint16_t* bitmap) {
+      if (!_fb || !_palette) return;
+      for (int16_t row = 0; row < h; row++) {
+        for (int16_t col = 0; col < w; col++) {
+          uint16_t color = bitmap[row * w + col];
+          uint8_t closestIndex = 0;
+          drawPixel(x + col, y + row, closestIndex);
+        }
+      }
+    }
+
+    void pushSprite(int16_t x, int16_t y) {
+      if (!_fb || !_palette) return;
+      uint16_t rowBuffer[TFT_WIDTH];
+      int16_t targetWidth = (_w > TFT_WIDTH) ? TFT_WIDTH : _w;
+      int16_t targetHeight = (_h > TFT_WIDTH) ? TFT_WIDTH : _h;
+
+      for (int16_t row = 0; row < targetHeight; row++) {
+        int canvasRowOffset = row * (_w / 2);
+        for (int16_t col = 0; col < targetWidth; col++) {
+          int byteIdx = canvasRowOffset + (col >> 1);
+          uint8_t rawByte = _fb[byteIdx];
+          uint8_t paletteIndex = ((col & 1) == 0) ? ((rawByte >> 4) & 0x0F) : (rawByte & 0x0F);
+          rowBuffer[col] = _palette[paletteIndex];
+        }
+        tft_driver->draw16bitRGBBitmap(x, y + row, rowBuffer, targetWidth, 1);
+      }
+    }
+
+    void setTextColor(uint16_t c, uint16_t b) { tft_driver->setTextColor(c, b); }
+    void setCursor(int16_t x, int16_t y) { tft_driver->setCursor(x, y); }
+    int16_t textWidth(const char* str) { return strlen(str) * 6; }
+  };
+
 #endif
 
 bool matchFuncBounds(const char* str, const char* prefix, int prefixLen, int &innerLen);
@@ -80,62 +304,9 @@ void processIncomingToken(const char* token, const char* m, bool &isRecordingCod
 	         	  size_t textAccumMaxSize, char* markdownBuffer, size_t mdMaxSize, bool &insideThinkBlock,
 			  char* fullAssistantResponse, size_t farMaxSize, int streamToConsole);
 
-static uint16_t currentActivePaletteId = TFT_GREEN; 
-
-SPIClass sdSPI(HSPI); 
-
-#if defined(BOARD_JC3248)
-  static Arduino_DataBus *bus = new Arduino_ESP32QSPI(
-    45 /* CS */, 47 /* SCK */, 21 /* D0 */, 48 /* D1 */, 40 /* D2 */, 39 /* D3 */ );
-  static Arduino_GFX *tft_driver = new Arduino_AXS15231B(
-    bus, GFX_NOT_DEFINED /* RST */, 0 /* rotation */, false /* IPS */, TFT_WIDTH /* width */, TFT_HEIGHT /* height */
-  );
-  class GFX_CompatibilityWrapper {
-  public:
-    void init() { 
-      tft_driver->begin(); 
-      tft_driver->fillScreen(TFT_BLACK);
-      Wire.begin(4 /* SDA */, 8 /* SCL */); 
-    }
-    void setRotation(uint8_t r) { tft_driver->setRotation(r); }
-    void fillScreen(uint16_t color) { tft_driver->fillScreen(color); }
-    void fillRect(int16_t x, int16_t y, int16_t w, int16_t h, uint16_t c) { tft_driver->fillRect(x,y,w,h,c); }
-    void drawRect(int16_t x, int16_t y, int16_t w, int16_t h, uint16_t c) { tft_driver->drawRect(x,y,w,h,c); }
-    void drawLine(int16_t x0, int16_t y0, int16_t x1, int16_t y1, uint16_t c) { tft_driver->drawLine(x0,y0,x1,y1,c); }
-    void drawPixel(int16_t x, int16_t y, uint16_t c) { tft_driver->drawPixel(x,y,c); }
-    void fillCircle(int16_t x, int16_t y, int16_t r, uint16_t c) { tft_driver->fillCircle(x, y, r, c); }
-    void drawChar(char c, int16_t x, int16_t y) { tft_driver->drawChar(x, y, (unsigned char)c, currentActivePaletteId, TFT_BLACK); }
-    void setTextColor(uint16_t c, uint16_t b) { tft_driver->setTextColor(c, b); }
-    void setCursor(int16_t x, int16_t y) { tft_driver->setCursor(x, y); }
-    void print(const char* str) { tft_driver->print(str); }
-    void setTextFont(uint8_t f) { }
-    void setTextSize(uint8_t s) { tft_driver->setTextSize(s); }
-    int16_t textWidth(const char* str) { return strlen(str) * 6; }
-    void drawString(const char* str, int16_t x, int16_t y) {
-      tft_driver->setCursor(x, y);
-      tft_driver->print(str);
-    }
-    bool getTouch(uint16_t *x, uint16_t *y) {
-      Wire.beginTransmission(0x3B);
-      if (Wire.endTransmission() != 0) return false;
-      Wire.requestFrom(0x3B, 6);
-      if (Wire.available() >= 6) {
-        uint8_t data[6];
-        for (int i = 0; i < 6; i++) data[i] = Wire.read();
-        if ((data[0] & 0x01) == 0) {
-          *x = ((data[1] & 0x0F) << 8) | data[2];
-          *y = ((data[3] & 0x0F) << 8) | data[4];
-          return true;
-        }
-      }
-      return false;
-    }
-  };
-  static GFX_CompatibilityWrapper tft;
-#endif
 
 const uint16_t ramOSPalette[16] = {
-    TFT_BLACK,      // Index 0 
+    TFT_BLACK,      // Index 0
     TFT_WHITE,      // Index 1
     TFT_LIGHTGREY,  // Index 2
     TFT_RED,        // Index 3
@@ -150,7 +321,7 @@ const uint16_t ramOSPalette[16] = {
     TFT_DARKCYAN,   // Index 12
     TFT_NAVY,       // Index 13
     TFT_PINK,       // Index 14
-    TFT_DARKGREY    // Index 15  <- Chroma key or dark grey 
+    TFT_DARKGREY    // Index 15  <- Chroma key or dark grey
 };
 
 uint16_t getPaletteColor(int cId) {
@@ -170,26 +341,26 @@ uint16_t getPaletteColor(int cId) {
     case 12: return TFT_DARKCYAN;
     case 13: return TFT_NAVY;
     case 14: return TFT_PINK;
-    case 15: return TFT_DARKGREY; // Chroma key or dark grey 
+    case 15: return TFT_DARKGREY; // Chroma key or dark grey
 
     default: return TFT_GREEN;
   }
 }
 
 #define SYSTEM_RAM_SIZE 165
-int systemRAM[SYSTEM_RAM_SIZE]; 
+int systemRAM[SYSTEM_RAM_SIZE];
 
 #define CONTEXT_BUF_SIZE 2048
 static char coderContext[CONTEXT_BUF_SIZE] = "";
 static char chatContext[CONTEXT_BUF_SIZE] = "";
 static char* activeContext = NULL;
 
-#define CHAR_WIDTH  6 
+#define CHAR_WIDTH  6
 #define CHAR_HEIGHT 16
-#define TERM_COLS   int(TFT_WIDTH / CHAR_WIDTH)   
-#define TERM_ROWS   int(TFT_WIDTH / CHAR_HEIGHT)  
+#define TERM_COLS   int(TFT_WIDTH / CHAR_WIDTH)
+#define TERM_ROWS   int(TFT_WIDTH / CHAR_HEIGHT)
 
-#define CURSOR_SIZE 2 
+#define CURSOR_SIZE 2
 #define FILENAME_SIZE 20
 #define PROMPT_SIZE 40
 #define INPUT_BUF_SIZE (TERM_COLS * 2)
@@ -223,10 +394,10 @@ static bool fKeysOverlayActive = false;
 
 #define KEY_ROWS   4
 #define KEY_COLS   10
-#define KEY_HEIGHT 34        
+#define KEY_HEIGHT 34
 #define KEY_WIDTH  32
 
-#define STATUS_HEIGHT   24 
+#define STATUS_HEIGHT   24
 #define STATUS_Y_START  (TFT_HEIGHT - (KEY_ROWS*KEY_HEIGHT) - STATUS_HEIGHT)
 
 #define KEYBOARD_Y_START (TFT_HEIGHT - (KEY_ROWS*KEY_HEIGHT))
@@ -242,7 +413,7 @@ static int activeRowIndex = 0;
 static bool symbolModeActive = false;
 
 #define SPRITE_SIZE 40
-#define COLOR_DEPTH 4 
+#define COLOR_DEPTH 4
 
 static TFT_eSprite bgCanvas = TFT_eSprite(&tft);
 static TFT_eSprite renderSprite = TFT_eSprite(&tft);
@@ -252,7 +423,7 @@ static TFT_eSprite tempSprite = TFT_eSprite(&tft);
 #define CLAMP(val, min, max) ((val) < (min) ? (min) : ((val) > (max) ? (max) : (val)))
 
 #define COMPRESSED_4BIT_SIZE 400
-#define PACKED_BYTES_PER_SPRITE ((SPRITE_SIZE * SPRITE_SIZE) / (8 / COLOR_DEPTH)) // 800 Bytes
+#define PACKED_BYTES_PER_SPRITE ((SPRITE_SIZE * SPRITE_SIZE) / (8 / COLOR_DEPTH))
 
 struct OSSprite_t {
     bool isOnScreen;
@@ -397,19 +568,20 @@ void setup() {
 #if defined(BOARD_CYD)
   initTouchCalibration();
   randomSeed(analogRead(34));
+#elif defined(BOARD_JC3248)
+  randomSeed(analogRead(10));
+#endif
+
   pinMode(0, INPUT_PULLUP);
   pinMode(AUDIO_EN_PIN, OUTPUT);
   digitalWrite(AUDIO_EN_PIN, HIGH);
-#elif defined(BOARD_JC3248)
-  randomSeed(analogRead(10));
-  pinMode(0, INPUT_PULLUP);
-#endif
+  pinMode(AUDIO_DATA_PIN, OUTPUT);
 
   api_setup();
   Serial.println(F("- Init API     OK"));
 
   pinMode(TFT_BL, OUTPUT);
-  digitalWrite(TFT_BL, HIGH); 
+  digitalWrite(TFT_BL, HIGH);
 
   kernelAPI.clear();
   clearProgram();
@@ -445,7 +617,7 @@ void loop() {
 }
 
 #define MAX_PROGRAM_LINES 100
-#define MAX_LINE_LEN 80 
+#define MAX_LINE_LEN 80
 
 struct ProgramLine {
   int lineNumber;
@@ -455,9 +627,9 @@ ProgramLine programMemory[MAX_PROGRAM_LINES];
 int programLineCount = 0;
 
 #define MAX_VARS 20
-#define MAX_VAR_NAME_LEN 12 
+#define MAX_VAR_NAME_LEN 12
 #define MAX_STR_VARS 20
-#define MAX_STR_LEN  50 
+#define MAX_STR_LEN  50
 
 struct Variable {
   char name[MAX_VAR_NAME_LEN];
@@ -477,10 +649,10 @@ static int stringRegistryCount = 0;
 
 #define MAX_STACK_DEPTH 20
 int subroutineCallStack[MAX_STACK_DEPTH];
-int stackPointer = 0; 
+int stackPointer = 0;
 
 
-#define MAX_FOR_NEST 4 
+#define MAX_FOR_NEST 4
 
 struct ForLoopState {
   char varName;
@@ -497,8 +669,8 @@ static bool showThinkingLogs = false;
 const char alphaLayout[KEY_ROWS][KEY_COLS] = {
   {'1', '2', '3', '4', '5', '6', '7', '8', '9', '0'},
   {'Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P'},
-  {'A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L', '\t'}, 
-  {'Z', 'X', 'C', 'V', 'B', 'N', 'M', ' ', '\r', '\n'} 
+  {'A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L', '\t'},
+  {'Z', 'X', 'C', 'V', 'B', 'N', 'M', ' ', '\r', '\n'}
 };
 
 const char symbolLayout[KEY_ROWS][KEY_COLS] = {
@@ -515,8 +687,11 @@ void processTerminalTouchScrolling() {
   uint16_t x = 0, y = 0;
 
   if (tft.getTouch(&x, &y)) {
+
+#if defined(BOARD_CYD)
       x = TFT_WIDTH - x;
       y = TFT_HEIGHT - y;
+#endif
 
       if (y >= 0 && y <= TFT_WIDTH) {
           if (!touchHeld) {
@@ -589,6 +764,9 @@ void drawStatusBar() {
             tft.print(fKeyLabelsDefault[i]);
 	}
     }
+#if defined(BOARD_JC3248)
+     canvas_bridge->flush();
+#endif
     tft.setTextFont(1);
     tft.setTextSize(1);
 }
@@ -601,7 +779,6 @@ bool tft_output(int16_t x, int16_t y, uint16_t w, uint16_t h, uint16_t* bitmap) 
     bgCanvas.pushImage(x, y, w, h, bitmap);
     bgCanvas.pushSprite(0, 0);
   } else {
-    // Push raw 16-bit RGB565 to the TFT hardware registers
     tft.pushImage(x, y, w, h, bitmap);
   }
 
@@ -705,10 +882,15 @@ void kernel_getTouchState(TouchState* state) {
   uint16_t rawY = 0;
 
   if (tft.getTouch(&rawX, &rawY)) {
+#if defined(BOARD_CYD)
     int mappedX = TFT_WIDTH - rawX;
     int mappedY = TFT_HEIGHT - rawY;
+#else
+    int mappedX = rawX;
+    int mappedY = rawY;
+#endif
 
-    if (mappedY < KEYBOARD_Y_START) { 
+    if (mappedY < KEYBOARD_Y_START) {
       state->isPressed = true;
       state->x = mappedX;
       state->y = mappedY;
@@ -728,8 +910,11 @@ char getKeyPress(bool blocking) {
   unsigned long startTime = millis();
 
   if (tft.getTouch(&touchX, &touchY)) {
+    Serial.println(touchX);
+#ifdef BOARD_CYD
     touchX = TFT_WIDTH - touchX;
     touchY = TFT_HEIGHT - touchY;
+#endif
 
     if (touchY >= STATUS_Y_START && touchY < KEYBOARD_Y_START) {
       int fIndex = touchX / 64;
@@ -799,18 +984,29 @@ void initTouchCalibration() {
 #endif
 
 void initSD() {
-  sdSPI.begin(SD_SCLK, SD_MISO, SD_MOSI, SD_CS_PIN); 
+#if defined(BOARD_CYD)
+  sdSPI.begin(SD_SCLK, SD_MISO, SD_MOSI, SD_CS_PIN);
   if (!SD.begin(SD_CS_PIN, sdSPI, SPI_FREQUENCY)) {
-    terminalPrintln("ERR: NO DISK");
     sdAvailable = false;
   } else {
     sdAvailable = true;
   }
+#elif defined(BOARD_JC3248)
+  SD_MMC.setPins(SD_MMC_CLK, SD_MMC_CMD, SD_MMC_D0);
+
+  if (!SD_MMC.begin("/sd", true)) {
+    sdAvailable = false;
+    Serial.println("SD_MMC Mount Failed!");
+  } else {
+    sdAvailable = true;
+    Serial.println("SD_MMC Mounted Successfully!");
+  }
+#endif
 }
 
 void loadBuffer(const char* filename) {
   if (!sdAvailable) { terminalPrintln("ERR: NO DISK"); return; }
-  
+
   memset(fixedFilename, 0, FILENAME_SIZE);
   if (filename[0] != '/') {
     snprintf(fixedFilename, FILENAME_SIZE, "/%s", filename);
@@ -818,7 +1014,7 @@ void loadBuffer(const char* filename) {
     strncpy(fixedFilename, filename, FILENAME_SIZE);
     fixedFilename[FILENAME_SIZE - 1] = '\0';
   }
-  
+
   File file = SD.open(fixedFilename);
   if (!file) { terminalPrintln("NOT FOUND"); return; }
 
@@ -830,7 +1026,7 @@ void loadBuffer(const char* filename) {
     if (c == '\n' || lineIdx >= (int)MAX_LINE_LEN - 1) {
       line[lineIdx] = '\0';
       trimCString(line);
-      terminalPrintln(line); 
+      terminalPrintln(line);
       lineIdx = 0;
     } else if (c != '\r') {
       line[lineIdx++] = c;
@@ -842,7 +1038,7 @@ void loadBuffer(const char* filename) {
 void loadFile(const char* filename) {
   terminalPrintln(filename);
   if (!sdAvailable) { terminalPrintln("ERR: NO DISK"); return; }
-  
+
   memset(fixedFilename, 0, FILENAME_SIZE);
   if (filename[0] != '/') {
     snprintf(fixedFilename, FILENAME_SIZE, "/%s", filename);
@@ -850,21 +1046,21 @@ void loadFile(const char* filename) {
     strncpy(fixedFilename, filename, FILENAME_SIZE);
     fixedFilename[FILENAME_SIZE - 1] = '\0';
   }
-  
+
   File file = SD.open(fixedFilename);
   if (!file) { terminalPrintln("NOT FOUND"); return; }
 
-  clearProgram(); 
-  
+  clearProgram();
+
   char line[MAX_LINE_LEN];
   int lineIdx = 0;
-  
+
   while (file.available()) {
     char c = file.read();
     if (c == '\n' || lineIdx >= (int)MAX_LINE_LEN - 1) {
       line[lineIdx] = '\0';
       trimCString(line);
-      
+
       if (strlen(line) > 0) {
         char* spaceIdx = strchr(line, ' ');
         if (spaceIdx != NULL) {
@@ -884,7 +1080,7 @@ void loadFile(const char* filename) {
 
 void saveBuffer(const char* filename) {
   if (!sdAvailable) { terminalPrintln("ERR: NO DISK"); return; }
-  
+
   memset(fixedFilename, 0, FILENAME_SIZE);
   if (filename[0] != '/') {
     snprintf(fixedFilename, FILENAME_SIZE, "/%s", filename);
@@ -892,10 +1088,10 @@ void saveBuffer(const char* filename) {
     strncpy(fixedFilename, filename, FILENAME_SIZE);
     fixedFilename[FILENAME_SIZE - 1] = '\0';
   }
-  
-  SD.remove(fixedFilename); 
 
+  SD.remove(fixedFilename);
   File file = SD.open(fixedFilename, FILE_WRITE);
+
   if (!file) { terminalPrintln("WRITE FAILED"); return; }
 
   for (int i = 0; i < activeRowIndex-1; i++) {
@@ -905,13 +1101,13 @@ void saveBuffer(const char* filename) {
   memset(logBuf, 0, TERM_COLS);
   snprintf(logBuf, TERM_COLS, "SAVED TO %s... ", fixedFilename);
   terminalPrint(logBuf);
-  
+
   terminalPrintln("OK.");
 }
 
 void saveFile(const char* filename) {
   if (!sdAvailable) { terminalPrintln("ERR: NO DISK"); return; }
-  
+
   memset(fixedFilename, 0, FILENAME_SIZE);
   if (filename[0] != '/') {
     snprintf(fixedFilename, FILENAME_SIZE, "/%s", filename);
@@ -919,13 +1115,13 @@ void saveFile(const char* filename) {
     strncpy(fixedFilename, filename, FILENAME_SIZE);
     fixedFilename[FILENAME_SIZE - 1] = '\0';
   }
-  
+
   memset(logBuf, 0, TERM_COLS);
   snprintf(logBuf, TERM_COLS, "SAVING TO %s... ", fixedFilename);
   terminalPrint(logBuf);
-  SD.remove(fixedFilename); 
-  
+  SD.remove(fixedFilename);
   File file = SD.open(fixedFilename, FILE_WRITE);
+
   if (!file) { terminalPrintln("WRITE FAILED"); return; }
 
   for (int i = 0; i < programLineCount; i++) {
@@ -963,10 +1159,9 @@ void redrawTerminal() {
             tft.setTextColor(getPaletteColor(charColorId), TFT_BLACK);
 	  }
         }
-        
+
         if (MATRIX_ACTIVE) {
           bgCanvas.print(terminalBuffer[targetMemoryRow][c]);
-          bgCanvas.pushSprite(0, 0);
 	} else {
           tft.print(terminalBuffer[targetMemoryRow][c]);
 	}
@@ -977,7 +1172,6 @@ void redrawTerminal() {
       if (textPixelWidth < TFT_WIDTH) {
         if (MATRIX_ACTIVE) {
           bgCanvas.fillRect(textPixelWidth, r * CHAR_HEIGHT, TFT_WIDTH - textPixelWidth, CHAR_HEIGHT, TFT_BLACK);
-          bgCanvas.pushSprite(0, 0);
 	} else {
           tft.fillRect(textPixelWidth, r * CHAR_HEIGHT, TFT_WIDTH - textPixelWidth, CHAR_HEIGHT, TFT_BLACK);
 	}
@@ -985,11 +1179,17 @@ void redrawTerminal() {
     } else {
       if (MATRIX_ACTIVE) {
         bgCanvas.fillRect(0, r * CHAR_HEIGHT, TFT_WIDTH, CHAR_HEIGHT, TFT_BLACK);
-        bgCanvas.pushSprite(0, 0);
       } else {
         tft.fillRect(0, r * CHAR_HEIGHT, TFT_WIDTH, CHAR_HEIGHT, TFT_BLACK);
       }
     }
+  }
+  if (MATRIX_ACTIVE) {
+     bgCanvas.pushSprite(0, 0);
+  } else {
+#if defined(BOARD_JC3248)
+     canvas_bridge->flush();
+#endif
   }
 }
 
@@ -1039,10 +1239,10 @@ void terminalPrint(const char* text) {
       }
       currentLen = 0;
     }
-    
+
     terminalBuffer[activeRowIndex][currentLen] = text[i];
     terminalBuffer[activeRowIndex][currentLen + 1] = '\0';
-    
+
     colorBuffer[activeRowIndex][currentLen] = (uint8_t)currentActivePaletteId;
   }
 
@@ -1096,10 +1296,16 @@ void drawKeyboard() {
       } else if (key == ' ') {
         if (!symbolModeActive && c == 7) tft.drawString("SPC", x + 4, y + 10);
       } else {
-        tft.drawChar(key, x + 11, y + 10);
+	char temp[2];
+	temp[0] = key;
+	temp[1] = '\0';
+        tft.drawString((char*)temp, x + 11, y + 10);
       }
     }
   }
+#if defined(BOARD_JC3248)
+     canvas_bridge->flush();
+#endif
   tft.setTextColor(currentActivePaletteId, TFT_BLACK);
   tft.setTextFont(1);
   tft.setTextSize(1);
@@ -1108,13 +1314,13 @@ void drawKeyboard() {
 void renderFullWrappedInputLine() {
     char fullLineText[INPUT_BUF_SIZE + PROMPT_SIZE + CURSOR_SIZE + 4];
     snprintf(fullLineText, sizeof(fullLineText), "%s", currentPrompt);
-    
+
     strncat(fullLineText, inputBuffer, inputCursorPos);
     strcat(fullLineText, cursor);
     strcat(fullLineText, inputBuffer + inputCursorPos);
 
     int totalChars = strlen(fullLineText);
-    
+
     int startRow = activeRowIndex;
     memset(terminalBuffer[startRow], 0, TERM_COLS + 1);
     memset(colorBuffer[startRow], 0, TERM_COLS);
@@ -1126,11 +1332,11 @@ void renderFullWrappedInputLine() {
         int chunkLen = min((int)TERM_COLS, totalChars - charIdx);
         strncpy(terminalBuffer[currentRow], fullLineText + charIdx, chunkLen);
         terminalBuffer[currentRow][chunkLen] = '\0';
-        
+
         for (int i = 0; i < chunkLen; i++) {
             colorBuffer[currentRow][i] = (uint8_t)currentActivePaletteId;
         }
-        
+
         charIdx += TERM_COLS;
         if (charIdx < totalChars) {
             currentRow++;
@@ -1151,7 +1357,7 @@ void renderFullWrappedInputLine() {
     }
 
     redrawTerminal();
-    
+
     if (MATRIX_ACTIVE) {
       cursorX = bgCanvas.textWidth(terminalBuffer[currentRow]);
     } else {
@@ -1213,7 +1419,7 @@ void handleKeyPress(char key) {
             inputBuffer[inputCursorPos] = key;
 
             colorBuffer[activeRowIndex][inputCursorPos] = currentActivePaletteId;
-        
+
             inputCursorPos++;
 
             renderFullWrappedInputLine();
@@ -1253,13 +1459,13 @@ void nativeBinaryTaskWorker(void* pvParameters) {
   int runtimeExitStatus = run_app(params->argc, params->argv, params->api);
 
   if (params->exitCode)   *(params->exitCode) = runtimeExitStatus;
-  
+
   volatile bool* syncFlag = params->isRunning;
 
   if (syncFlag) {
       *syncFlag = false;
   }
-  
+
   vTaskDelete(NULL);
 }
 
@@ -1432,8 +1638,8 @@ int getVariable(const char* name) {
   upperName[MAX_VAR_NAME_LEN - 1] = '\0';
   for (int i = 0; upperName[i]; i++) upperName[i] = toupper((unsigned char)upperName[i]);
 
-  for (int i = 0; i < variableCount; i++) { 
-    if (strcmp(sysVariables[i].name, upperName) == 0) return sysVariables[i].value; 
+  for (int i = 0; i < variableCount; i++) {
+    if (strcmp(sysVariables[i].name, upperName) == 0) return sysVariables[i].value;
   }
   return 0;
 }
@@ -1444,13 +1650,13 @@ void setVariable(const char* name, int val) {
   upperName[MAX_VAR_NAME_LEN - 1] = '\0';
   for (int i = 0; upperName[i]; i++) upperName[i] = toupper((unsigned char)upperName[i]);
 
-  for (int i = 0; i < variableCount; i++) { 
-    if (strcmp(sysVariables[i].name, upperName) == 0) { sysVariables[i].value = val; return; } 
+  for (int i = 0; i < variableCount; i++) {
+    if (strcmp(sysVariables[i].name, upperName) == 0) { sysVariables[i].value = val; return; }
   }
-  if (variableCount < MAX_VARS) { 
+  if (variableCount < MAX_VARS) {
     strncpy(sysVariables[variableCount].name, upperName, sizeof(sysVariables[variableCount].name));
-    sysVariables[variableCount].value = val; 
-    variableCount++; 
+    sysVariables[variableCount].value = val;
+    variableCount++;
   }
 }
 
@@ -1521,7 +1727,7 @@ bool runMultiStatementLine(const char* fullLine, int &nextIdx) {
   strncpy(cleanLine, fullLine, (MAX_LINE_LEN + PROMPT_SIZE + CURSOR_SIZE));
   cleanLine[(MAX_LINE_LEN + PROMPT_SIZE + CURSOR_SIZE) - 1] = '\0';
   trimCString(cleanLine);
-  
+
   bool res = true;
   int totalLen = (MAX_LINE_LEN + PROMPT_SIZE + CURSOR_SIZE);
   if (totalLen == 0) return res;
@@ -1535,11 +1741,11 @@ bool runMultiStatementLine(const char* fullLine, int &nextIdx) {
 
     if ((c == ':' && !inQuotes) || i == totalLen - 1) {
       int endIdx = (c == ':' && !inQuotes) ? i : i + 1;
-      
+
       char statement[MAX_LINE_LEN];
       int chunkLen = endIdx - startIdx;
       if (chunkLen >= (int)MAX_LINE_LEN) chunkLen = MAX_LINE_LEN - 1;
-      
+
       strncpy(statement, cleanLine + startIdx, chunkLen);
       statement[chunkLen] = '\0';
       trimCString(statement);
@@ -1569,9 +1775,9 @@ void executeProgram() {
       snprintf(logBuf, TERM_COLS, "\nBREAK AT LINE %d", programMemory[currentIdx].lineNumber);
       terminalPrintln(logBuf);
       while (digitalRead(0) == LOW) { delay(10); }
-      break; 
+      break;
     }
-    
+
     int trackingIdx = currentIdx;
     if (!runMultiStatementLine(programMemory[currentIdx].code, trackingIdx)) {
       snprintf(logBuf, TERM_COLS, "HALT AT %d", programMemory[currentIdx].lineNumber);
@@ -1612,7 +1818,7 @@ void processCommand(const char* rawCmd) {
 
   char firstToken[16];
   char* firstSpace = strchr(cmd, ' ');
-  
+
   if (firstSpace != NULL) {
     int tokenLen = firstSpace - cmd;
     if (tokenLen >= (int)16) tokenLen = 16 - 1;
@@ -1641,16 +1847,16 @@ void processCommand(const char* rawCmd) {
 
   if (strcmp(firstToken, "DIR") == 0 || strcmp(firstToken, "CAT") == 0) {
     if (!sdAvailable) { terminalPrintln("ERR: NO DISK"); return; }
-  
+
     File root = SD.open("/");
     if (!root) { terminalPrintln("ERR: OPEN FAILED"); return; }
     if (!root.isDirectory()) { root.close(); terminalPrintln("NOT A DIR"); return; }
 
     File file = root.openNextFile();
-    int count = 0; 
-  
-    char localDirBuf[TERM_COLS]; 
-  
+    int count = 0;
+
+    char localDirBuf[TERM_COLS];
+
     while (file) {
       if (!file.isDirectory()) {
         snprintf(localDirBuf, TERM_COLS, " %s (%d B)", file.name(), (int)file.size());
@@ -1825,7 +2031,7 @@ void processCommand(const char* rawCmd) {
             terminalPrint(hexStr);
           }
         }
-        terminalPrintln(""); 
+        terminalPrintln("");
         address += bytesRead;
       }
       file.close();
@@ -1853,7 +2059,7 @@ void processCommand(const char* rawCmd) {
       if (!file) { terminalPrintln("NOT FOUND"); return; }
 
       uint32_t address = 0;
-      uint8_t stringBuffer[32]; 
+      uint8_t stringBuffer[32];
 
       while (file.available()) {
         if (address % 256 == 0) {
@@ -1878,7 +2084,7 @@ void processCommand(const char* rawCmd) {
             terminalPrint(".");
           }
         }
-        terminalPrintln(""); 
+        terminalPrintln("");
         address += bytesRead;
       }
       file.close();
@@ -1894,9 +2100,9 @@ void processCommand(const char* rawCmd) {
       trimCString(baseFilename);
 
       loadJpegToScreen(baseFilename, 0, 0);
-      
+
       getKeyPress(true);
-      
+
       redrawTerminal();
     } else {
       terminalPrintln("ERR: SPECIFY IMAGE FILENAME");
@@ -1906,17 +2112,17 @@ void processCommand(const char* rawCmd) {
   else if (strcmp(firstToken, "EDIT") == 0) {
     strncpy(previousPrompt, currentPrompt, PROMPT_SIZE - 1);
     previousPrompt[PROMPT_SIZE - 1] = '\0';
-    
+
     strncpy(currentPrompt, "ED> ", PROMPT_SIZE - 1);
     currentPrompt[PROMPT_SIZE - 1] = '\0';
-    
+
     if (firstSpace != NULL) {
       memset(baseFilename, 0, FILENAME_SIZE);
       strncpy(baseFilename, firstSpace + 1, FILENAME_SIZE - 1);
       baseFilename[FILENAME_SIZE - 1] = '\0';
       stripQuotes(baseFilename);
       trimCString(baseFilename);
-      
+
       memset(fixedFilename, 0, FILENAME_SIZE);
       if (baseFilename[0] != '/') {
         snprintf(fixedFilename, FILENAME_SIZE, "/%s", baseFilename);
@@ -1924,16 +2130,16 @@ void processCommand(const char* rawCmd) {
         strncpy(fixedFilename, baseFilename, FILENAME_SIZE - 1);
         fixedFilename[FILENAME_SIZE - 1] = '\0';
       }
-      
+
       terminalPrint("EDITING: ");
       terminalPrintln(fixedFilename);
       terminalPrintln("TYPE H FOR HEP, L TO LIST, A TO APPEND,");
       terminalPrintln("E TO EDIT, S TO SAVE & EXIT, Q TO QUIT.");
-      
+
       #define MAX_EDIT_LINES 250
       String lines[MAX_EDIT_LINES];
       int fileLineCount = 0;
-      
+
       if (sdAvailable && SD.exists(fixedFilename)) {
         File f = SD.open(fixedFilename, FILE_READ);
         if (f) {
@@ -1943,12 +2149,12 @@ void processCommand(const char* rawCmd) {
             lines[fileLineCount++] = l;
           }
           f.close();
-          
+
           snprintf(logBuf, TERM_COLS, "LOADED %d LINES.", fileLineCount);
           terminalPrintln(logBuf);
         }
       }
-      
+
       bool editing = true;
       while (editing) {
         if (activeRowIndex >= TERM_ROWS) {
@@ -1956,15 +2162,15 @@ void processCommand(const char* rawCmd) {
         } else {
             scrollOffset = 0;
         }
-        
+
         char initialPrompt[PROMPT_SIZE + 4];
         snprintf(initialPrompt, PROMPT_SIZE, "%s%s", currentPrompt, cursor);
         terminalPrint(initialPrompt);
-        
+
         memset(inputBuffer, 0, INPUT_BUF_SIZE);
         String userEntry = "";
-        bool readingInput = true; 
-        
+        bool readingInput = true;
+
         while (readingInput) {
           char pressedKey = getKeyPress(true);
           if (pressedKey > 0) {
@@ -1977,7 +2183,7 @@ void processCommand(const char* rawCmd) {
           }
           delay(10);
         }
-        
+
         userEntry.trim();
         if (userEntry.equalsIgnoreCase("L") || userEntry.substring(0, 2).equalsIgnoreCase("L ")) {
           if (fileLineCount == 0) {
@@ -2002,16 +2208,16 @@ void processCommand(const char* rawCmd) {
                 }
               }
             }
-            
+
             if (startLine < 0) startLine = 0;
             if (endLine > fileLineCount) endLine = fileLineCount;
-            
+
             for (int i = startLine; i < endLine; i++) {
               terminalPrintln((String(i + 1) + ": " + lines[i]).c_str());
             }
           }
 	  continue;
-        } 
+        }
         else if (userEntry.equalsIgnoreCase("A")) {
           terminalPrintln("APPENDING MODE. ENTER BLANK LINE TO EXIT.");
 
@@ -2039,12 +2245,12 @@ void processCommand(const char* rawCmd) {
               }
               delay(10);
             }
-            
+
             appendLine.trim();
             if (appendLine.length() == 0) {
                 strncpy(currentPrompt, "ED> ", PROMPT_SIZE - 1);
                 currentPrompt[PROMPT_SIZE - 1] = '\0';
-	        break; 
+	        break;
 	    }
             lines[fileLineCount++] = appendLine;
             strncpy(tempPrompt, (String(fileLineCount + 1) + "+ ").c_str(), PROMPT_SIZE);
@@ -2054,7 +2260,7 @@ void processCommand(const char* rawCmd) {
 	    terminalPrint(cursor);
           }
 	  continue;
-        } 
+        }
         else if (userEntry.equalsIgnoreCase("S")) {
           if (sdAvailable) {
             SD.remove(fixedFilename);
@@ -2071,7 +2277,7 @@ void processCommand(const char* rawCmd) {
           }
           editing = false;
 	  continue;
-        } 
+        }
         if (userEntry.equalsIgnoreCase("E") || userEntry.substring(0, 2).equalsIgnoreCase("E ")) {
           if (userEntry.equalsIgnoreCase("E")) {
             terminalPrintln("USAGE: E line");
@@ -2120,7 +2326,7 @@ void processCommand(const char* rawCmd) {
 	    }
           }
 	  continue;
-        } 
+        }
         else if (userEntry.equalsIgnoreCase("H")) {
           terminalPrintln("TYPE H FOR HEP, L TO LIST, A TO APPEND,");
           terminalPrintln("E TO EDIT, S TO SAVE & EXIT, Q TO QUIT.");
@@ -2138,7 +2344,7 @@ void processCommand(const char* rawCmd) {
     } else {
       terminalPrintln("ERR: SPECIFY FILENAME");
     }
-    
+
     strncpy(currentPrompt, previousPrompt, PROMPT_SIZE);
     currentPrompt[PROMPT_SIZE - 1] = '\0';
     return;
@@ -2149,7 +2355,7 @@ void processCommand(const char* rawCmd) {
       strncpy(restOfCmd, firstSpace + 1, MAX_LINE_LEN);
       restOfCmd[MAX_LINE_LEN - 1] = '\0';
       trimCString(restOfCmd);
-    
+
       int argc = 0;
       const int MAX_ARGS = 8;
       char argTokens[MAX_ARGS][FILENAME_SIZE];
@@ -2175,9 +2381,9 @@ void processCommand(const char* rawCmd) {
         strncpy(fixedFilename, baseFilename, FILENAME_SIZE);
         fixedFilename[FILENAME_SIZE - 1] = '\0';
       }
-    
+
       strlcpy(argTokens[argc++], fixedFilename, FILENAME_SIZE);
-    
+
       if (nextSpace != NULL) {
         char remainingArgs[MAX_LINE_LEN];
         strncpy(remainingArgs, nextSpace + 1, MAX_LINE_LEN);
@@ -2202,7 +2408,7 @@ void processCommand(const char* rawCmd) {
       }
 
       if (!sdAvailable) { terminalPrintln("ERR: NO DISK"); return; }
-  
+
       File file = SD.open(fixedFilename, FILE_READ);
       if (!file) { terminalPrintln("NOT FOUND"); return; }
 
@@ -2240,10 +2446,10 @@ void processCommand(const char* rawCmd) {
       // ============================================================================
       file.seek(sizeof(MDBHeader));
       file.read(iramStagingArea, header.iramSize);
-      
+
       file.seek(sizeof(MDBHeader) + header.iramSize);
       file.read(localDramBuffer, header.dramSize);
-      
+
       file.close();
 
 #ifdef SERIAL_DEBUG
@@ -2281,7 +2487,7 @@ void processCommand(const char* rawCmd) {
           uint32_t patchedAddr = 0;
           const char* targetSegment = nullptr;
 
-          if ((rawVal & 3) == 0) { 
+          if ((rawVal & 3) == 0) {
               if (rawVal >= iramStart && rawVal < iramEnd) {
                   patchedAddr = (rawVal - iramStart) + (uint32_t)localIramBuffer;
                   targetSegment = "IRAM";
@@ -2294,7 +2500,7 @@ void processCommand(const char* rawCmd) {
           if (targetSegment) {
               literalPool[i] = patchedAddr;
 #ifdef SERIAL_DEBUGGER
-       //        Serial.printf("  Pool [%d] @ 0x%04X (Raw: 0x%08X) -> 🛠️  PATCHED %s: 0x%08X\n\r", 
+       //        Serial.printf("  Pool [%d] @ 0x%04X (Raw: 0x%08X) -> 🛠️  PATCHED %s: 0x%08X\n\r",
        //                     i, (i * 4) + iramStart, rawVal, targetSegment, patchedAddr);
 #endif
           }
@@ -2307,10 +2513,10 @@ void processCommand(const char* rawCmd) {
       Serial.println("\nScanning Global Offset Table (GOT) Entries...");
 #endif
       uint32_t gotDramOffset = header.gotFileOffset - iramEnd;
-      
+
       if (gotDramOffset < header.dramSize) {
           uint32_t* realGotTable = (uint32_t*)(localDramBuffer + gotDramOffset);
-          
+
           size_t remainingDramBytes = header.dramSize - gotDramOffset;
           size_t gotWordCount = remainingDramBytes / 4;
 
@@ -2347,8 +2553,8 @@ void processCommand(const char* rawCmd) {
       // ============================================================================
       Serial.printf("\n\rFirst 32 Bytes of DRAM Payload (Raw Character Look):\n\r");
       for (int i = 0; i < 32; i += 4) {
-          Serial.printf("  DRAM + 0x%02X: %02X %02X %02X %02X | %c%c%c%c\n\r", 
-                        i, 
+          Serial.printf("  DRAM + 0x%02X: %02X %02X %02X %02X | %c%c%c%c\n\r",
+                        i,
                         localDramBuffer[i], localDramBuffer[i+1], localDramBuffer[i+2], localDramBuffer[i+3],
                         (localDramBuffer[i] >= 32 && localDramBuffer[i] <= 126) ? localDramBuffer[i] : '.',
                         (localDramBuffer[i+1] >= 32 && localDramBuffer[i+1] <= 126) ? localDramBuffer[i+1] : '.',
@@ -2408,7 +2614,7 @@ void processCommand(const char* rawCmd) {
               binaryTaskHandle = NULL;
               break;
           }
-          
+
           if (!binaryIsRunning) {
               vTaskDelay(pdMS_TO_TICKS(150));
               break;
@@ -2437,7 +2643,7 @@ void processCommand(const char* rawCmd) {
   }
   else if (strcmp(firstToken, "NEW") == 0) {
     clearProgram();
-    kernelAPI.clear(); 
+    kernelAPI.clear();
     redrawTerminal();
     printLogo();
     return;
@@ -2466,17 +2672,17 @@ void processCommand(const char* rawCmd) {
     strncpy(lookupName, firstToken, FILENAME_SIZE);
     lookupName[FILENAME_SIZE - 1] = '\0';
     trimCString(lookupName);
-    
+
     if (sdAvailable && strlen(lookupName) > 0) {
       char checkPath[FILENAME_SIZE];
-      
+
       snprintf(checkPath, FILENAME_SIZE, "/%s.BIN", lookupName);
       if (SD.exists(checkPath)) {
         snprintf(cmd, MAX_LINE_LEN, "EXEC %s%s", checkPath, (firstSpace != NULL ? firstSpace : ""));
         cmd[MAX_LINE_LEN - 1] = '\0';
         continue;
       }
-      
+
       snprintf(checkPath, FILENAME_SIZE, "/%s.BAS", lookupName);
       if (SD.exists(checkPath)) {
         snprintf(cmd, MAX_LINE_LEN, "RUN %s", checkPath);
@@ -2503,7 +2709,7 @@ bool runSingleLine(const char* rawLine, int &currentLineIdx) {
   if (totalLen == 0) return true;
 
   // ==========================================
-  // 1. UNIFIED PRINT ENGINE (Piped to Kernel)
+  // 1. UNIFIED PRINT ENGINE
   // ==========================================
   if (strncmp(line, "PRINT ", 6) == 0 || strncmp(line, "PRINT(", 6) == 0) {
     char* payload = line + 6;
@@ -2512,7 +2718,7 @@ bool runSingleLine(const char* rawLine, int &currentLineIdx) {
       if (rParen) *rParen = '\0';
     }
     trimCString(payload);
-    
+
     int startIdx = 0;
     int payloadLen = strlen(payload);
     while (startIdx < payloadLen) {
@@ -2525,9 +2731,9 @@ bool runSingleLine(const char* rawLine, int &currentLineIdx) {
           break;
         }
       }
-      
+
       int endIdx = (nextDelim == -1) ? payloadLen : nextDelim;
-      
+
       char token[MAX_LINE_LEN];
       int tokenChunk = endIdx - startIdx;
       if (tokenChunk >= (int)MAX_LINE_LEN) tokenChunk = MAX_LINE_LEN - 1;
@@ -2535,27 +2741,27 @@ bool runSingleLine(const char* rawLine, int &currentLineIdx) {
       token[tokenChunk] = '\0';
       trimCString(token);
       int tLen = strlen(token);
-      
+
       if (tLen > 0 && token[tLen - 1] == '$') {
         kernelAPI.print(getStringVariable(token));
-      } 
+      }
       else if (tLen >= 2 && token[0] == '"' && token[tLen - 1] == '"') {
         token[tLen - 1] = '\0';
         kernelAPI.print(token + 1);
-      } 
+      }
       else if (tLen > 0) {
         char valBuf[16];
         snprintf(valBuf, 16, "%d", evaluateExpression(token));
         kernelAPI.print(valBuf);
       }
-      
+
       if (nextDelim != -1 && payload[nextDelim] == ',') {
-        kernelAPI.print("    "); 
+        kernelAPI.print("    ");
       }
-      
+
       startIdx = endIdx + 1;
     }
-    
+
     kernelAPI.println("");
     return true;
   }
@@ -2615,11 +2821,11 @@ bool runSingleLine(const char* rawLine, int &currentLineIdx) {
   // 3. UNIFIED SOUND & TIMING DIRECTIVES
   // ==========================================
   if (strncmp(line, "DELAY ", 6) == 0 || strncmp(line, "PAUSE ", 6) == 0) {
-    char* arg = line + 6; 
+    char* arg = line + 6;
     trimCString(arg);
     int ms = evaluateExpression(arg);
     if (ms > 0) {
-      kernelAPI.delay((int)ms); 
+      kernelAPI.delay((int)ms);
     }
     return true;
   }
@@ -2631,9 +2837,9 @@ bool runSingleLine(const char* rawLine, int &currentLineIdx) {
       *commaIdx = '\0';
       int freq = evaluateExpression(args);
       int duration = evaluateExpression(commaIdx + 1);
-      if (freq > 0 && duration > 0) { 
-        kernelAPI.beep(freq, duration); 
-        return true; 
+      if (freq > 0 && duration > 0) {
+        kernelAPI.beep(freq, duration);
+        return true;
       }
     }
     kernelAPI.println("ERR: INVALID BEEP ARGS");
@@ -2650,7 +2856,7 @@ bool runSingleLine(const char* rawLine, int &currentLineIdx) {
       *commaIdx = '\0';
       int address = evaluateExpression(args);
       int value = evaluateExpression(commaIdx + 1);
-      
+
       kernelAPI.poke(address, value);
       return true;
     }
@@ -2665,7 +2871,7 @@ bool runSingleLine(const char* rawLine, int &currentLineIdx) {
     char* arg = line + 6;
     trimCString(arg);
     int colorId = evaluateExpression(arg);
-    
+
     kernelAPI.color(colorId);
     return true;
   }
@@ -2730,7 +2936,7 @@ bool runSingleLine(const char* rawLine, int &currentLineIdx) {
         int x       = evaluateExpression(args);
         int y       = evaluateExpression(firstComma + 1);
         int colorId = evaluateExpression(secondComma + 1);
-        
+
         kernelAPI.plot(x, y, colorId);
         return true;
       }
@@ -2752,11 +2958,11 @@ bool runSingleLine(const char* rawLine, int &currentLineIdx) {
     strncpy(varTarget, line + 6, MAX_LINE_LEN);
     varTarget[MAX_LINE_LEN - 1] = '\0';
     trimCString(varTarget);
-    
+
     if (strlen(varTarget) > 0) {
       char foundKey = (char)kernelAPI.inkey();
       int targetLen = strlen(varTarget);
-      
+
       if (varTarget[targetLen - 1] == '$') {
         char kStr[2] = { foundKey, '\0' };
         setStringVariable(varTarget, kStr);
@@ -2768,7 +2974,7 @@ bool runSingleLine(const char* rawLine, int &currentLineIdx) {
     kernelAPI.println("ERR: INVALID INKEY ARGS");
     return false;
   }
-  
+
   if (strncmp(line, "INPUT ", 6) == 0 || strncmp(line, "KEY ", 4) == 0) {
     bool read_key = false;
     char args[MAX_LINE_LEN];
@@ -2784,7 +2990,7 @@ bool runSingleLine(const char* rawLine, int &currentLineIdx) {
     char promptStr[PROMPT_SIZE] = "";
     char varTarget[MAX_LINE_LEN] = "";
     bool withNewline = false;
-    
+
     char* commaIdx = strrchr(args, ',');
     char* scolanIdx = strrchr(args, ';');
     if (commaIdx != NULL) {
@@ -2820,7 +3026,7 @@ bool runSingleLine(const char* rawLine, int &currentLineIdx) {
         }
         targetBuffer[0] = k;
         targetBuffer[1] = '\0';
-      } 
+      }
       else {
         if (strlen(promptStr) > 0 && withNewline) {
             kernelAPI.println(promptStr);
@@ -2838,11 +3044,11 @@ bool runSingleLine(const char* rawLine, int &currentLineIdx) {
       }
       return true;
     }
-    
+
     kernelAPI.println("ERR: INVALID INPUT ARGS");
     return false;
   }
- 
+
   // ==========================================
   // 7. MAPPED INTERPRETER LOGIC
   // ==========================================
@@ -2851,29 +3057,29 @@ bool runSingleLine(const char* rawLine, int &currentLineIdx) {
     strncpy(upperLine, line, MAX_LINE_LEN);
     upperLine[MAX_LINE_LEN - 1] = '\0';
     for (int i = 0; upperLine[i]; i++) upperLine[i] = toupper((unsigned char)upperLine[i]);
-    
+
     char* splitPtr = strstr(upperLine, "THEN");
     bool isThenSplit = (splitPtr != NULL);
     if (!isThenSplit) {
       splitPtr = strstr(upperLine, "GOTO");
     }
-    
+
     if (splitPtr != NULL) {
       int splitOffset = splitPtr - upperLine;
-      
+
       char expression[MAX_LINE_LEN];
       strncpy(expression, line + 3, splitOffset - 3);
       expression[splitOffset - 3] = '\0';
       trimCString(expression);
-      
+
       char trailingAction[MAX_LINE_LEN];
       strncpy(trailingAction, line + splitOffset + 4, MAX_LINE_LEN);
       trailingAction[MAX_LINE_LEN - 1] = '\0';
       trimCString(trailingAction);
-      
+
       enum Op { EQUAL, NOT_EQUAL, GREATER, LESS, G_EQUAL, L_EQUAL, NONE };
       Op foundOp = NONE; int opPos = -1; int opLen = 1;
-      
+
       char* opSearch;
       if ((opSearch = strstr(expression, "==")) != NULL) { foundOp = EQUAL; opPos = opSearch - expression; opLen = 2; }
       else if ((opSearch = strstr(expression, "!=")) != NULL) { foundOp = NOT_EQUAL; opPos = opSearch - expression; opLen = 2; }
@@ -2882,22 +3088,22 @@ bool runSingleLine(const char* rawLine, int &currentLineIdx) {
       else if ((opSearch = strstr(expression, ">")) != NULL)  { foundOp = GREATER; opPos = opSearch - expression; }
       else if ((opSearch = strstr(expression, "<")) != NULL)  { foundOp = LESS; opPos = opSearch - expression; }
       else if ((opSearch = strstr(expression, "=")) != NULL)   { foundOp = EQUAL; opPos = opSearch - expression; }
-      
+
       if (foundOp != NONE) {
         char leftSide[MAX_LINE_LEN];
         strncpy(leftSide, expression, opPos);
         leftSide[opPos] = '\0';
         trimCString(leftSide);
-        
+
         char rightSide[MAX_LINE_LEN];
         strncpy(rightSide, expression + opPos + opLen, MAX_LINE_LEN);
         rightSide[MAX_LINE_LEN - 1] = '\0';
         trimCString(rightSide);
-        
+
         bool conditionMet = false;
         int lLen = strlen(leftSide);
         int rLen = strlen(rightSide);
-        
+
         if (leftSide[lLen - 1] == '$' || rightSide[rLen - 1] == '$' || leftSide[0] == '"' || rightSide[0] == '"') {
           char leftStr[MAX_STR_LEN] = "";
           if (leftSide[lLen - 1] == '$') {
@@ -2906,7 +3112,7 @@ bool runSingleLine(const char* rawLine, int &currentLineIdx) {
             strncpy(leftStr, leftSide + 1, lLen - 2);
             leftStr[lLen - 2] = '\0';
           }
-          
+
           char rightStr[MAX_STR_LEN] = "";
           if (rightSide[rLen - 1] == '$') {
             strncpy(rightStr, getStringVariable(rightSide), MAX_STR_LEN);
@@ -2914,14 +3120,14 @@ bool runSingleLine(const char* rawLine, int &currentLineIdx) {
             strncpy(rightStr, rightSide + 1, rLen - 2);
             rightStr[rLen - 2] = '\0';
           }
-          
+
           if (foundOp == EQUAL) conditionMet = (strcmp(leftStr, rightStr) == 0);
           else if (foundOp == NOT_EQUAL) conditionMet = (strcmp(leftStr, rightStr) != 0);
           else {
             kernelAPI.println("ERR: STRING ONLY SUPPORTS == AND !=");
             return false;
           }
-        } 
+        }
         else {
           int leftVal = evaluateExpression(leftSide);
           int rightVal = evaluateExpression(rightSide);
@@ -2935,13 +3141,13 @@ bool runSingleLine(const char* rawLine, int &currentLineIdx) {
             default: break;
           }
         }
-        
+
         if (conditionMet) {
           bool isPureNumericJump = true;
           for (int i = 0; trailingAction[i]; i++) {
             if (!isdigit((unsigned char)trailingAction[i])) { isPureNumericJump = false; break; }
           }
-          
+
           if (isPureNumericJump && strlen(trailingAction) > 0) {
             int targetLine = atoi(trailingAction);
             for (int i = 0; i < programLineCount; i++) {
@@ -2949,10 +3155,10 @@ bool runSingleLine(const char* rawLine, int &currentLineIdx) {
             }
             memset(errBuf, 0, TERM_COLS);
             snprintf(errBuf, TERM_COLS, "ERR: LINE MISSING %d", targetLine);
-            kernelAPI.println(errBuf); 
+            kernelAPI.println(errBuf);
             return false;
           }
-          
+
           if (strncmp(trailingAction, "GOTO ", 5) == 0) {
             int targetLine = atoi(trailingAction + 5);
             for (int i = 0; i < programLineCount; i++) {
@@ -2960,10 +3166,10 @@ bool runSingleLine(const char* rawLine, int &currentLineIdx) {
             }
             memset(errBuf, 0, TERM_COLS);
             snprintf(errBuf, TERM_COLS, "ERR: LINE MISSING %d", targetLine);
-            kernelAPI.println(errBuf); 
+            kernelAPI.println(errBuf);
             return false;
           }
-          
+
           return runSingleLine(trailingAction, currentLineIdx);
         }
         return true;
@@ -2983,7 +3189,7 @@ bool runSingleLine(const char* rawLine, int &currentLineIdx) {
       *commaIdx = '\0';
       int pin = evaluateExpression(args);
       int mode = evaluateExpression(commaIdx + 1);
-      
+
       kernelAPI.pinMode(pin, mode == 1 ? OUTPUT : INPUT);
       return true;
     }
@@ -2995,7 +3201,7 @@ bool runSingleLine(const char* rawLine, int &currentLineIdx) {
     char* arg = line + 5;
     trimCString(arg);
     int pin = evaluateExpression(arg);
-    
+
     kernelAPI.digitalWrite(pin, HIGH);
     return true;
   }
@@ -3004,7 +3210,7 @@ bool runSingleLine(const char* rawLine, int &currentLineIdx) {
     char* arg = line + 4;
     trimCString(arg);
     int pin = evaluateExpression(arg);
-    
+
     kernelAPI.digitalWrite(pin, LOW);
     return true;
   }
@@ -3022,14 +3228,14 @@ bool runSingleLine(const char* rawLine, int &currentLineIdx) {
       strncpy(ssid, args, 16); ssid[16-1] = '\0';
       strncpy(pass, commaIdx + 1, 16); pass[16-1] = '\0';
       trimCString(ssid); trimCString(pass);
-      
+
       int sLen = strlen(ssid);
       if (sLen >= 2 && ssid[0] == '"' && ssid[sLen - 1] == '"') { ssid[sLen - 1] = '\0'; memmove(ssid, ssid + 1, sLen - 1); }
       int pLen = strlen(pass);
       if (pLen >= 2 && pass[0] == '"' && pass[pLen - 1] == '"') { pass[pLen - 1] = '\0'; memmove(pass, pass + 1, pLen - 1); }
-      
+
       kernelAPI.println("PROVISIONING INTERNAL NETWORK CARD...");
-      
+
       if (kernelAPI.wifiUp(ssid, pass) == 0) {
         IPAddress localIP = WiFi.localIP();
         char ipBuf[32];
@@ -3057,10 +3263,10 @@ bool runSingleLine(const char* rawLine, int &currentLineIdx) {
   if (strncmp(line, "FOR ", 4) == 0) {
     char* args = line + 4;
     trimCString(args);
-    
+
     char* eqIdx = strchr(args, '=');
     char* toIdx = strstr(args, " TO ");
-    
+
     if (eqIdx != NULL && toIdx != NULL) {
       *eqIdx = '\0';
       *toIdx = '\0';
@@ -3068,7 +3274,7 @@ bool runSingleLine(const char* rawLine, int &currentLineIdx) {
       char* startStr = eqIdx + 1;
       char* endStr = toIdx + 4;
       trimCString(varStr); trimCString(startStr); trimCString(endStr);
-      
+
       int stepValue = 1;
       char* stepIdx = strstr(endStr, " STEP ");
       if (stepIdx != NULL) {
@@ -3076,19 +3282,19 @@ bool runSingleLine(const char* rawLine, int &currentLineIdx) {
         stepValue = evaluateExpression(stepIdx + 6);
         trimCString(endStr);
       }
-      
+
       if (strlen(varStr) == 1 && isAlpha((unsigned char)varStr[0])) {
         char loopVar = varStr[0];
         int startVal = evaluateExpression(startStr);
         int targetVal = evaluateExpression(endStr);
-        
+
         setVariable(varStr, startVal);
-        
+
         if (forStackPointer >= MAX_FOR_NEST) {
           kernelAPI.println("ERR: FOR LOOP NEST OVERFLOW");
           return false;
         }
-        
+
         forStack[forStackPointer].varName = loopVar;
         forStack[forStackPointer].targetValue = targetVal;
         forStack[forStackPointer].stepValue = stepValue;
@@ -3136,9 +3342,9 @@ bool runSingleLine(const char* rawLine, int &currentLineIdx) {
     }
     return true;
   }
- 
+
   // ==========================================
-  // 10. COMMENTS FILTER 
+  // 10. COMMENTS FILTER
   // ==========================================
   if (strncmp(line, "REM", 3) == 0) {
     return true;
@@ -3160,7 +3366,7 @@ bool runSingleLine(const char* rawLine, int &currentLineIdx) {
     char* rhs = eqIdx + 1;
     trimCString(varName); trimCString(rhs);
     int vNameLen = strlen(varName);
-    
+
     if (vNameLen > 0 && isAlpha((unsigned char)varName[0])) {
       if (varName[vNameLen - 1] == '$') {
         int rLen = strlen(rhs);
@@ -3177,7 +3383,7 @@ bool runSingleLine(const char* rawLine, int &currentLineIdx) {
 
         char* firstQuote = strchr(rhs, '"');
         char* lastQuote = strrchr(rhs, '"');
-        
+
         if (firstQuote != NULL && lastQuote != NULL && firstQuote != lastQuote) {
           *lastQuote = '\0';
           char* strVal = firstQuote + 1;
@@ -3187,11 +3393,11 @@ bool runSingleLine(const char* rawLine, int &currentLineIdx) {
         kernelAPI.println("ERR: STRING LITERAL OR STR$ EXPECTED");
         return false;
       }
-      
+
       setVariable(varName, evaluateExpression(rhs));
       return true;
-    }  
-  }  
+    }
+  }
   kernelAPI.println("SYNTAX ERROR");
   return false;
 }
@@ -3335,12 +3541,12 @@ void api_setup() {
     if (t) terminalPrintln(t);
   };
 
-  kernelAPI.clear   = [] () { 
+  kernelAPI.clear   = [] () {
     for(int i=0;i<TOTAL_ROWS;i++) memset(terminalBuffer[i], 0, TERM_COLS + 1);
     for(int i=0;i<TOTAL_ROWS;i++) memset(colorBuffer[i], 0, TERM_COLS);
     activeRowIndex=0;
     scrollOffset = 0;
-    cursorX = 0; 
+    cursorX = 0;
     cursorY = 0;
     if (MATRIX_ACTIVE) {
       bgCanvas.fillRect(0,0,TFT_WIDTH,TFT_WIDTH,TFT_BLACK);
@@ -3361,7 +3567,7 @@ void api_setup() {
 
   kernelAPI.inkey   = [] () -> int {
     char foundKey = getKeyPress(false);
-    return (int)foundKey; 
+    return (int)foundKey;
   };
 
   kernelAPI.color = [] (int colorId) {
@@ -3389,7 +3595,7 @@ void api_setup() {
       } else {
         tft.drawLine(x1, y1, x2, y2, getPaletteColor(colorId));
       }
-    } 
+    }
   };
 
   kernelAPI.rect = [] (int x, int y, int w, int h, int colorId) {
@@ -3465,9 +3671,9 @@ void api_setup() {
         handleKeyPress(pressedKey);
         if (pressedKey == '\n') {
           uint32_t bytesToCopy = strlen(inputBuffer);
-              
+
           if (bytesToCopy >= maxLen) bytesToCopy = maxLen - 1;
-              
+
           memcpy(destBuffer, inputBuffer, bytesToCopy);
           destBuffer[bytesToCopy] = '\0';
           memset(inputBuffer, 0, INPUT_BUF_SIZE);
@@ -3500,10 +3706,10 @@ void api_setup() {
       if (wifiFile) {
         int len = wifiFile.readBytesUntil('\n', localSSID, sizeof(localSSID) - 1);
         localSSID[len] = '\0';
-                
+
         len = wifiFile.readBytesUntil('\n', localPASS, sizeof(localPASS) - 1);
         localPASS[len] = '\0';
-                
+
         wifiFile.close();
       } else {
 #ifdef SERIAL_DEBUGGER
@@ -3535,8 +3741,8 @@ void api_setup() {
     while (WiFi.status() != WL_CONNECTED && timeout < 20) {
       delay(500);
       timeout++;
-    }   
-  
+    }
+
     if (WiFi.status() == WL_CONNECTED) {
 #ifdef SERIAL_DEBUGGER
       Serial.printf("[SYS] Wi-Fi connected! Station IP address: %s\n\r", WiFi.localIP().toString().c_str());
@@ -3557,7 +3763,7 @@ void api_setup() {
 
   kernelAPI.ollamaStream = [] (const char* p, const char* s, const char* m, const char* sysPrompt, int streamToConsole) -> int {
     if (WiFi.status() != WL_CONNECTED || !p || strlen(p) == 0 || !m) return -1;
-        
+
     String inputStr = String(p);
     String thinking = "false";
 
@@ -3612,9 +3818,9 @@ void api_setup() {
     }
 
 
-    HTTPClient http; 
+    HTTPClient http;
     http.begin("http://" + String(s) + ":11434/api/generate");
-    http.setTimeout((uint16_t)30000); 
+    http.setTimeout((uint16_t)30000);
     http.addHeader("Content-Type", "application/json");
 
     String jsonPrompt = String(activeContext);
@@ -3644,9 +3850,9 @@ void api_setup() {
 
     if (code == HTTP_CODE_OK) {
       WiFiClient* stream = http.getStreamPtr();
-        
+
       bool isRecordingCode = false;
-          
+
       #define WORK_ACC_SIZE 1536
       #define WORK_MD_SIZE 64
       #define WORK_FAR_SIZE 1024
@@ -3674,12 +3880,12 @@ void api_setup() {
           if (responseWindow.length() > 14) {
             responseWindow = responseWindow.substring(responseWindow.length() - 14);
           }
-                
+
           if (responseWindow.endsWith("\"response\":\"")) {
             insideResponseValue = true;
             escapeActive = false;
             responseWindow = "";
-          } 
+          }
           else if (responseWindow.endsWith("\"thinking\":\"")) {
             if (showThinkingLogs) {
               insideResponseValue = true;
@@ -3692,20 +3898,20 @@ void api_setup() {
 
         if (insideResponseValue) {
           if (escapeActive) {
-            String token = "\\" + String(c); 
+            String token = "\\" + String(c);
             escapeActive = false;
             if (textAccumulator && fullAssistantResponse) {
               processIncomingToken(token.c_str(), m, isRecordingCode, textAccumulator,
 			           WORK_ACC_SIZE, markdownBuffer, WORK_MD_SIZE, insideThinkBlock,
 				   fullAssistantResponse, WORK_FAR_SIZE, streamToConsole);
             }
-          } 
+          }
           else if (c == '\\') {
             escapeActive = true;
-          } 
+          }
           else if (c == '"') {
             insideResponseValue = false;
-          } 
+          }
           else {
             String token = String(c);
             if (textAccumulator && fullAssistantResponse) {
@@ -3715,7 +3921,7 @@ void api_setup() {
             }
           }
         }
-        delay(1); 
+        delay(1);
       }
 
       if (fullAssistantResponse && strlen(fullAssistantResponse) > 0) {
@@ -3723,7 +3929,7 @@ void api_setup() {
         if (farStr.endsWith("User:")) {
           farStr = farStr.substring(0, farStr.length() - 5);
         }
-            
+
         while ((strlen(activeContext) + farStr.length()) >= CONTEXT_BUF_SIZE) {
           char* nextTurn = strstr(activeContext + 6, "User:");
           if (nextTurn) {
@@ -3742,12 +3948,12 @@ void api_setup() {
       return 0;
     }
 
-    http.end(); 
+    http.end();
     return -1;
   };
 
   kernelAPI.getTouch    = kernel_getTouchState;
-  
+
   kernelAPI.termWidth   = TFT_WIDTH;
 
   kernelAPI.termHeight  = TFT_WIDTH;
@@ -3762,7 +3968,7 @@ void api_setup() {
     strlcpy(fKeyLabels[2], l3 ? l3 : "F3", F_KEY_LABEL_SIZE);
     strlcpy(fKeyLabels[3], l4 ? l4 : "F4", F_KEY_LABEL_SIZE);
     strlcpy(fKeyLabels[4], l5 ? l5 : "F5", F_KEY_LABEL_SIZE);
-    
+
     fKeysOverlayActive = true;
     drawStatusBar();
   };
@@ -3773,11 +3979,11 @@ void api_setup() {
   };
 
   kernelAPI.malloc = [] (unsigned int size) -> void* {
-    return malloc(size); 
+    return malloc(size);
   };
 
-  kernelAPI.free   = [] (void* ptr) { 
-    if (ptr) free(ptr); 
+  kernelAPI.free   = [] (void* ptr) {
+    if (ptr) free(ptr);
   };
 
   kernelAPI.createSprite = [](const char* filename) -> uint32_t {
@@ -3799,11 +4005,11 @@ void api_setup() {
     File f = SD.open(safePath, FILE_READ);
     f.read((uint8_t*)tempSprite.frameBuffer(0), PACKED_BYTES_PER_SPRITE);
     f.close();
-    
+
     spr->rawSize = compress4BitRLE((uint8_t*)tempSprite.frameBuffer(0), (uint8_t*)spr->rawSprite);
     spr->lastX = 0; spr->lastY = 0;
     spr->isOnScreen = false;
-    
+
     return (uint32_t)spr;
   };
 
@@ -3894,7 +4100,7 @@ void api_setup() {
       bgCanvas.setColorDepth(COLOR_DEPTH);
       bgCanvas.createSprite(TFT_WIDTH, TFT_WIDTH);
       bgCanvas.createPalette((uint16_t*)ramOSPalette);
-      
+
       tempSprite.deleteSprite();
       tempSprite.setColorDepth(COLOR_DEPTH);
       tempSprite.createSprite(SPRITE_SIZE, SPRITE_SIZE);
@@ -3911,7 +4117,13 @@ void api_setup() {
   };
 
   kernelAPI.flushGameMatrix = []() {
-    bgCanvas.pushSprite(0, 0);
+    if (MATRIX_ACTIVE) {
+      bgCanvas.pushSprite(0, 0);
+    } else {
+#if defined(BOARD_JC3248)
+     canvas_bridge->flush();
+#endif
+    }
   };
 
   kernelAPI.closeGameMatrix = []() {
