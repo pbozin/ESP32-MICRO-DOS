@@ -5,8 +5,8 @@
 
 # ESP32 MicroDOS
 
-An advanced, retro-style retro-operating system and interactive environment designed for 
-CYD clones [https://www.lcdwiki.com/4.0inch_ESP32-32E_Display] and capacitive equivalents (JC3248). 
+An advanced, retro-style retro-operating system and interactive environment designed for
+CYD clones [https://www.lcdwiki.com/4.0inch_ESP32-32E_Display] and capacitive equivalents (JC3248).
 
 Unlike typical monolithic microcontroller firmware, **MicroDOS** behaves like a classic 1980s disk operating system with modern AI features. It features a custom multi-statement **BASIC interpreter**, a **Universal Dynamic Linker/Loader** capable of running precompiled native C binaries from an SD card, an indexed **4-bit Sprite Game Engine**, and a memory-efficient **Ollama LLM live-streaming engine** that can autonomously re-program the host system on the fly.
 
@@ -25,7 +25,7 @@ A feature typically reserved for full application-class processors. MicroDOS bre
 * **Phase 2 (GOT Table Mapping):** Crawls the application's internal Global Offset Table (GOT) lookup grid to update indirect function pointers and global variables before spinning up a standalone, stack-guarded, runtime isolated FreeRTOS thread worker.
 
 ### 3. AI Stream Engine & Autonomous Code Harvesting
-MicroDOS implements a lightweight token streaming state-machine that communicates with localized or remote **Ollama AI Servers**. 
+MicroDOS implements a lightweight token streaming state-machine that communicates with localized or remote **Ollama AI Servers**.
 * **JSON Stream Tunneling:** Instead of inflating the memory footprint with heavy JSON string parsers, it parses network socket buffers byte-by-byte, using a sliding memory footprint window (`memmove`) to roll old history lines outward once bounds thresholds fill up.
 * **Code Injection Hook:** When contextually bound to `coder` mode, the terminal monitors incoming markdown tags. Encountering a ````basic```` markdown code block causes the OS to dump active interpretation tracks, capture the coming AI stream verbatim, and automatically inject the code into memory line-by-line via `storeLine()`. **The AI can rewrite the terminal program while it runs.**
 
@@ -68,16 +68,16 @@ Native applications interface with the operating system through a unified BIOS j
 // Entrypoint signature requested by the MicroDOS Dynamic Relocation Loader
 int _start(int argc, char** argv, MicroDosAPI* api) {
     _global_api_ptr = api; // Bind memory allocation hooks back to OS core
-    
+
     api->clear();
     api->println(STRING("--- Dynamic C Guest Application Live ---"));
     api->beep(440, 250);
-    
+
     // Launch dynamic 4-bit graphical loop matrix
     api->initGameMatrix();
     api->rect(10, 10, 100, 50, GREEN);
     api->flushGameMatrix();
-    
+
     api->delay(2000);
     api->closeGameMatrix();
     return 0; // Returns exit status codes back up safely to Host Core tasks
@@ -91,7 +91,7 @@ To build plugins that can survive runtime relative offset assignments, use these
 [env:esp32dev]
 platform = espressif32
 board = esp32dev
-build_flags = 
+build_flags =
     -O2
     -fpack-struct=4
     -fPIC                               ; Position Independent Code flag

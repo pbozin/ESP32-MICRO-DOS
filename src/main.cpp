@@ -13,12 +13,20 @@
 #include <TFT_eSPI.h>
 TFT_eSPI tft = TFT_eSPI();
 SPIClass sdSPI(HSPI);
+#define TOUCH_X_MIN 300
+#define TOUCH_X_MAX 3500
+#define TOUCH_Y_MIN 300
+#define TOUCH_Y_MAX 3500
 
 #elif defined(BOARD_JC3248)
 #include <Arduino_GFX_Library.h>
 #include <Wire.h>
 #include <SD_MMC.h>
 #define SD SD_MMC
+#define TOUCH_X_MIN 12
+#define TOUCH_X_MAX 310
+#define TOUCH_Y_MIN 14
+#define TOUCH_Y_MAX 461
 #define TFT_BLACK     0x0000
 #define TFT_BLUE      0x001F
 #define TFT_RED       0xF800
@@ -37,13 +45,86 @@ SPIClass sdSPI(HSPI);
 #define TFT_PINK      0xFE19
 #endif
 
-
 static uint16_t currentActivePaletteId = TFT_GREEN;
 
+const uint16_t ramOSPalette[16] = {
+    TFT_BLACK,      // Index 0
+    TFT_WHITE,      // Index 1
+    TFT_LIGHTGREY,  // Index 2
+    TFT_RED,        // Index 3
+    TFT_ORANGE,     // Index 4
+    TFT_YELLOW,     // Index 5
+    TFT_GREEN,      // Index 6
+    TFT_CYAN,       // Index 7
+    TFT_BLUE,       // Index 8
+    TFT_MAGENTA,    // Index 9
+    TFT_MAROON,     // Index 10
+    TFT_DARKGREEN,  // Index 11
+    TFT_DARKCYAN,   // Index 12
+    TFT_NAVY,       // Index 13
+    TFT_PINK,       // Index 14
+    TFT_DARKGREY    // Index 15  <- Chroma key or dark grey
+};
+
+#define SYSTEM_RAM_SIZE 128
+#define CONTEXT_BUF_SIZE 2048
+#define CHAR_WIDTH  6
+#define CHAR_HEIGHT 16
+#define TERM_COLS   int(TFT_WIDTH / CHAR_WIDTH)
+#define TERM_ROWS   int(TFT_WIDTH / CHAR_HEIGHT)
+
+#define TOTAL_ROWS (TERM_ROWS * 4)  // Total capacity of historical terminal memory
+
+#define CURSOR_SIZE 2
+#define FILENAME_SIZE 20
+#define PROMPT_SIZE 40
+#define INPUT_BUF_SIZE (TERM_COLS * 2)
+
+#define KEY_ROWS   4
+#define KEY_COLS   10
+#define KEY_HEIGHT 34
+#define KEY_WIDTH  32
+
+#define KEY_REPEAT_DELAY 300
+
+#define STATUS_HEIGHT   24
+#define STATUS_Y_START  (TFT_HEIGHT - (KEY_ROWS*KEY_HEIGHT) - STATUS_HEIGHT)
+
+#define TFT_HEIGHT_DRAW STATUS_Y_START
+#define TFT_WIDTH_DRAW TFT_WIDTH
+
+#define KEYBOARD_Y_START (TFT_HEIGHT - (KEY_ROWS*KEY_HEIGHT))
+
+#define F_KEY_LABEL_SIZE 7
+#define TKN_F1 '\x11'
+#define TKN_F2 '\x12'
+#define TKN_F3 '\x13'
+#define TKN_F4 '\x14'
+#define TKN_F5 '\x15'
+
+#define SPRITE_SIZE 40
+#define COLOR_DEPTH 4
+
+#define MATRIX_ACTIVE (bgCanvas.frameBuffer(0) != nullptr)
+#define CLAMP(val, min, max) ((val) < (min) ? (min) : ((val) > (max) ? (max) : (val)))
+
+#define COMPRESSED_4BIT_SIZE 400
+#define PACKED_BYTES_PER_SPRITE ((SPRITE_SIZE * SPRITE_SIZE) / (8 / COLOR_DEPTH))
+
+#define MAX_PROGRAM_LINES 100
+#define MAX_LINE_LEN 100
+
+#define MAX_VARS 20
+#define MAX_VAR_NAME_LEN 12
+#define MAX_STR_VARS 20
+#define MAX_STR_LEN  50
+
+#define MAX_STACK_DEPTH 20
+#define MAX_FOR_NEST 4
+
+
 #if defined(BOARD_JC3248)
-  static Arduino_DataBus *bus = new Arduino_ESP32QSPI(
-    45 /* CS */, 47 /* SCK */, 21 /* D0 */, 48 /* D1 */, 40 /* D2 */, 39 /* D3 */
-  );
+  static Arduino_DataBus *bus = new Arduino_ESP32QSPI(TFT_CS, TFT_SCK, TFT_D0, TFT_D1, TFT_D2, TFT_D3);
 
   static Arduino_GFX *tft_base = new Arduino_AXS15231B(
     bus, GFX_NOT_DEFINED /* RST */, 0 /* Rotation */, false /* IPS */, TFT_WIDTH, TFT_HEIGHT
@@ -60,18 +141,16 @@ static uint16_t currentActivePaletteId = TFT_GREEN;
     void init() {
 
       tft_driver->begin();
-      tft_driver->fillScreen(TFT_BLACK);
+      tft_driver->fillScreen(TFT_GREEN);
 
-      pinMode(3, INPUT);
+      pinMode(TOUCH_INT, INPUT_PULLUP);
+      Wire.begin(TOUCH_SDA, TOUCH_SCL);
+      Wire.setClock(TOUCH_FREQUENCY);
 
-      Wire.begin(4 /* SDA */, 8 /* SCL */);
-      Wire.setClock(400000);
-
-      static const uint8_t AXS_READ_TOUCHPAD[8] = { 0xB5, 0xAB, 0xA5, 0x5A, 0x00, 0x00, 0x00, 0x08 };
+      static const uint8_t AXS_READ_TOUCHPAD[8] = { 0xB5, 0xAB, 0xA5, 0x5A, 0x00, 0x00, 0x00, 0x06 };
       Wire.beginTransmission(0x3B);
       Wire.write(AXS_READ_TOUCHPAD, 8);
       Wire.endTransmission();
-      delayMicroseconds(50);
     }
     void initDMA() {}
     void setRotation(uint8_t r) { tft_driver->setRotation(r); }
@@ -108,21 +187,25 @@ static uint16_t currentActivePaletteId = TFT_GREEN;
       canvas_bridge->flush();
     }
     bool getTouch(uint16_t *x, uint16_t *y) {
-      Wire.requestFrom(0x3B, 8);
-      if (Wire.available() >= 8) {
-        uint8_t packet[8];
-        for (int i = 0; i < 8; i++) {
+      Wire.requestFrom(0x3B, 6);
+      if (Wire.available() >= 6) {
+        uint8_t packet[6];
+        for (int i = 0; i < 6; i++) {
           packet[i] = Wire.read();
         }
-        if (packet[0] != 0x00 || packet[1] == 0x00) return false;
+        uint8_t eventType = packet[2] >> 6;
+
+        if (eventType == 0x01 || packet[1] == 0x00) return false;
 
         uint16_t rawX = ((uint16_t)(packet[2] & 0x0F) << 8) | packet[3];
         uint16_t rawY = ((uint16_t)(packet[4] & 0x0F) << 8) | packet[5];
 
-        if (rawX < TFT_WIDTH && rawY < TFT_HEIGHT) {
-          *x = rawX;
-          *y = rawY;
-	  delay(33);
+        uint16_t pixelX = map(rawX, TOUCH_X_MIN, TOUCH_X_MAX, 0, TFT_WIDTH-1);
+        uint16_t pixelY = map(rawY, TOUCH_Y_MIN, TOUCH_Y_MAX, 0, TFT_HEIGHT-1);
+
+        if (pixelX < TFT_WIDTH && pixelY < TFT_HEIGHT) {
+          *x = pixelX;
+          *y = pixelY;
           return true;
         }
       }
@@ -228,7 +311,7 @@ static uint16_t currentActivePaletteId = TFT_GREEN;
       if (!_fb || !_palette) return;
       uint16_t rowBuffer[TFT_WIDTH];
       int16_t targetWidth = (_w > TFT_WIDTH) ? TFT_WIDTH : _w;
-      int16_t targetHeight = (_h > TFT_WIDTH) ? TFT_WIDTH : _h;
+      int16_t targetHeight = (_h > TFT_HEIGHT_DRAW) ? TFT_WIDTH_DRAW : _h;
 
       for (int16_t row = 0; row < targetHeight; row++) {
         int canvasRowOffset = row * (_w / 2);
@@ -267,7 +350,6 @@ void drawStatusBar();
 void executeProgram();
 void handleKeyPress(char key);
 void initSD();
-void initTouchCalibration();
 void listProgram();
 void listProgramRange(int start, int end);
 void loadBuffer(const char* filename);
@@ -279,7 +361,7 @@ void playBeep(int frequency, int durationMs);
 void printLogo();
 void processCommand(const char* cmd);
 void processCommand(const char* rawCmd);
-void processTerminalTouchScrolling();
+void processTerminalTouchScrolling(uint16_t x, uint16_t y);
 void redrawTerminal();
 void renderFullWrappedInputLine();
 void saveBuffer(const char* filename);
@@ -305,70 +387,21 @@ void processIncomingToken(const char* token, const char* m, bool &isRecordingCod
 			  char* fullAssistantResponse, size_t farMaxSize, int streamToConsole);
 
 
-const uint16_t ramOSPalette[16] = {
-    TFT_BLACK,      // Index 0
-    TFT_WHITE,      // Index 1
-    TFT_LIGHTGREY,  // Index 2
-    TFT_RED,        // Index 3
-    TFT_ORANGE,     // Index 4
-    TFT_YELLOW,     // Index 5
-    TFT_GREEN,      // Index 6
-    TFT_CYAN,       // Index 7
-    TFT_BLUE,       // Index 8
-    TFT_MAGENTA,    // Index 9
-    TFT_MAROON,     // Index 10
-    TFT_DARKGREEN,  // Index 11
-    TFT_DARKCYAN,   // Index 12
-    TFT_NAVY,       // Index 13
-    TFT_PINK,       // Index 14
-    TFT_DARKGREY    // Index 15  <- Chroma key or dark grey
-};
 
 uint16_t getPaletteColor(int cId) {
-  switch (cId) {
-    case 0: return TFT_BLACK;
-    case 1: return TFT_WHITE;
-    case 2: return TFT_LIGHTGREY;
-    case 3: return TFT_RED;
-    case 4: return TFT_ORANGE;
-    case 5: return TFT_YELLOW;
-    case 6: return TFT_GREEN;
-    case 7: return TFT_CYAN;
-    case 8: return TFT_BLUE;
-    case 9: return TFT_MAGENTA;
-    case 10: return TFT_MAROON;
-    case 11: return TFT_DARKGREEN;
-    case 12: return TFT_DARKCYAN;
-    case 13: return TFT_NAVY;
-    case 14: return TFT_PINK;
-    case 15: return TFT_DARKGREY; // Chroma key or dark grey
-
-    default: return TFT_GREEN;
+  if (cId >= 0 && cId < 16) {
+    return ramOSPalette[cId];
   }
+  return TFT_GREEN;
 }
 
-#define SYSTEM_RAM_SIZE 165
 int systemRAM[SYSTEM_RAM_SIZE];
 
-#define CONTEXT_BUF_SIZE 2048
-static char coderContext[CONTEXT_BUF_SIZE] = "";
 static char chatContext[CONTEXT_BUF_SIZE] = "";
 static char* activeContext = NULL;
 
-#define CHAR_WIDTH  6
-#define CHAR_HEIGHT 16
-#define TERM_COLS   int(TFT_WIDTH / CHAR_WIDTH)
-#define TERM_ROWS   int(TFT_WIDTH / CHAR_HEIGHT)
-
-#define TOTAL_ROWS TERM_ROWS * 4  // Total capacity of historical terminal memory
-
 static char terminalBuffer[TOTAL_ROWS][TERM_COLS + 1];
 static uint8_t colorBuffer[TOTAL_ROWS][TERM_COLS];
-
-#define CURSOR_SIZE 2
-#define FILENAME_SIZE 20
-#define PROMPT_SIZE 40
-#define INPUT_BUF_SIZE (TERM_COLS * 2)
 
 static int inputCursorPos = 0;
 
@@ -383,47 +416,21 @@ static char fixedFilename[FILENAME_SIZE];
 
 static bool programHalted = false;
 
-#define TKN_F1 '\x11'
-#define TKN_F2 '\x12'
-#define TKN_F3 '\x13'
-#define TKN_F4 '\x14'
-#define TKN_F5 '\x15'
-
 static const char fTable[5] = { TKN_F1, TKN_F2, TKN_F3, TKN_F4, TKN_F5 };
 
-#define F_KEY_LABEL_SIZE 7
 static const char fKeyLabelsDefault[5][F_KEY_LABEL_SIZE] = { "  <-  ", "  ->  ", "  ESC ", "  DEL ", "  <X  " };
 static char fKeyLabels[5][F_KEY_LABEL_SIZE] = { "  <-  ", "  ->  ", "  ESC ", "  DEL ", "  <X  " };
 
 static bool fKeysOverlayActive = false;
-
-#define KEY_ROWS   4
-#define KEY_COLS   10
-#define KEY_HEIGHT 34
-#define KEY_WIDTH  32
-
-#define STATUS_HEIGHT   24
-#define STATUS_Y_START  (TFT_HEIGHT - (KEY_ROWS*KEY_HEIGHT) - STATUS_HEIGHT)
-
-#define KEYBOARD_Y_START (TFT_HEIGHT - (KEY_ROWS*KEY_HEIGHT))
 
 static int scrollOffset = 0;
 static int activeRowIndex = 0;
 
 static bool symbolModeActive = false;
 
-#define SPRITE_SIZE 40
-#define COLOR_DEPTH 4
-
 static TFT_eSprite bgCanvas = TFT_eSprite(&tft);
 static TFT_eSprite renderSprite = TFT_eSprite(&tft);
 static TFT_eSprite tempSprite = TFT_eSprite(&tft);
-
-#define MATRIX_ACTIVE (bgCanvas.frameBuffer(0) != nullptr)
-#define CLAMP(val, min, max) ((val) < (min) ? (min) : ((val) > (max) ? (max) : (val)))
-
-#define COMPRESSED_4BIT_SIZE 400
-#define PACKED_BYTES_PER_SPRITE ((SPRITE_SIZE * SPRITE_SIZE) / (8 / COLOR_DEPTH))
 
 struct OSSprite_t {
     bool isOnScreen;
@@ -540,21 +547,80 @@ static MicroDosAPI kernelAPI;
 
 bool sdAvailable = false;
 
+struct ProgramLine {
+  int lineNumber;
+  char code[MAX_LINE_LEN];
+};
+ProgramLine programMemory[MAX_PROGRAM_LINES];
+int programLineCount = 0;
+
+struct Variable {
+  char name[MAX_VAR_NAME_LEN];
+  int value;
+};
+
+Variable sysVariables[MAX_VARS];
+int variableCount = 0;
+
+struct StringVariable {
+    char name[MAX_VAR_NAME_LEN];
+    char value[MAX_STR_LEN];
+};
+
+static StringVariable stringRegistry[MAX_STR_VARS];
+static int stringRegistryCount = 0;
+
+int subroutineCallStack[MAX_STACK_DEPTH];
+int stackPointer = 0;
+
+struct ForLoopState {
+  char varName;
+  int targetValue;
+  int stepValue;
+  int lineMemoryIdx;
+};
+
+ForLoopState forStack[MAX_FOR_NEST];
+int forStackPointer = 0;
+
+static bool showThinkingLogs = false;
+
+const char alphaLayout[KEY_ROWS][KEY_COLS] = {
+  {'1', '2', '3', '4', '5', '6', '7', '8', '9', '0'},
+  {'Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P'},
+  {'A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L', '\t'},
+  {'Z', 'X', 'C', 'V', 'B', 'N', 'M', ' ', '\r', '\n'}
+};
+
+const char symbolLayout[KEY_ROWS][KEY_COLS] = {
+  {'+', '-', '*', '/', '=', '(', ')', '[', ']', '%'},
+  {'"', '\'', ':', ';', '!', '?', '\\', '|', '&', '^'},
+  {'.', ',', '<', '>', '_', '~', '$', '@', '#', '\t'},
+  {'{', '}', ' ', ' ', ' ', ' ', ' ', ' ', '\r', '\n'}
+};
+
+static int lastTouchY = 0;
+static bool touchHeld = false;
+
 void setup() {
   Serial.begin(115200);
   unsigned long startWait = millis();
-  while (!Serial && (millis() - startWait < 3000)) { delay(10); }
+  while (!Serial && (millis() - startWait < 1000)) { delay(10); }
   Serial.println(F("\nStarting ESP32 MicroDOS"));
 
   initSD();
-  Serial.println(F("- Init SD Card OK"));
-  delay(100);
+  if (sdAvailable) {
+    Serial.println(F("- Init SD Card OK"));
+  } else {
+    Serial.println(F("- Init SD Card FAIL"));
+  }
 
   WiFi.mode(WIFI_STA);
-  delay(100);
-  WiFi.mode(WIFI_OFF);
-  delay(100);
-  Serial.println(F("- Init WiFi    OK"));
+  if (WiFi.mode(WIFI_OFF)) {
+    Serial.println(F("- Init WiFi    OK"));
+  } else {
+    Serial.println(F("- Init WiFi    FAIL"));
+  }
 
   tft.init();
   tft.initDMA();
@@ -562,23 +628,24 @@ void setup() {
   tft.fillScreen(TFT_BLACK);
   Serial.println(F("- Init TFT     OK"));
 
-  drawKeyboard();
-  drawStatusBar();
-
 #if defined(BOARD_CYD)
-  initTouchCalibration();
-  randomSeed(analogRead(34));
+  uint16_t cD[] = { TOUCH_Y_MIN, TOUCH_Y_MAX, TOUCH_X_MIN, TOUCH_X_MAX, 4 };
+  tft.setTouch(cD);
 #elif defined(BOARD_JC3248)
   randomSeed(analogRead(10));
 #endif
 
-  pinMode(0, INPUT_PULLUP);
+  randomSeed(analogRead(RND_SEED_PIN));
+  pinMode(HARD_BREAK_PIN, INPUT_PULLUP);
   pinMode(AUDIO_EN_PIN, OUTPUT);
   digitalWrite(AUDIO_EN_PIN, HIGH);
   pinMode(AUDIO_DATA_PIN, OUTPUT);
 
   api_setup();
   Serial.println(F("- Init API     OK"));
+
+  drawKeyboard();
+  drawStatusBar();
 
   pinMode(TFT_BL, OUTPUT);
   digitalWrite(TFT_BL, HIGH);
@@ -616,107 +683,30 @@ void loop() {
   delay(10);
 }
 
-#define MAX_PROGRAM_LINES 100
-#define MAX_LINE_LEN 80
+void processTerminalTouchScrolling(uint16_t x, uint16_t y) {
+  if (y >= 0 && y <= TFT_HEIGHT_DRAW) {
+      if (!touchHeld) {
+          touchHeld = true;
+          lastTouchY = y;
+      } else {
+          int deltaY = y - lastTouchY;
 
-struct ProgramLine {
-  int lineNumber;
-  char code[MAX_LINE_LEN];
-};
-ProgramLine programMemory[MAX_PROGRAM_LINES];
-int programLineCount = 0;
-
-#define MAX_VARS 20
-#define MAX_VAR_NAME_LEN 12
-#define MAX_STR_VARS 20
-#define MAX_STR_LEN  50
-
-struct Variable {
-  char name[MAX_VAR_NAME_LEN];
-  int value;
-};
-
-Variable sysVariables[MAX_VARS];
-int variableCount = 0;
-
-struct StringVariable {
-    char name[MAX_VAR_NAME_LEN];
-    char value[MAX_STR_LEN];
-};
-
-static StringVariable stringRegistry[MAX_STR_VARS];
-static int stringRegistryCount = 0;
-
-#define MAX_STACK_DEPTH 20
-int subroutineCallStack[MAX_STACK_DEPTH];
-int stackPointer = 0;
-
-
-#define MAX_FOR_NEST 4
-
-struct ForLoopState {
-  char varName;
-  int targetValue;
-  int stepValue;
-  int lineMemoryIdx;
-};
-
-ForLoopState forStack[MAX_FOR_NEST];
-int forStackPointer = 0;
-
-static bool showThinkingLogs = false;
-
-const char alphaLayout[KEY_ROWS][KEY_COLS] = {
-  {'1', '2', '3', '4', '5', '6', '7', '8', '9', '0'},
-  {'Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P'},
-  {'A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L', '\t'},
-  {'Z', 'X', 'C', 'V', 'B', 'N', 'M', ' ', '\r', '\n'}
-};
-
-const char symbolLayout[KEY_ROWS][KEY_COLS] = {
-  {'+', '-', '*', '/', '=', '(', ')', '[', ']', '%'},
-  {'"', '\'', ':', ';', '!', '?', '\\', '|', '&', '^'},
-  {'.', ',', '<', '>', '_', '~', '$', '@', '#', '\t'},
-  {'{', '}', ' ', ' ', ' ', ' ', ' ', ' ', '\r', '\n'}
-};
-
-static int lastTouchY = 0;
-static bool touchHeld = false;
-
-void processTerminalTouchScrolling() {
-  uint16_t x = 0, y = 0;
-
-  if (tft.getTouch(&x, &y)) {
-
-#if defined(BOARD_CYD)
-      x = TFT_WIDTH - x;
-      y = TFT_HEIGHT - y;
-#endif
-
-      if (y >= 0 && y <= TFT_WIDTH) {
-          if (!touchHeld) {
-              touchHeld = true;
+          if (deltaY >= CHAR_HEIGHT) {
+              if (scrollOffset > 0) {
+                  scrollOffset--;
+                  redrawTerminal();
+              }
               lastTouchY = y;
-          } else {
-              int deltaY = y - lastTouchY;
+          }
+          else if (deltaY <= -CHAR_HEIGHT) {
+              int maxPossibleScroll = activeRowIndex - TERM_ROWS + 1;
+              if (maxPossibleScroll < 0) maxPossibleScroll = 0;
 
-              if (deltaY >= CHAR_HEIGHT) {
-                  if (scrollOffset > 0) {
-                      scrollOffset--;
-                      redrawTerminal();
-                  }
-                  lastTouchY = y;
+              if (scrollOffset < maxPossibleScroll) {
+                  scrollOffset++;
+                  redrawTerminal();
               }
-              else if (deltaY <= -CHAR_HEIGHT) {
-                  int maxPossibleScroll = activeRowIndex - TERM_ROWS + 1;
-                  if (maxPossibleScroll < 0) maxPossibleScroll = 0;
-
-                  if (scrollOffset < maxPossibleScroll) {
-                      scrollOffset++;
-                      redrawTerminal();
-                  }
-                  lastTouchY = y;
-              }
+              lastTouchY = y;
           }
       }
   } else {
@@ -775,7 +765,7 @@ bool tft_output(int16_t x, int16_t y, uint16_t w, uint16_t h, uint16_t* bitmap) 
   if (y >= tft.width()) return false;
 
   if (MATRIX_ACTIVE) {
-    //TODO Decode 16-bit RGB565 to 4-bit indexed color array and push to the TFT hardware registers
+    //TODO Decode 16-bit RGB565 to 4-bit indexed color array
     bgCanvas.pushImage(x, y, w, h, bitmap);
     bgCanvas.pushSprite(0, 0);
   } else {
@@ -861,12 +851,8 @@ void clearConversationContext() {
     if (activeContext != NULL) {
         activeContext[0] = '\0';
     } else {
-        memset(coderContext, 0, CONTEXT_BUF_SIZE);
         memset(chatContext, 0, CONTEXT_BUF_SIZE);
     }
-
-    clearProgram();
-    forStackPointer = 0;
 
 #ifdef SERIAL_DEBUG
     if (Serial) {
@@ -882,18 +868,10 @@ void kernel_getTouchState(TouchState* state) {
   uint16_t rawY = 0;
 
   if (tft.getTouch(&rawX, &rawY)) {
-#if defined(BOARD_CYD)
-    int mappedX = TFT_WIDTH - rawX;
-    int mappedY = TFT_HEIGHT - rawY;
-#else
-    int mappedX = rawX;
-    int mappedY = rawY;
-#endif
-
-    if (mappedY < KEYBOARD_Y_START) {
+    if (rawY < KEYBOARD_Y_START) {
       state->isPressed = true;
-      state->x = mappedX;
-      state->y = mappedY;
+      state->x = rawX;
+      state->y = rawY;
       return;
     }
   }
@@ -904,65 +882,45 @@ void kernel_getTouchState(TouchState* state) {
 }
 
 char getKeyPress(bool blocking) {
+  unsigned long startTime = millis();
   uint16_t touchX = 0, touchY = 0;
   char pressedKey = 0;
-  int max_delay = 50;
-  unsigned long startTime = millis();
+  int maxDelay = 50;
 
   if (tft.getTouch(&touchX, &touchY)) {
-#ifdef BOARD_CYD
-    touchX = TFT_WIDTH - touchX;
-    touchY = TFT_HEIGHT - touchY;
-#endif
-
     if (touchY >= STATUS_Y_START && touchY < KEYBOARD_Y_START) {
       int fIndex = touchX / 64;
 
       if (fIndex >= 0 && fIndex <= 4) {
         pressedKey = fTable[fIndex];
-
-        delay(300);
-        tft.getTouch(&touchX, &touchY);
-        return pressedKey;
+        if (blocking) delay(KEY_REPEAT_DELAY);
       }
     }
-    else if (touchY >= KEYBOARD_Y_START && touchY < TFT_HEIGHT) {
+    else if (touchY >= KEYBOARD_Y_START && touchY <= TFT_HEIGHT) {
       int localY = touchY - KEYBOARD_Y_START;
-      int row = localY / KEY_HEIGHT;
-      int col = touchX / KEY_WIDTH;
+      int row = (localY / KEY_HEIGHT);
+      int col = (touchX / KEY_WIDTH);
 
       if (row >= 0 && row < KEY_ROWS && col >= 0 && col < KEY_COLS) {
         pressedKey = symbolModeActive ? symbolLayout[row][col] : alphaLayout[row][col];
-
+        if (blocking) delay(KEY_REPEAT_DELAY);
         if (pressedKey == '\r') {
           pressedKey = 0;
           symbolModeActive = !symbolModeActive;
           drawKeyboard();
           drawStatusBar();
-          while (tft.getTouch(&touchX, &touchY)) { delay(10); }
-          return 0;
-        }
-        else if (pressedKey == '\t') {
-          delay(300);
-          tft.getTouch(&touchX, &touchY);
-          return pressedKey;
-        }
-
-        if (blocking) {
-            while (tft.getTouch(&touchX, &touchY)) { delay(10); }
+          delay(KEY_REPEAT_DELAY);
         }
       }
     }
     else if (touchY >= 0 && touchY <= STATUS_Y_START) {
-       processTerminalTouchScrolling();
+       processTerminalTouchScrolling(touchX, touchY);
     }
-  } else {
-      processTerminalTouchScrolling();
   }
 
   unsigned long execTime = millis() - startTime;
-  if (execTime > 0 && execTime < max_delay) {
-     delay(max_delay - execTime);
+  if (execTime > 0 && execTime < maxDelay) {
+     delay(maxDelay - execTime);
   }
   return pressedKey;
 }
@@ -974,13 +932,6 @@ void playBeep(int frequency, int durationMs) {
   noTone(AUDIO_DATA_PIN);
   digitalWrite(AUDIO_EN_PIN, HIGH);
 }
-
-#if defined(BOARD_CYD)
-void initTouchCalibration() {
-  uint16_t calData[] = { TFT_WIDTH, 3500, TFT_WIDTH, 3500, 2 };
-  tft.setTouch(calData);
-}
-#endif
 
 void initSD() {
 #if defined(BOARD_CYD)
@@ -995,10 +946,8 @@ void initSD() {
 
   if (!SD_MMC.begin("/sd", true)) {
     sdAvailable = false;
-    Serial.println("SD_MMC Mount Failed!");
   } else {
     sdAvailable = true;
-    Serial.println("SD_MMC Mounted Successfully!");
   }
 #endif
 }
@@ -1168,18 +1117,18 @@ void redrawTerminal() {
       }
 
       int textPixelWidth = c * CHAR_WIDTH;
-      if (textPixelWidth < TFT_WIDTH) {
+      if (textPixelWidth < TFT_WIDTH_DRAW) {
         if (MATRIX_ACTIVE) {
-          bgCanvas.fillRect(textPixelWidth, r * CHAR_HEIGHT, TFT_WIDTH - textPixelWidth, CHAR_HEIGHT, TFT_BLACK);
+          bgCanvas.fillRect(textPixelWidth, r * CHAR_HEIGHT, TFT_WIDTH_DRAW - textPixelWidth, CHAR_HEIGHT, TFT_BLACK);
 	} else {
-          tft.fillRect(textPixelWidth, r * CHAR_HEIGHT, TFT_WIDTH - textPixelWidth, CHAR_HEIGHT, TFT_BLACK);
+          tft.fillRect(textPixelWidth, r * CHAR_HEIGHT, TFT_WIDTH_DRAW - textPixelWidth, CHAR_HEIGHT, TFT_BLACK);
 	}
       }
     } else {
       if (MATRIX_ACTIVE) {
-        bgCanvas.fillRect(0, r * CHAR_HEIGHT, TFT_WIDTH, CHAR_HEIGHT, TFT_BLACK);
+        bgCanvas.fillRect(0, r * CHAR_HEIGHT, TFT_WIDTH_DRAW, CHAR_HEIGHT, TFT_BLACK);
       } else {
-        tft.fillRect(0, r * CHAR_HEIGHT, TFT_WIDTH, CHAR_HEIGHT, TFT_BLACK);
+        tft.fillRect(0, r * CHAR_HEIGHT, TFT_WIDTH_DRAW, CHAR_HEIGHT, TFT_BLACK);
       }
     }
   }
@@ -3583,10 +3532,10 @@ void api_setup() {
     cursorX = 0;
     cursorY = 0;
     if (MATRIX_ACTIVE) {
-      bgCanvas.fillRect(0,0,TFT_WIDTH,TFT_WIDTH,TFT_BLACK);
+      bgCanvas.fillRect(0,0,TFT_WIDTH_DRAW,TFT_HEIGHT_DRAW,TFT_BLACK);
       bgCanvas.pushSprite(0, 0);
     } else {
-      tft.fillRect(0,0,TFT_WIDTH,TFT_WIDTH,TFT_BLACK);
+      tft.fillRect(0,0,TFT_WIDTH_DRAW,TFT_HEIGHT_DRAW,TFT_BLACK);
     }
     redrawTerminal();
   };
@@ -3613,7 +3562,7 @@ void api_setup() {
   };
 
   kernelAPI.plot = [] (int x, int y, int colorId) {
-    if (x >= 0 && x < TFT_WIDTH && y >= 0 && y < TFT_WIDTH) {
+    if (x >= 0 && x < TFT_WIDTH_DRAW && y >= 0 && y < TFT_HEIGHT_DRAW) {
       if (MATRIX_ACTIVE) {
         bgCanvas.drawPixel(x, y, colorId);
       } else {
@@ -3623,7 +3572,7 @@ void api_setup() {
   };
 
   kernelAPI.line = [] (int x1, int y1, int x2, int y2, int colorId) {
-    if (x1 >= 0 && x1 < TFT_WIDTH && y1 >= 0 && y1 < TFT_WIDTH && x2 >= 0 && x2 < TFT_WIDTH && y2 >= 0 && y2 < TFT_WIDTH) {
+    if (x1 >= 0 && x1 < TFT_WIDTH_DRAW && y1 >= 0 && y1 < TFT_HEIGHT_DRAW && x2 >= 0 && x2 < TFT_WIDTH_DRAW && y2 >= 0 && y2 < TFT_HEIGHT_DRAW) {
       if (MATRIX_ACTIVE) {
         bgCanvas.drawLine(x1, y1, x2, y2, colorId);
       } else {
@@ -3827,11 +3776,7 @@ void api_setup() {
       thinking = "true";
     }
 
-    if (String(m).indexOf("coder") > -1) {
-      activeContext = coderContext;
-    } else {
-      activeContext = chatContext;
-    }
+    activeContext = chatContext;
 
 
     if (strlen(activeContext) == 0) {
@@ -3988,9 +3933,9 @@ void api_setup() {
 
   kernelAPI.getTouch    = kernel_getTouchState;
 
-  kernelAPI.termWidth   = TFT_WIDTH;
+  kernelAPI.termWidth   = TFT_WIDTH_DRAW;
 
-  kernelAPI.termHeight  = TFT_WIDTH;
+  kernelAPI.termHeight  = TFT_HEIGHT_DRAW;
 
   kernelAPI.charWidth   = CHAR_WIDTH;
 
@@ -4059,7 +4004,7 @@ void api_setup() {
       spr->isOnScreen = false;
     }
 
-    if (x < 0 || x > (TFT_WIDTH - SPRITE_SIZE) || y < 0 || y > (TFT_WIDTH - SPRITE_SIZE)) {
+    if (x < 0 || x > (TFT_WIDTH_DRAW - SPRITE_SIZE) || y < 0 || y > (TFT_HEIGHT_DRAW - SPRITE_SIZE)) {
       return;
     }
 
@@ -4069,14 +4014,14 @@ void api_setup() {
       uint8_t* out_render = (uint8_t*)renderSprite.frameBuffer(0);
 
       int bytesPerSpriteRow = SPRITE_SIZE / (8 / COLOR_DEPTH);
-      int bytesPerCanvasRow = TFT_WIDTH / (8 / COLOR_DEPTH);
+      int bytesPerCanvasRow = TFT_WIDTH_DRAW / (8 / COLOR_DEPTH);
 
       int alignedX = x & ~1;
       int startByteX = alignedX >> 1;
 
       for (int row = 0; row < SPRITE_SIZE; row++) {
         int targetY = y + row;
-        if (targetY >= TFT_WIDTH) break;
+        if (targetY >= TFT_HEIGHT_DRAW) break;
 
         int canvasSourceOffset = (targetY * bytesPerCanvasRow) + startByteX;
         int spriteDestOffset = row * bytesPerSpriteRow;
@@ -4132,7 +4077,7 @@ void api_setup() {
   kernelAPI.initGameMatrix = []() -> bool {
     if (!MATRIX_ACTIVE) {
       bgCanvas.setColorDepth(COLOR_DEPTH);
-      bgCanvas.createSprite(TFT_WIDTH, TFT_WIDTH);
+      bgCanvas.createSprite(TFT_WIDTH_DRAW, TFT_HEIGHT_DRAW);
       bgCanvas.createPalette((uint16_t*)ramOSPalette);
 
       tempSprite.deleteSprite();

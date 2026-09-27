@@ -12,7 +12,7 @@ Developing dynamic binary plugins for a Harvard-architecture microcontroller lik
 To protect guest binaries against long-call memory traps, MicroDOS applies a specialized layout configuration map via `api/mdb.ld`:
 
 1. **Inline Literal Pool Interleaving:** Rather than aggregating `.literal` records inside a separate trailing partition, the linker interleaves them directly beside code boundaries inside the text layout tracking sections: `*(.literal .text .literal.* .text.*)`. This forces data assets to settle directly alongside matching code blocks, preserving localized `L32R` lookup constraints.
-2. **Strict Dual-Zone Segregation:** 
+2. **Strict Dual-Zone Segregation:**
    * **ZONE 1 (IRAM Space):** Houses the instruction entries (`.text`) packed with local literal indices. The loader allocates this segment to the ESP32 instruction bus (`MALLOC_CAP_EXEC`).
    * **ZONE 2 (DRAM Space):** Clusters writeable variables (`.data`), read-only strings (`.rodata`), and the lookup matrix vectors (`.got`). The loader assigns this section safely to data RAM footprints.
 
@@ -30,7 +30,7 @@ Before the `EXEC` loader task schedules execution loops inside FreeRTOS, it veri
 
 ## 🛠️ SDK Reference API (`microdos_api.h`)
 
-Native applications hook into parent system calls through an isolated jump table interface. 
+Native applications hook into parent system calls through an isolated jump table interface.
 
 ### Core API Categories
 

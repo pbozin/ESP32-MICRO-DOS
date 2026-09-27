@@ -20,53 +20,53 @@ typedef struct {
   void (*print)(const char* text);
   void (*println)(const char* text);
   void (*clear)();
-  
+
   // --- Embedded Hardware Signals ---
   void (*beep)(int freq, int ms);
   void (*delay)(int ms);
   int  (*inkey)();
-  
+
   // --- Low-Level Vector Graphics ---
   void (*color)(int colorId);
   void (*plot)(int x, int y, int colorId);
   void (*line)(int x1, int y1, int x2, int y2, int colorId);
   void (*rect)(int x, int y, int w, int h, int colorId);
   void (*circle)(int x, int y, int r, int colorId);
-  
+
   // --- Direct Memory Sandboxing ---
   int  (*peek)(int address);
   void (*poke)(int address, int value);
   int  (*getRamSize)();
-  
+
   // --- Protected GPIO Fences ---
   void (*pinMode)(int pin, int mode);
   void (*digitalWrite)(int pin, int val);
   int  (*digitalRead)(int pin);
-  
+
   // --- System Input & Network Control ---
   void (*inputStr)(const char* prompt, char* destBuffer, int maxLen);
   int  (*wifiUp)(const char* ssid, const char* pass);
   void (*wifiDown)();
-  
+
   // --- Local Autonomous AI Streaming ---
   int  (*ollamaStream)(const char* prompt,
 		       const char* serverIp,
 		       const char* modelName,
 		       const char* sysPrompt,
 		       int streamToConsole);
-  
+
   // --- Touch Panel Input Engine ---
   void (*getTouch)(TouchState* state);
   int termWidth;
   int termHeight;
   int charWidth;
   int charHeight;
-  
+
   // --- Extended Visual Add-ons ---
   void (*drawJpeg)(const char* filename, int x, int y);
   void (*setFKeys)(const char* l1, const char* l2, const char* l3, const char* l4, const char* l5);
   void (*clearFKeys)();
-  
+
   // --- Allocator Vectors hooks ---
   void* (*malloc)(unsigned int size);
   void  (*free)(void* ptr);
@@ -86,7 +86,7 @@ static MicroDosAPI* _global_api_ptr = 0;
 // ============================================================================
 //   4BIT COLOR PALETTE
 // ============================================================================
-#define BLACK     0 
+#define BLACK     0
 #define WHITE     1
 #define LIGHTGREY 2
 #define RED       3
@@ -158,7 +158,7 @@ __attribute__((weak)) void* malloc(unsigned int size) {
   if (_global_api_ptr && _global_api_ptr->malloc) {
     return _global_api_ptr->malloc(size);
   }
-  return 0; 
+  return 0;
 }
 
 __attribute__((weak)) void free(void* ptr) {

@@ -33,14 +33,14 @@ SYSTEM_PALETTE = {
 def get_closest_palette_index(r, g, b):
     min_distance = float('inf')
     closest_idx = 1 # Default to White if matching fails
-    
+
     # Unpacking the color tuple elements (pr, pg, pb)
     for idx, (pr, pg, pb) in SYSTEM_PALETTE.items():
         distance = (r - pr)**2 + (g - pg)**2 + (b - pb)**2
         if distance < min_distance:
             min_distance = distance
             closest_idx = idx
-            
+
     return closest_idx
 
 print("--- EXPORTING 4-BIT SPRITES ---")
@@ -48,27 +48,27 @@ print("--- EXPORTING 4-BIT SPRITES ---")
 for filename in os.listdir(INPUT_DIR):
     if not filename.endswith(".png"):
         continue
-        
+
     filepath = os.path.join(INPUT_DIR, filename)
     src_img = Image.open(filepath).convert("RGBA")
     resized_img = src_img.resize((TARGET_SIZE, TARGET_SIZE), Image.Resampling.LANCZOS)
-    
+
     basename = os.path.splitext(filename)[0]
     out_path = os.path.join(OUTPUT_DIR, f"{basename}.spr")
-    
+
     pixel_indices = []
-    
+
     for y in range(TARGET_SIZE):
         for x in range(TARGET_SIZE):
             r, g, b, a = resized_img.getpixel((x, y))
-            
+
             # Transparency mask processing
             if a < 128:
                 pixel_idx = 15 # Index 15 is Chroma Key
             else:
                 # Map pixel down to exact 15 system colors
                 pixel_idx = get_closest_palette_index(r, g, b)
-                
+
                 # Prevent collision corruption
                 if pixel_idx == 15:
                     pixel_idx = 14 # Fallback to Pink
@@ -82,5 +82,5 @@ for filename in os.listdir(INPUT_DIR):
             low_nibble  = pixel_indices[i + 1]
             packed_byte = (high_nibble << 4) | low_nibble
             f.write(struct.pack("B", packed_byte))
-                        
+
 print("--- ALL 4-BIT SPRITES ENCODED SUCCESSFULLY ---")
