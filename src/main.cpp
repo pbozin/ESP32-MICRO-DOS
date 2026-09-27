@@ -200,12 +200,15 @@ const uint16_t ramOSPalette[16] = {
         uint16_t rawX = ((uint16_t)(packet[2] & 0x0F) << 8) | packet[3];
         uint16_t rawY = ((uint16_t)(packet[4] & 0x0F) << 8) | packet[5];
 
-        uint16_t pixelX = map(rawX, TOUCH_X_MIN, TOUCH_X_MAX, 0, TFT_WIDTH-1);
-        uint16_t pixelY = map(rawY, TOUCH_Y_MIN, TOUCH_Y_MAX, 0, TFT_HEIGHT-1);
+        int32_t pixelX = map(rawX, TOUCH_X_MIN, TOUCH_X_MAX, 0, TFT_WIDTH-1);
+        int32_t pixelY = map(rawY, TOUCH_Y_MIN, TOUCH_Y_MAX, 0, TFT_HEIGHT-1);
 
-        if (pixelX < TFT_WIDTH && pixelY < TFT_HEIGHT) {
-          *x = pixelX;
-          *y = pixelY;
+	pixelX = constrain(pixelX, 0, TFT_WIDTH);
+	pixelY = constrain(pixelY, 0, TFT_HEIGHT);
+
+        if (pixelX >= 0 && pixelX < TFT_WIDTH && pixelY >= 0 && pixelY < TFT_HEIGHT) {
+          *x = (uint16_t)pixelX;
+          *y = (uint16_t)pixelY;
           return true;
         }
       }
