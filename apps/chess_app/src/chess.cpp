@@ -253,8 +253,8 @@ static inline char getRowChar(int rowIdx) {
     }
 }
 
-static inline void aiThinkAndRespond(MicroDosAPI* api);
-static inline void executeMove(const char* moveStr, bool* playerTurn, MicroDosAPI* api);
+__attribute__((always_inline)) static inline void aiThinkAndRespond(MicroDosAPI* api);
+__attribute__((always_inline)) static inline void executeMove(const char* moveStr, bool* playerTurn, MicroDosAPI* api);
 
 int _start(int argc, char** argv, MicroDosAPI* api) {
     _global_api_ptr = api;
@@ -433,95 +433,6 @@ int _start(int argc, char** argv, MicroDosAPI* api) {
     return 0;
 }
 
-static inline void aiThinkAndRespond(MicroDosAPI* api) {
-    int bestMoveFrom = 0;
-    int bestMoveTo   = 0;
-    bool aiIsWhite   = !humanIsWhite;
-
-    // Relative tracking: AI always wants the highest possible positive score
-    int bestScore = -999999;
-
-    for (int from = 1; from <= 64; from++) {
-        bool isAiPiece = aiIsWhite ? (b[from] > 0) : (b[from] < 0);
-
-        if (isAiPiece) {
-            for (int to = 1; to <= 64; to++) {
-                if (from == to) continue;
-
-                // Prevent friendly fire
-                if (b[to] != 0 && ((b[from] > 0 && b[to] > 0) || (b[from] < 0 && b[to] < 0))) continue;
-                if (!isMoveValid(from, to)) continue;
-
-                // Simulate Move
-                int capturedPiece = b[to];
-                b[to] = b[from];
-                b[from] = 0;
-
-                // Verify King safety
-                if (isKingUnderAttack(aiIsWhite)) {
-                    b[from] = b[to];
-                    b[to] = capturedPiece;
-                    continue;
-                }
-
-                // Calculate relative material layout
-                int materialScore = 0;
-                for (int i = 1; i <= 64; i++) {
-                    int pieceVal = b[i];
-                    if (pieceVal == 0) continue;
-
-                    int pieceId = ABS(pieceVal);
-                    if (pieceId > 16) pieceId = 16;
-
-                    // PERSPECTIVE FIX: Positive points for AI pieces, negative points for opponent pieces
-                    if (aiIsWhite) {
-                        if (pieceVal > 0)  materialScore += pieceWeights[pieceId];
-                        if (pieceVal < 0)  materialScore -= pieceWeights[pieceId];
-                    } else {
-                        if (pieceVal < 0)  materialScore += pieceWeights[pieceId];
-                        if (pieceVal > 0)  materialScore -= pieceWeights[pieceId];
-                    }
-                }
-
-                // Positional Control Bonus: Target center ring squares
-                int toRow = (to - 1) / 8;
-                int toCol = (to - 1) % 8;
-                if (toRow >= 3 && toRow <= 4 && toCol >= 3 && toCol <= 4) {
-                    materialScore += 15; // Always add a bonus for controlling the center
-                }
-
-                // AI always maximizes this relative score profile
-                if (materialScore > bestScore) {
-                    bestScore = materialScore;
-                    bestMoveFrom = from;
-                    bestMoveTo = to;
-                }
-
-                // Revert Simulation state
-                b[from] = b[to];
-                b[to] = capturedPiece;
-            }
-        }
-    }
-
-    // Execute the final chosen best move path
-    if (bestMoveFrom != 0 && bestMoveTo != 0) {
-        int fRow = (bestMoveFrom - 1) / 8;
-        int fCol = (bestMoveFrom - 1) % 8;
-        int tRow = (bestMoveTo - 1) / 8;
-        int tCol = (bestMoveTo - 1) % 8;
-
-        char cpuMove[5];
-        cpuMove[0] = getColChar(fCol);
-        cpuMove[1] = getRowChar(fRow);
-        cpuMove[2] = getColChar(tCol);
-        cpuMove[3] = getRowChar(tRow);
-        cpuMove[4] = '\0';
-
-        executeToledoMove(cpuMove);
-    }
-}
-
 static inline void handlePawnPromotion() {
     // Check Row 0 (Indices 1 to 8) - White promoting on Black's back rank
     for (int col = 0; col < 8; col++) {
@@ -577,6 +488,118 @@ static inline void executeMove(const char* moveStr, bool* playerTurn, MicroDosAP
     }
 
     api->setFKeys(STRING(" NEW  "), STRING(" UNDO "), STRING(" FLIP "), STRING("      "), STRING(" QUIT "));
+}
+
+
+static inline void aiThinkAndRespond(MicroDosAPI* api) {
+    int bestMoveFrom = 0;
+    int bestMoveTo   = 0;
+    bool aiIsWhite   = !humanIsWhite;
+
+    // Relative tracking: AI always wants the highest possible positive score
+    int bestScore = -999999;
+
+    for (int from = 1; from <= 64; from++) {
+        bool isAiPiece = aiIsWhite ? (b[from] > 0) : (b[from] < 0);
+
+        if (isAiPiece) {
+            for (int to = 1; to <= 64; to++) {
+                if (from == to) continue;
+
+                // Prevent friendly fire
+                if (b[to] != 0 && ((b[from] > 0 && b[to] > 0) || (b[from] < 0 && b[to] < 0))) continue;
+                if (!isMoveValid(from, to)) continue;
+
+                // Simulate Move
+                int capturedPiece = b[to];
+                b[to] = b[from];
+                b[from] = 0;
+
+                // Verify King safety
+                if (isKingUnderAttack(aiIsWhite)) {
+                    b[from] = b[to];
+                    b[to] = capturedPiece;
+                    continue;
+                }
+
+                // Calculate relative material layout
+                int materialScore = 0;
+                for (int i = 1; i <= 64; i++) {
+                    int pieceVal = b[i];
+                    if (pieceVal == 0) continue;
+
+                    int pieceId = ABS(pieceVal);
+                    if (pieceId > 16) pieceId = 16;
+
+                    // PERSPECTIVE FIX: Positive points for AI pieces, negative points for opponent pieces
+                    if (aiIsWhite) {
+                        if (pieceVal > 0)  materialScore += pieceWeights[pieceId];
+                        if (pieceVal < 0)  materialScore -= pieceWeights[pieceId];
+                    } else {
+                        if (pieceVal < 0)  materialScore += pieceWeights[pieceId];
+                        if (pieceVal > 0)  materialScore -= pieceWeights[pieceId];
+                    }
+                }
+
+                bool squareIsDefended = false;
+                for (int attackerIdx = 1; attackerIdx <= 64; attackerIdx++) {
+                    int enemyPiece = b[attackerIdx];
+                    if (enemyPiece == 0) continue;
+
+                    // Check if the enemy piece can legally capture on our 'to' square
+                    bool isEnemy = aiIsWhite ? (enemyPiece < 0) : (enemyPiece > 0);
+                    if (isEnemy) {
+                        if (isMoveValid(attackerIdx, to)) {
+                            squareIsDefended = true;
+                            break;
+                        }
+                    }
+                }
+
+                // If the square is guarded, penalize this score by the value of the AI's moving piece
+                if (squareIsDefended) {
+                    int movingPieceId = ABS(b[to]); // This is the piece that just moved there
+                    if (movingPieceId > 16) movingPieceId = 16;
+                    materialScore -= pieceWeights[movingPieceId];
+                }
+
+                // Positional Control Bonus: Target center ring squares
+                int toRow = (to - 1) / 8;
+                int toCol = (to - 1) % 8;
+                if (toRow >= 3 && toRow <= 4 && toCol >= 3 && toCol <= 4) {
+                    materialScore += 15; // Always add a bonus for controlling the center
+                }
+
+                // AI always maximizes this relative score profile
+                if (materialScore > bestScore) {
+                    bestScore = materialScore;
+                    bestMoveFrom = from;
+                    bestMoveTo = to;
+                }
+
+                // Revert Simulation state
+                b[from] = b[to];
+                b[to] = capturedPiece;
+            }
+        }
+    }
+
+    // Execute the final chosen best move path
+    if (bestMoveFrom != 0 && bestMoveTo != 0) {
+        int fRow = (bestMoveFrom - 1) / 8;
+        int fCol = (bestMoveFrom - 1) % 8;
+        int tRow = (bestMoveTo - 1) / 8;
+        int tCol = (bestMoveTo - 1) % 8;
+
+        char cpuMove[5];
+        cpuMove[0] = getColChar(fCol);
+        cpuMove[1] = getRowChar(fRow);
+        cpuMove[2] = getColChar(tCol);
+        cpuMove[3] = getRowChar(tRow);
+        cpuMove[4] = '\0';
+
+        executeToledoMove(cpuMove);
+    }
 }
 
 static inline bool isMoveValid(int fromIdx, int toIdx) {
