@@ -5,8 +5,9 @@
 
 # ESP32 MicroDOS
 
-An advanced, retro-style retro-operating system and interactive environment designed for
-CYD clones [https://www.lcdwiki.com/4.0inch_ESP32-32E_Display] and capacitive equivalents (JC3248W535C).
+An advanced, retro-style retro-operating system and interactive environment designed for ESP32 boards with 320x480 display: 
+- [tested] CYD clones [https://www.lcdwiki.com/4.0inch_ESP32-32E_Display]
+- [tested] JC3248W535C [https://www.aliexpress.com/item/1005007566332450.html]
 
 Unlike typical monolithic microcontroller firmware, **MicroDOS** behaves like a classic 1980s disk operating system with modern AI features. It features a custom multi-statement **BASIC interpreter**, a **Universal Dynamic Linker/Loader** capable of running precompiled native C binaries from an SD card, an indexed **4-bit Sprite Game Engine**, and a memory-efficient **Ollama LLM live-streaming engine** that can generate BASIC programs and store them in the host system on the fly.
 
@@ -125,9 +126,12 @@ extra_scripts = post:extract_bin.py     ; Extract packaged segment tracks automa
 
 ### Flashing the OS (Linux console)
 1. Connect your hardware target over USB
-2. git clone git@github.com:pbozin/ESP32-MICRO-DOS.git
-3. cd ESP32-MICRO-DOS
-4. pio run -e cyd --target upload
+2. execute:
+```bash
+git clone git@github.com:pbozin/ESP32-MICRO-DOS.git
+cd ESP32-MICRO-DOS
+pio run -e cyd --target upload
+```
  
 ---
 
