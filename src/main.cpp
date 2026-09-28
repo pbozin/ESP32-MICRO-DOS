@@ -2580,10 +2580,12 @@ void processCommand(const char* rawCmd) {
       localTParams->dramSize     = header.dramSize;
 
       size_t totalTaskStackDepthWords = 2048 * 2;
-      if (header.iramSize + header.dramSize > 512)  totalTaskStackDepthWords = 2048 * 3;
-      if (header.iramSize + header.dramSize > 2048) totalTaskStackDepthWords = 2048 * 4;
-      if (header.iramSize + header.dramSize > 4096) totalTaskStackDepthWords = 2048 * 5;
-      if (header.iramSize + header.dramSize > 8192) totalTaskStackDepthWords = 2048 * 6;
+      if (header.iramSize + header.dramSize > 512)   totalTaskStackDepthWords = 2048 * 3;
+      if (header.iramSize + header.dramSize > 2048)  totalTaskStackDepthWords = 2048 * 4;
+      if (header.iramSize + header.dramSize > 4096)  totalTaskStackDepthWords = 2048 * 5;
+      if (header.iramSize + header.dramSize > 8192)  totalTaskStackDepthWords = 2048 * 6;
+      if (header.iramSize + header.dramSize > 12288) totalTaskStackDepthWords = 2048 * 7;
+      if (header.iramSize + header.dramSize > 16384) totalTaskStackDepthWords = 2048 * 8;
 
       BaseType_t taskCreated = xTaskCreatePinnedToCore(
           nativeBinaryTaskWorker,
