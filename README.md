@@ -6,9 +6,9 @@
 # ESP32 MicroDOS
 
 An advanced, retro-style retro-operating system and interactive environment designed for
-CYD clones [https://www.lcdwiki.com/4.0inch_ESP32-32E_Display] and capacitive equivalents (JC3248).
+CYD clones [https://www.lcdwiki.com/4.0inch_ESP32-32E_Display] and capacitive equivalents (JC3248W535C).
 
-Unlike typical monolithic microcontroller firmware, **MicroDOS** behaves like a classic 1980s disk operating system with modern AI features. It features a custom multi-statement **BASIC interpreter**, a **Universal Dynamic Linker/Loader** capable of running precompiled native C binaries from an SD card, an indexed **4-bit Sprite Game Engine**, and a memory-efficient **Ollama LLM live-streaming engine** that can autonomously re-program the host system on the fly.
+Unlike typical monolithic microcontroller firmware, **MicroDOS** behaves like a classic 1980s disk operating system with modern AI features. It features a custom multi-statement **BASIC interpreter**, a **Universal Dynamic Linker/Loader** capable of running precompiled native C binaries from an SD card, an indexed **4-bit Sprite Game Engine**, and a memory-efficient **Ollama LLM live-streaming engine** that can generate BASIC programs and store them in the host system on the fly.
 
 ---
 
@@ -59,7 +59,7 @@ Run these commands directly inside the interactive interactive touch console int
 
 You can develop high-performance native plugins for MicroDOS inside standard IDEs (like VS Code) using the provided PlatformIO SDK layout structure.
 
-### 1. App SDK Framework (`microdos_api.h`)
+### 1. App SDK Framework (`api/microdos_api.h`)
 Native applications interface with the operating system through a unified BIOS jump table vector map. It features `__attribute__((weak))` overrides to ensure you can use standard memory structures safely without bloating the plugin size:
 
 ```c
@@ -72,6 +72,7 @@ int _start(int argc, char** argv, MicroDosAPI* api) {
     api->clear();
     api->println(STRING("--- Dynamic C Guest Application Live ---"));
     api->beep(440, 250);
+    api->delay(2000);
 
     // Launch dynamic 4-bit graphical loop matrix
     api->initGameMatrix();
@@ -84,7 +85,7 @@ int _start(int argc, char** argv, MicroDosAPI* api) {
 }
 ```
 
-### 2. Toolchain Compilation Directives (`platformio.ini`)
+### 2. Toolchain Compilation Directives (`api/platformio.ini`)
 To build plugins that can survive runtime relative offset assignments, use these exact compilation flags:
 
 ```ini
@@ -110,16 +111,24 @@ extra_scripts = post:extract_bin.py     ; Extract packaged segment tracks automa
 ## 🚀 Getting Started
 
 ### Hardware Requirements
-* **ESP32 Cheap Yellow Display (CYD) Clone** (E32N40T) OR **JC3248 capacitive variant**.
+* **ESP32 Cheap Yellow Display (CYD) Clone** (E32N40T)
+    or **JC3248W535C capacitive variant**
+    or **adjust platformio.ini for specific ESP32 board**
 * Micro SD card (FAT32 formatted).
 * *Optional:* A `/WIFI.CFG` file stored on the SD root directory containing your network credentials (SSID on line 1, password on line 2) to unlock automated fallback network card provisioning.
 
 ### Flashing the OS
 1. Clone this repository down to your computer workspace.
 2. Open the host workspace directory using **PlatformIO**.
-3. Select your hardware target environment layout profile flags inside the main configuration files (`BOARD_CYD` or `BOARD_JC3248`).
+3. Select your hardware target environment layout profile flags inside the main configuration files (`cyd` or `jc`).
 4. Connect your hardware target over USB, build, and flash.
 
+### Flashing the OS (Linux console)
+1. Connect your hardware target over USB
+2. git clone git@github.com:pbozin/ESP32-MICRO-DOS.git
+3. cd ESP32-MICRO-DOS
+4. pio run -e cyd --target upload
+ 
 ---
 
 ## 📄 License
