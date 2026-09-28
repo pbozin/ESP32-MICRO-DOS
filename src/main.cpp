@@ -3553,6 +3553,9 @@ void api_setup() {
 
   kernelAPI.inkey   = [] () -> int {
     char foundKey = getKeyPress(false);
+#if defined(BOARD_JC3248)
+     canvas_bridge->flush();
+#endif
     return (int)foundKey;
   };
 

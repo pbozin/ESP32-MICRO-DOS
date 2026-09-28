@@ -29,7 +29,6 @@ extern "C" int _start(int argc, char** argv, MicroDosAPI* api) {
         int a = c * 32;
         int b = r * 15;
         api->rect(a, b, 30, 12, r + 3); // Draw colored rows of bricks
-        api->flushGameMatrix();
     }
 
     // Wipe baseline boot banner to clear the field context
@@ -38,8 +37,6 @@ extern "C" int _start(int argc, char** argv, MicroDosAPI* api) {
 
     int running = 1;
 
-    api->flushGameMatrix();
-    api->delay(100);
     // Main Game Loop Context
     while (running) {
         int k = api->inkey();
@@ -124,11 +121,9 @@ extern "C" int _start(int argc, char** argv, MicroDosAPI* api) {
             api->delay(2000);
             running = 0;
         }
-        api->flushGameMatrix();
         api->delay(8);
     }
 
-    api->flushGameMatrix();
     api->color(GREEN);
     api->clear();
     return 0;
