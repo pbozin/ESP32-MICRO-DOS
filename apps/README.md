@@ -33,6 +33,16 @@ A development pipeline that prompts a remote AI Coder model to write, compile, a
 
 ---
 
+## 🎮 4. Retro Chess Engine (`chess.bin`)
+A compact, highly optimized chess simulator featuring a dual-input control layout, dynamic function key overrides, and an internal Toledo-style look-ahead heuristic evaluator.
+
+### Architectural Blueprint
+* **Hybrid Touch & Alphanumeric Input:** Leverages a dual-mode event listener stack. Users can input standard algebraic coordinate strings (e.g., e2e4) over serial/keyboard polling buffers (`api->inkey()`) or click squares directly on the panel utilizing localized display coordinate division math (`touch.x / 40`, `touch.y / 40`).
+* **Persistent BIOS Function-Key Hooks:** Interlaces UI feedback structures cleanly with the host operating system layer by mapping string pointers back to dynamic hardware macros (`api->setFKeys`). This yields responsive rendering adjustments, board configuration shifts (`FLIP`), and multi-state history adjustments (`UNDO`, `NEW`, `QUIT`).
+* **Toledo-Heuristic Material Scan Loop:** Implements a standalone evaluation state-machine running over a shared memory index layout (`b[from]`). The logic simulates individual positions, drops illegal tracks via King tracking verification arrays (`isKingUnderAttack`), rewards structural positional ownership over center-ring grids, and calculates real-time coordinate differentials to pass calculated move paths directly back down to target evaluation hooks (`executeToledoMove`).
+
+---
+
 ## 🛠️ Building & Deployment Guide
 
 Applications are compiled outside the core kernel image using **PlatformIO**:
