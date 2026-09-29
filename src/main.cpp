@@ -2430,11 +2430,14 @@ void processCommand(const char* rawCmd) {
       // ============================================================================
       // THE KERNEL SEGMENT LOADER
       // ============================================================================
+      size_t alignedIramSize = (header.iramSize + 3) & ~3;
+
       file.seek(sizeof(MDBHeader));
       file.read(iramStagingArea, header.iramSize);
 
-      file.seek(sizeof(MDBHeader) + header.iramSize);
+      file.seek(sizeof(MDBHeader) + alignedIramSize);
       file.read(localDramBuffer, header.dramSize);
+      size_t actualFileSize = file.size();
 
       file.close();
 
@@ -2445,6 +2448,7 @@ void processCommand(const char* rawCmd) {
       Serial.printf("\n\r--- [MDB DEBUG: %s] ---\n\r", fixedFilename);
       Serial.printf("Header - dramSize:    %d (0x%04X)\n\r", header.dramSize, header.dramSize);
       Serial.printf("Header - iramSize:    %d (0x%04X)\n\r", header.iramSize, header.iramSize);
+      Serial.printf("Header - iramSize(aligned):%d (0x%04X)\n\r", alignedIramSize, alignedIramSize);
       Serial.printf("Header - entryOffset: %d (0x%04X)\n\r", header.entryOffset, header.entryOffset);
       Serial.printf("Header - gotOffset:   %d (0x%04X)\n\r", header.gotFileOffset, header.gotFileOffset);
       Serial.printf("Runtime - localDramBuffer Alloc Base: 0x%08X\n\r", (uint32_t)localDramBuffer);
@@ -2456,17 +2460,17 @@ void processCommand(const char* rawCmd) {
       // UNIVERSAL DUAL-SEGMENT RELOCATION ENGINE
       // ============================================================================
       const uint32_t iramStart = sizeof(MDBHeader); // 16
-      const uint32_t iramEnd   = iramStart + header.iramSize;
+      const uint32_t iramEnd   = iramStart + alignedIramSize;
       const uint32_t dramStart = iramEnd;
       const uint32_t dramEnd   = dramStart + header.dramSize;
 
+#ifdef SERIAL_DEBUG
+      Serial.printf("[MDB LOADER] Scanning IRAM literals up to size: %d bytes...\n\r", alignedIramSize);
+#endif
+
       // --- PHASE 1: SCAN AND PATCH FULL IRAM LITERAL POOL ---
       uint32_t* literalPool = (uint32_t*)iramStagingArea;
-      size_t literalWordCount = header.iramSize / 4;
-
-#ifdef SERIAL_DEBUG
-      Serial.printf("[MDB LOADER] Scanning IRAM literals up to size: %d bytes...\n\r", header.iramSize);
-#endif
+      size_t literalWordCount = alignedIramSize / 4;
 
       for (size_t i = 0; i < literalWordCount; i++) {
           uint32_t rawVal = literalPool[i];
@@ -2481,18 +2485,38 @@ void processCommand(const char* rawCmd) {
                   patchedAddr = (rawVal - dramStart) + (uint32_t)localDramBuffer;
                   targetSegment = "DRAM";
               }
+          } 
+          else {
+              uint32_t baseAddr = rawVal & ~3;
+              uint32_t byteOffset = rawVal & 3;
+
+              if (byteOffset == 2) {
+                  if (baseAddr >= iramStart && baseAddr < iramEnd) {
+                      
+                      if (baseAddr + byteOffset < iramEnd) {
+                          patchedAddr = (baseAddr - iramStart) + (uint32_t)localIramBuffer + byteOffset;
+                          targetSegment = "IRAM_UNALIGNED";
+                      }
+                  }
+              } 
+              else if (baseAddr >= dramStart && baseAddr <= dramEnd) {
+                  if (byteOffset != 2 && (baseAddr + byteOffset <= dramEnd)) {
+                      patchedAddr = (baseAddr - dramStart) + (uint32_t)localDramBuffer + byteOffset;
+                      targetSegment = "DRAM_UNALIGNED";
+                  }
+              }
           }
 
           if (targetSegment) {
               literalPool[i] = patchedAddr;
 #ifdef SERIAL_DEBUG
-	      if (targetSegment != nullptr)
                Serial.printf("  Pool [%d] @ 0x%04X (Raw: 0x%08X) -> 🛠️  PATCHED %s: 0x%08X\n\r",
                             i, (i * 4) + iramStart, rawVal, targetSegment, patchedAddr);
 #endif
           }
       }
-      memcpy(localIramBuffer, iramStagingArea, header.iramSize);
+
+      memcpy(localIramBuffer, iramStagingArea, alignedIramSize);
       free(iramStagingArea);
 
       // --- PHASE 2: SCAN AND PATCH GLOBAL OFFSET TABLE (GOT) ---
@@ -2501,7 +2525,7 @@ void processCommand(const char* rawCmd) {
 #endif
       uint32_t gotDramOffset = header.gotFileOffset - iramEnd;
 
-      if (gotDramOffset < header.dramSize) {
+      if (gotDramOffset < header.dramSize && header.gotFileOffset < actualFileSize) {
           uint32_t* realGotTable = (uint32_t*)(localDramBuffer + gotDramOffset);
 
           size_t remainingDramBytes = header.dramSize - gotDramOffset;

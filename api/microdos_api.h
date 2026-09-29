@@ -80,8 +80,11 @@ typedef struct {
   void  (*closeGameMatrix)();
 } MicroDosAPI;
 
-// Tracking pointer instance to link standard malloc loops cleanly
-static MicroDosAPI* _global_api_ptr = 0;
+// Tracking pointer instance to link standard malloc lodops cleanly
+__attribute__((weak)) MicroDosAPI* _global_api_ptr = 0;
+
+#define INLINE static inline
+#define ALWAYS __attribute__((always_inline))
 
 // ============================================================================
 //   4BIT COLOR PALETTE

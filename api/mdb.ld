@@ -16,10 +16,8 @@ SECTIONS
     _iram_start = .;
     .text : ALIGN(4) {
         KEEP(*(.text._start))
-
-        /* Interleave literal pools inside the text section.
-           This ensures L32R instructions can safely look backwards over tiny distances. */
         *(.literal .text .literal.* .text.*)
+	. = ALIGN(4);
     }
     . = ALIGN(4);
     _iram_end = .;
@@ -27,7 +25,6 @@ SECTIONS
 
     /* ZONE 2: VARIABLES & DATA STRINGS ONLY (Mapped to Data DRAM) */
     _dram_start = .;
-
     .rodata : ALIGN(4) {
         KEEP(*(.rodata .rodata.*))
         . = ALIGN(4);
@@ -36,11 +33,12 @@ SECTIONS
         KEEP(*(.data .data.*))
         . = ALIGN(4);
     }
-
+    . = ALIGN(4);
     _got_file_offset = .;
     .got : ALIGN(4) {
         _got_start = .;
         KEEP(*(.got .got.plt))
+	. = ALIGN(4);
         _got_end = .;
     }
     . = ALIGN(4);
