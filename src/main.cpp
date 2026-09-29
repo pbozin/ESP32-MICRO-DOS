@@ -2486,8 +2486,9 @@ void processCommand(const char* rawCmd) {
           if (targetSegment) {
               literalPool[i] = patchedAddr;
 #ifdef SERIAL_DEBUG
-       //        Serial.printf("  Pool [%d] @ 0x%04X (Raw: 0x%08X) -> 🛠️  PATCHED %s: 0x%08X\n\r",
-       //                     i, (i * 4) + iramStart, rawVal, targetSegment, patchedAddr);
+	      if (targetSegment != nullptr)
+               Serial.printf("  Pool [%d] @ 0x%04X (Raw: 0x%08X) -> 🛠️  PATCHED %s: 0x%08X\n\r",
+                            i, (i * 4) + iramStart, rawVal, targetSegment, patchedAddr);
 #endif
           }
       }

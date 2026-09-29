@@ -1,9 +1,52 @@
 import os
 import subprocess
 import sys
+import struct
 from SCons.Script import Import
 
 Import("env")
+
+def check_microdos_binary(file_path):
+    if not os.path.exists(file_path):
+        sys.exit(1)
+
+    with open(file_path, "rb") as f:
+        data = f.read()
+
+    dram_size, iram_size, entry_off, got_off = struct.unpack("<IIII", data[:16])
+
+    misalignments = 0
+    scan_limit = min(len(data), 16 + iram_size)
+
+    got_table_start = got_off
+    got_table_end = got_table_start + (len(data) - got_off)
+
+    for offset in range(16, scan_limit, 4):
+        if offset + 4 > len(data):
+            break
+
+        word = struct.unpack("<I", data[offset:offset+4])[0]
+
+        if word == 0 or word == 0xFFFFFFFF:
+            continue
+
+        if word >= got_table_start and word < got_table_end:
+            if word % 4 == 0:
+                continue
+
+            pool_index = (offset - 16) // 4
+            print(f"  ⚠️  [GOT RELOCATION FAULT] Pool [{pool_index}] @ offset 0x{offset:04X}: "
+                  f"Unaligned pointer address = 0x{word:08X}!")
+            misalignments += 1
+
+    if misalignments > 0:
+        print("-" * 76)
+        print(f"❌ COMPONENT ERROR: Found {misalignments} true unaligned variable data allocation faults.")
+        print("-" * 76)
+        return True
+    else:
+        print(f"[MDB Loader] SUCCESS. Clean binary package size: {os.path.getsize(file_path)} bytes.\n")
+        return True
 
 def extract_text_section(source, target, env):
     elf_file = str(target[0])
@@ -13,9 +56,6 @@ def extract_text_section(source, target, env):
 
     objcopy = "/home/bozin/.platformio/packages/toolchain-xtensa-esp32/bin/xtensa-esp32-elf-objcopy"
 
-    # Extract elements matching layout order:
-    # Header -> Instructions Only (.text) -> Data Block (.literal, .rodata, .data, .got)
-    # 🛠️ Match the updated section footprint:
     cmd = [
         objcopy, "-O", "binary",
         "--only-section=.mdb_header",
@@ -30,7 +70,6 @@ def extract_text_section(source, target, env):
     if result.returncode != 0:
         sys.stderr.write(f"Error packing binary:\n{result.stderr.decode('utf-8')}\n")
         env.Exit(1)
-
-    print(f"[MDB Loader] SUCCESS. Clean binary package size: {os.path.getsize(bin_file)} bytes.\n")
+    check_microdos_binary(bin_file)
 
 env.AddPostAction("$BUILD_DIR/${PROGNAME}.elf", extract_text_section)
