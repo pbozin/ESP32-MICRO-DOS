@@ -16,34 +16,32 @@ def check_microdos_binary(file_path):
     dram_size, iram_size, entry_off, got_off = struct.unpack("<IIII", data[:16])
 
     misalignments = 0
-    scan_limit = min(len(data), 16 + iram_size)
 
-    got_table_start = got_off
-    got_table_end = got_table_start + (len(data) - got_off)
+    iram_start = 16
+    iram_end = iram_start + iram_size
+    dram_start = iram_end
+    dram_end = dram_start + dram_size
 
-    for offset in range(16, scan_limit, 4):
-        if offset + 4 > len(data):
-            break
-
+    for offset in range(16, entry_off, 4):
         word = struct.unpack("<I", data[offset:offset+4])[0]
 
         if word == 0 or word == 0xFFFFFFFF:
             continue
 
-        if word >= got_table_start and word < got_table_end:
+        if (word >= iram_start and word < iram_end) or (word >= dram_start and word <= dram_end):
             if word % 4 == 0:
                 continue
 
             pool_index = (offset - 16) // 4
-            print(f"  ⚠️  [GOT RELOCATION FAULT] Pool [{pool_index}] @ offset 0x{offset:04X}: "
-                  f"Unaligned pointer address = 0x{word:08X}!")
+            print(f"  ❌ [TRUE ALIGNMENT FAULT] Pool [{pool_index}] @ offset 0x{offset:04X}: "
+                  f"Unaligned address reference = 0x{word:08X}!")
             misalignments += 1
 
     if misalignments > 0:
         print("-" * 76)
         print(f"❌ COMPONENT ERROR: Found {misalignments} true unaligned variable data allocation faults.")
         print("-" * 76)
-        return True
+        return False
     else:
         print(f"[MDB Loader] SUCCESS. Clean binary package size: {os.path.getsize(file_path)} bytes.\n")
         return True

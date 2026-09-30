@@ -2470,7 +2470,7 @@ void processCommand(const char* rawCmd) {
 
       // --- PHASE 1: SCAN AND PATCH FULL IRAM LITERAL POOL ---
       uint32_t* literalPool = (uint32_t*)iramStagingArea;
-      size_t literalWordCount = alignedIramSize / 4;
+      size_t literalWordCount = header.entryOffset / 4;
 
       for (size_t i = 0; i < literalWordCount; i++) {
           uint32_t rawVal = literalPool[i];
@@ -2485,20 +2485,20 @@ void processCommand(const char* rawCmd) {
                   patchedAddr = (rawVal - dramStart) + (uint32_t)localDramBuffer;
                   targetSegment = "DRAM";
               }
-          } 
+          }
           else {
               uint32_t baseAddr = rawVal & ~3;
               uint32_t byteOffset = rawVal & 3;
 
               if (byteOffset == 2) {
                   if (baseAddr >= iramStart && baseAddr < iramEnd) {
-                      
+
                       if (baseAddr + byteOffset < iramEnd) {
                           patchedAddr = (baseAddr - iramStart) + (uint32_t)localIramBuffer + byteOffset;
                           targetSegment = "IRAM_UNALIGNED";
                       }
                   }
-              } 
+              }
               else if (baseAddr >= dramStart && baseAddr <= dramEnd) {
                   if (byteOffset != 2 && (baseAddr + byteOffset <= dramEnd)) {
                       patchedAddr = (baseAddr - dramStart) + (uint32_t)localDramBuffer + byteOffset;

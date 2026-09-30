@@ -1,43 +1,160 @@
 #include "microdos_api.h"
 #include <cstring>
-
-static const int pieceWeights[] = {0, 100, 100, 100, 100, 100, 100, 100, 100, 300, 300, 300, 300, 500, 500, 900, 9999};
-
-static uint32_t pieceSprites[33];
+#include <stdbool.h>
 
 #define UNDO_DEPTH 6
-static int8_t undoHistory[UNDO_DEPTH][65];
-static int undoHead = 0;
-static int undoCount = 0;
-
-static char textBuf[7] = "      ";
-int bufLen = 6;
-
 #define ABS(x) ((x) < 0 ? -(x) : (x))
-static bool humanIsWhite = true;
 
-static int b[65];
+static uint32_t whiteCastleKingsSide  __attribute__((aligned(4))) = 1;
+static uint32_t whiteCastleQueensSide __attribute__((aligned(4))) = 1;
+static uint32_t blackCastleKingsSide  __attribute__((aligned(4))) = 1;
+static uint32_t blackCastleQueensSide __attribute__((aligned(4))) = 1;
+static int32_t bufLen __attribute__((aligned(4))) = 6;
+static int32_t undoHead __attribute__((aligned(4))) = 0;
+static int32_t undoCount __attribute__((aligned(4))) = 0;
+static uint32_t humanIsWhite __attribute__((aligned(4))) = 1;
 
-__attribute__((always_inline)) static inline bool isMoveValid(int fromIdx, int toIdx);
+static int32_t b[68] __attribute__((aligned(4)));
+static int32_t undoHistory[UNDO_DEPTH][68] __attribute__((aligned(4)));
 
-static inline int findKing(bool whiteKing) {
-    int targetId = whiteKing ? 16 : -16;
-    for (int i = 1; i <= 64; i++) {
+static bool isKingUnderAttack(bool isWhiteKing);
+
+INLINE ALWAYS bool checkPawnMove(int32_t fromIdx, int32_t toIdx, int32_t p, int32_t t, int32_t fRow, int32_t dc, int32_t dr, int32_t absDc) {
+    bool movesUp = (p > 0) ? (humanIsWhite != 0) : (humanIsWhite == 0);
+
+    if (movesUp) {
+        if (dc == 0 && dr == -1 && t == 0) return true;
+        if (dc == 0 && dr == -2 && fRow == 6 && b[fromIdx - 8] == 0 && t == 0) return true;
+        if (absDc == 1 && dr == -1 && t != 0) return true;
+    } else {
+        if (dc == 0 && dr == 1 && t == 0) return true;
+        if (dc == 0 && dr == 2 && fRow == 1 && b[fromIdx + 8] == 0 && t == 0) return true;
+        if (absDc == 1 && dr == 1 && t != 0) return true;
+    }
+    return false;
+}
+
+INLINE ALWAYS bool checkSlidingMove(int32_t fCol, int32_t fRow, int32_t tCol, int32_t tRow, int32_t sCol, int32_t sRow) {
+    int32_t c = fCol + sCol;
+    int32_t r = fRow + sRow;
+    while (c != tCol || r != tRow) {
+        if (c < 0 || c > 7 || r < 0 || r > 7) return false;
+
+        int32_t boardIdx = (r * 8) + c + 1;
+        if (boardIdx < 1 || boardIdx > 64) return false;
+
+        if (b[boardIdx] != 0) return false;
+        c += sCol;
+        r += sRow;
+    }
+    return true;
+}
+
+INLINE ALWAYS int32_t findKing(bool whiteKing) {
+    int32_t targetId = whiteKing ? 16 : -16;
+    for (int32_t i = 1; i <= 64; i++) {
         if (b[i] == targetId) return i;
     }
     return 0;
 }
 
-static inline bool isKingUnderAttack(bool isWhiteKing) {
-    int kingIdx = findKing(isWhiteKing);
+INLINE ALWAYS bool checkKingMove(int32_t fromIdx, int32_t p, int32_t dc, int32_t dr, int32_t absDc, int32_t absDr) {
+    if (absDc <= 1 && absDr <= 1) return true;
+
+    if (dr == 0 && absDc == 2) {
+        bool isWhiteKing = (p > 0);
+
+        if (isKingUnderAttack(isWhiteKing)) return false;
+
+        if (dc == 2) {
+            uint32_t rights = isWhiteKing ? whiteCastleKingsSide : blackCastleKingsSide;
+            if (rights == 0) return false;
+            if (b[fromIdx + 1] != 0 || b[fromIdx + 2] != 0) return false;
+
+            int32_t backup = b[fromIdx + 1];
+            b[fromIdx + 1] = p; b[fromIdx] = 0;
+            bool passThroughCheck = isKingUnderAttack(isWhiteKing);
+            b[fromIdx] = p; b[fromIdx + 1] = backup;
+
+            return !passThroughCheck;
+        }
+
+        if (dc == -2) {
+            uint32_t rights = isWhiteKing ? whiteCastleQueensSide : blackCastleQueensSide;
+            if (rights == 0) return false;
+            if (b[fromIdx - 1] != 0 || b[fromIdx - 2] != 0 || b[fromIdx - 3] != 0) return false;
+
+            int32_t backup = b[fromIdx - 1];
+            b[fromIdx - 1] = p; b[fromIdx] = 0;
+            bool passThroughCheck = isKingUnderAttack(isWhiteKing);
+            b[fromIdx] = p; b[fromIdx - 1] = backup;
+
+            return !passThroughCheck;
+        }
+    }
+    return false;
+}
+
+static bool isMoveValid(int32_t fromIdx, int32_t toIdx) {
+    if (fromIdx < 1 || fromIdx > 64 || toIdx < 1 || toIdx > 64) return false;
+    if (fromIdx == toIdx) return false;
+
+    int32_t p = b[fromIdx];
+    int32_t t = b[toIdx];
+
+    if (p == 0) return false;
+    if (t != 0 && ((p > 0 && t > 0) || (p < 0 && t < 0))) return false;
+
+    int32_t fCol = (fromIdx - 1) % 8;
+    int32_t fRow = (fromIdx - 1) / 8;
+    int32_t tCol = (toIdx - 1) % 8;
+    int32_t tRow = (toIdx - 1) / 8;
+
+    int32_t dc = tCol - fCol;
+    int32_t dr = tRow - fRow;
+    int32_t absDc = ABS(dc);
+    int32_t absDr = ABS(dr);
+
+    int32_t sCol = (dc == 0) ? 0 : (dc > 0 ? 1 : -1);
+    int32_t sRow = (dr == 0) ? 0 : (dr > 0 ? 1 : -1);
+
+    int32_t pieceType = ABS(p);
+
+    if (pieceType >= 1 && pieceType <= 8) {
+        return checkPawnMove(fromIdx, toIdx, p, t, fRow, dc, dr, absDc);
+    }
+    if (pieceType == 9 || pieceType == 10) {
+        return (absDc == 1 && absDr == 2) || (absDc == 2 && absDr == 1);
+    }
+    if (pieceType == 11 || pieceType == 12) { // Bishop
+        if (absDc != absDr) return false;
+        return checkSlidingMove(fCol, fRow, tCol, tRow, sCol, sRow);
+    }
+    if (pieceType == 13 || pieceType == 14) { // Rook
+        if (dc != 0 && dr != 0) return false;
+        return checkSlidingMove(fCol, fRow, tCol, tRow, sCol, sRow);
+    }
+    if (pieceType == 15) { // Queen
+        if (absDc != absDr && dc != 0 && dr != 0) return false;
+        return checkSlidingMove(fCol, fRow, tCol, tRow, sCol, sRow);
+    }
+    if (pieceType == 16) { // King
+        return checkKingMove(fromIdx, p, dc, dr, absDc, absDr);
+    }
+
+    return false;
+}
+
+static bool isKingUnderAttack(bool isWhiteKing) {
+    int32_t kingIdx = findKing(isWhiteKing);
     if (kingIdx < 1 || kingIdx > 64) return false;
 
-    for (int attackerIdx = 1; attackerIdx <= 64; attackerIdx++) {
-        int p = b[attackerIdx];
+    for (int32_t attackerIdx = 1; attackerIdx <= 64; attackerIdx++) {
+        int32_t p = b[attackerIdx];
         if (p == 0) continue;
 
         if ((isWhiteKing && p < 0) || (!isWhiteKing && p > 0)) {
-            if (attackerIdx != kingIdx && isMoveValid(attackerIdx, kingIdx)) {
+            if (isMoveValid(attackerIdx, kingIdx)) {
                 return true;
             }
         }
@@ -45,38 +162,32 @@ static inline bool isKingUnderAttack(bool isWhiteKing) {
     return false;
 }
 
-static inline int countLegalMoves(bool isWhiteTurn) {
-    int legalCount = 0;
+INLINE int32_t countLegalMoves(bool isWhiteTurn) {
+    int32_t legalCount = 0;
 
-    for (int from = 1; from <= 64; from++) {
-        int p = b[from];
+    for (int32_t from = 1; from <= 64; from++) {
+        int32_t p = b[from];
         if (p == 0) continue;
 
-        // Skip pieces that do not match the current turn's color
-        if (isWhiteTurn && p < 0) continue;  // White turn: Skip black pieces
-        if (!isWhiteTurn && p > 0) continue; // Black turn: Skip white pieces
+        if (isWhiteTurn && p < 0) continue;
+        if (!isWhiteTurn && p > 0) continue;
 
-        for (int to = 1; to <= 64; to++) {
+        for (int32_t to = 1; to <= 64; to++) {
             if (from == to) continue;
 
-            // Prevent capturing pieces of your own color
             if (b[to] != 0) {
                 if (isWhiteTurn && b[to] > 0) continue;
                 if (!isWhiteTurn && b[to] < 0) continue;
             }
 
-            // Verify basic geometric legality
             if (!isMoveValid(from, to)) continue;
 
-            // Simulate move
-            int backupTo = b[to];
+            int32_t backupTo = b[to];
             b[to] = b[from];
             b[from] = 0;
 
-            // Ensure this move doesn't leave/put our own king in check
             bool selfCheck = isKingUnderAttack(isWhiteTurn);
 
-            // Rollback simulation
             b[from] = b[to];
             b[to] = backupTo;
 
@@ -88,375 +199,255 @@ static inline int countLegalMoves(bool isWhiteTurn) {
     return legalCount;
 }
 
-static inline bool executeToledoMove(const char* moveStr) {
+INLINE ALWAYS bool executeToledoMove(const char* moveStr) {
     if (!moveStr || moveStr[0] == '\0') return false;
-    int fromCol = moveStr[0] - 'A';
-    int fromRow = '8' - moveStr[1];
-    int toCol   = moveStr[2] - 'A';
-    int toRow   = '8' - moveStr[3];
+    int32_t fromCol = moveStr[0] - 'A';
+    int32_t fromRow = '8' - moveStr[1];
+    int32_t toCol   = moveStr[2] - 'A';
+    int32_t toRow   = '8' - moveStr[3];
 
     if (fromCol < 0 || fromCol > 7 || fromRow < 0 || fromRow > 7) return false;
     if (toCol < 0 || toCol > 7 || toRow < 0 || toRow > 7) return false;
 
-    int fromIdx = (fromRow * 8) + fromCol + 1;
-    int toIdx   = (toRow * 8) + toCol + 1;
+    int32_t fromIdx = (fromRow * 8) + fromCol + 1;
+    int32_t toIdx   = (toRow * 8) + toCol + 1;
 
     if (!isMoveValid(fromIdx, toIdx)) return false;
 
     bool isWhiteMove = (b[fromIdx] > 0);
+    int32_t pieceType = ABS(b[fromIdx]);
 
-    // Simulate move to catch self-check violations
-    int capturedPiece = b[toIdx];
+    int32_t capturedPiece = b[toIdx];
     b[toIdx] = b[fromIdx];
     b[fromIdx] = 0;
 
     bool leavesKingInCheck = isKingUnderAttack(isWhiteMove);
 
-    // Roll back simulation
     b[fromIdx] = b[toIdx];
     b[toIdx] = capturedPiece;
 
     if (leavesKingInCheck) return false;
 
-    // Commit the valid move
+    if (pieceType == 16 && ABS(toCol - fromCol) == 2) {
+        if (toCol - fromCol == 2) {
+            int32_t rookFrom = toIdx + 1;
+            int32_t rookTo = toIdx - 1;
+            b[rookTo] = b[rookFrom];
+            b[rookFrom] = 0;
+        }
+        else if (toCol - fromCol == -2) {
+            int32_t rookFrom = toIdx - 2;
+            int32_t rookTo = toIdx + 1;
+            b[rookTo] = b[rookFrom];
+            b[rookFrom] = 0;
+        }
+    }
+
     b[toIdx] = b[fromIdx];
     b[fromIdx] = 0;
+
+    if (pieceType == 16) {
+        if (isWhiteMove) { whiteCastleKingsSide = 0; whiteCastleQueensSide = 0; }
+        else             { blackCastleKingsSide = 0; blackCastleQueensSide = 0; }
+    }
+    else if (pieceType == 13 || pieceType == 14) {
+        int32_t whiteKingsideRook  = (humanIsWhite != 0) ? 64 : 8;
+        int32_t whiteQueensideRook = (humanIsWhite != 0) ? 57 : 1;
+        int32_t blackKingsideRook  = (humanIsWhite != 0) ? 8  : 64;
+        int32_t blackQueensideRook = (humanIsWhite != 0) ? 1  : 57;
+
+        if (isWhiteMove) {
+            if (fromIdx == whiteKingsideRook)  whiteCastleKingsSide = 0;
+            if (fromIdx == whiteQueensideRook) whiteCastleQueensSide = 0;
+        } else {
+            if (fromIdx == blackKingsideRook)  blackCastleKingsSide = 0;
+            if (fromIdx == blackQueensideRook) blackCastleQueensSide = 0;
+        }
+    }
+
     return true;
 }
 
-static inline void refreshBoard(MicroDosAPI* api) {
-    for (int r = 0; r < 8; r++) {
-        for (int c = 0; c < 8; c++) {
-            int boardIdx = (r * 8) + c + 1;
-            int pieceVal = b[boardIdx];
+static const int32_t pieceWeights[] __attribute__((aligned(4))) = {
+    0, 100, 100, 100, 100, 100, 100, 100, 100,
+    300, 300, 300, 300, 500, 500, 900, 9999
+};
+
+INLINE ALWAYS int32_t calculateTotalHangingPenalty(bool aiIsWhite) {
+    int32_t totalPenalty = 0;
+
+    for (int32_t targetIdx = 1; targetIdx <= 64; targetIdx++) {
+        int32_t pieceVal = b[targetIdx];
+        if (pieceVal == 0) continue;
+
+        bool isAiPiece = aiIsWhite ? (pieceVal > 0) : (pieceVal < 0);
+        if (!isAiPiece) continue;
+
+        for (int32_t attackerIdx = 1; attackerIdx <= 64; attackerIdx++) {
+            int32_t enemyPiece = b[attackerIdx];
+            if (enemyPiece == 0) continue;
+
+            bool isEnemy = aiIsWhite ? (enemyPiece < 0) : (enemyPiece > 0);
+            if (isEnemy && isMoveValid(attackerIdx, targetIdx)) {
+                int32_t pId = ABS(pieceVal);
+                if (pId > 16) pId = 16;
+                totalPenalty += pieceWeights[pId];
+                break;
+            }
+        }
+    }
+    return totalPenalty;
+}
+
+INLINE ALWAYS int32_t evaluateMaterialLayout(bool aiIsWhite) {
+    int32_t materialScore = 0;
+    for (int32_t i = 1; i <= 64; i++) {
+        int32_t pieceVal = b[i];
+        if (pieceVal == 0) continue;
+
+        int32_t pieceId = ABS(pieceVal);
+        if (pieceId > 16) pieceId = 16;
+
+        if (aiIsWhite) {
+            materialScore += (pieceVal > 0) ? pieceWeights[pieceId] : -pieceWeights[pieceId];
+        } else {
+            materialScore += (pieceVal < 0) ? pieceWeights[pieceId] : -pieceWeights[pieceId];
+        }
+    }
+    return materialScore;
+}
+
+INLINE ALWAYS bool isSquareDefendedByEnemy(int32_t targetIdx, bool aiIsWhite) {
+    if (targetIdx < 1 || targetIdx > 64) return false;
+
+    for (int32_t attackerIdx = 1; attackerIdx <= 64; attackerIdx++) {
+        int32_t enemyPiece = b[attackerIdx];
+        if (enemyPiece == 0) continue;
+
+        bool isEnemy = aiIsWhite ? (enemyPiece < 0) : (enemyPiece > 0);
+        if (isEnemy) {
+            if (isMoveValid(attackerIdx, targetIdx)) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+INLINE ALWAYS void aiThinkAndRespond(MicroDosAPI* api) {
+    int32_t bestMoveFrom = 0;
+    int32_t bestMoveTo   = 0;
+    bool aiIsWhite   = (humanIsWhite == 0);
+    int32_t bestScore    = -999999;
+
+    int32_t initialHangingPenalty = calculateTotalHangingPenalty(aiIsWhite);
+
+    for (int32_t from = 1; from <= 64; from++) {
+        bool isAiPiece = aiIsWhite ? (b[from] > 0) : (b[from] < 0);
+        if (!isAiPiece) continue;
+
+        for (int32_t to = 1; to <= 64; to++) {
+            if (from == to) continue;
+
+            if (b[to] != 0 && ((b[from] > 0 && b[to] > 0) || (b[from] < 0 && b[to] < 0))) continue;
+            if (!isMoveValid(from, to)) continue;
+
+            int32_t capturedPiece = b[to];
+            b[to] = b[from];
+            b[from] = 0;
+
+            if (isKingUnderAttack(aiIsWhite)) {
+                b[from] = b[to];
+                b[to] = capturedPiece;
+                continue;
+            }
+
+            int32_t currentMoveScore = evaluateMaterialLayout(aiIsWhite);
+
+            if (isSquareDefendedByEnemy(to, aiIsWhite)) {
+                int32_t movingPieceId = ABS(b[to]);
+                if (movingPieceId > 16) movingPieceId = 16;
+                currentMoveScore -= pieceWeights[movingPieceId];
+            }
+
+            int32_t postHangingPenalty = calculateTotalHangingPenalty(aiIsWhite);
+            int32_t dangerResolvedBonus = initialHangingPenalty - postHangingPenalty;
+            currentMoveScore += dangerResolvedBonus;
+
+            int32_t toRow = (to - 1) / 8;
+            int32_t toCol = (to - 1) % 8;
+            if (toRow >= 3 && toRow <= 4 && toCol >= 3 && toCol <= 4) {
+                currentMoveScore += 15;
+            }
+
+            if (currentMoveScore > bestScore) {
+                bestScore = currentMoveScore;
+                bestMoveFrom = from;
+                bestMoveTo = to;
+            }
+
+            b[from] = b[to];
+            b[to] = capturedPiece;
+        }
+    }
+    if (bestMoveFrom != 0 && bestMoveTo != 0) {
+        int32_t fRow = (bestMoveFrom - 1) / 8;
+        int32_t fCol = (bestMoveFrom - 1) % 8;
+        int32_t tRow = (bestMoveTo - 1) / 8;
+        int32_t tCol = (bestMoveTo - 1) % 8;
+
+	char cpuMove[8] __attribute__((aligned(4)));
+        cpuMove[0] = (char)('A' + fCol);
+        cpuMove[1] = (char)('8' - fRow);
+        cpuMove[2] = (char)('A' + tCol);
+        cpuMove[3] = (char)('8' - tRow);
+        cpuMove[4] = '\0';
+
+        executeToledoMove(cpuMove);
+    }
+}
+
+INLINE void handlePawnPromotion() {
+    for (int32_t col = 0; col < 8; col++) {
+        int32_t idx = col + 1;
+        if (b[idx] >= 1 && b[idx] <= 8)   b[idx] = 15;
+        if (b[idx] <= -1 && b[idx] >= -8) b[idx] = -15;
+    }
+
+    for (int32_t col = 0; col < 8; col++) {
+        int32_t idx = 56 + col + 1;
+        if (b[idx] >= 1 && b[idx] <= 8)   b[idx] = 15;
+        if (b[idx] <= -1 && b[idx] >= -8) b[idx] = -15;
+    }
+}
+
+static uint32_t pieceSprites[36] __attribute__((aligned(4)));
+
+INLINE ALWAYS void refreshBoard(MicroDosAPI* api) {
+    for (int32_t r = 0; r < 8; r++) {
+        for (int32_t c = 0; c < 8; c++) {
+            int32_t boardIdx = (r * 8) + c + 1;
+            int32_t pieceVal = b[boardIdx];
 
             if (pieceVal != 0) {
-                  int spriteIdx = (pieceVal > 0) ? pieceVal : (-pieceVal + 16);
+                  int32_t spriteIdx = (pieceVal > 0) ? pieceVal : (-pieceVal + 16);
                   uint32_t handle = pieceSprites[spriteIdx];
                   if (handle != 0) {
                     api->drawSprite(handle, c * 40, r * 40);
-		  }
+                  }
             }
         }
     }
 }
 
-static inline void cacheAllChessSprites(MicroDosAPI* api) {
-    pieceSprites[1]  = api->createSprite("Chess_plt60.spr");
-    pieceSprites[2]  = api->createSprite("Chess_plt60.spr");
-    pieceSprites[3]  = api->createSprite("Chess_plt60.spr");
-    pieceSprites[4]  = api->createSprite("Chess_plt60.spr");
-    pieceSprites[5]  = api->createSprite("Chess_plt60.spr");
-    pieceSprites[6]  = api->createSprite("Chess_plt60.spr");
-    pieceSprites[7]  = api->createSprite("Chess_plt60.spr");
-    pieceSprites[8]  = api->createSprite("Chess_plt60.spr");
-
-    pieceSprites[9]  = api->createSprite("Chess_nlt60.spr");
-    pieceSprites[10] = api->createSprite("Chess_nlt60.spr");
-    pieceSprites[11] = api->createSprite("Chess_blt60.spr");
-    pieceSprites[12] = api->createSprite("Chess_blt60.spr");
-    pieceSprites[13] = api->createSprite("Chess_rlt60.spr");
-    pieceSprites[14] = api->createSprite("Chess_rlt60.spr");
-
-    pieceSprites[15] = api->createSprite("Chess_qlt60.spr");
-    pieceSprites[16] = api->createSprite("Chess_klt60.spr");
-
-    pieceSprites[17] = api->createSprite("Chess_pdt60.spr");
-    pieceSprites[18] = api->createSprite("Chess_pdt60.spr");
-    pieceSprites[19] = api->createSprite("Chess_pdt60.spr");
-    pieceSprites[20] = api->createSprite("Chess_pdt60.spr");
-    pieceSprites[21] = api->createSprite("Chess_pdt60.spr");
-    pieceSprites[22] = api->createSprite("Chess_pdt60.spr");
-    pieceSprites[23] = api->createSprite("Chess_pdt60.spr");
-    pieceSprites[24] = api->createSprite("Chess_pdt60.spr");
-
-    pieceSprites[25] = api->createSprite("Chess_ndt60.spr");
-    pieceSprites[26] = api->createSprite("Chess_ndt60.spr");
-    pieceSprites[27] = api->createSprite("Chess_bdt60.spr");
-    pieceSprites[28] = api->createSprite("Chess_bdt60.spr");
-    pieceSprites[29] = api->createSprite("Chess_rdt60.spr");
-    pieceSprites[30] = api->createSprite("Chess_rdt60.spr");
-
-    pieceSprites[31] = api->createSprite("Chess_qdt60.spr");
-    pieceSprites[32] = api->createSprite("Chess_kdt60.spr");
-}
-
-static inline void saveUndoState() {
-    for(int i = 0; i <= 64; i++) {
-        undoHistory[undoHead][i] = b[i];
-    }
-    undoHead = (undoHead + 1) % UNDO_DEPTH;
-    if (undoCount < UNDO_DEPTH) undoCount++;
-}
-
-static inline bool executeUndo() {
-    if (undoCount <= 0) return false;
-
-    undoHead = (undoHead - 1 + UNDO_DEPTH) % UNDO_DEPTH;
-    for(int i = 0; i <= 64; i++) {
-        b[i] = undoHistory[undoHead][i];
-    }
-    undoCount--;
-    return true;
-}
-
-static inline void clearUndoHistory() {
-    undoHead = 0;
-    undoCount = 0;
-}
-
-static inline void drawBoard(MicroDosAPI* api) {
-    for (int r = 0; r < 8; r++) {
-        for (int c = 0; c < 8; c++) {
-            int colorId = -1;
-            colorId = ((r + c) % 2 == 0) ? 15 : 2;
-            api->rect(c * 40, r * 40, 40, 40, colorId);
-        }
-    }
-    api->flushGameMatrix();
-}
-
-static inline void initToledoBoard() {
-    int initialLayout[] = {13, 9, 11, 15, 16, 12, 10, 14};
-    int initialLayoutF[] = {13, 9, 11, 16, 15, 12, 10, 14};
-
-    for (int i = 0; i <= 64; i++) b[i] = 0;
-
-    for (int c = 0; c < 8; c++) {
-        if (humanIsWhite) {
-            b[1 + c]  = -initialLayout[c];  // Row 0: Black AI
-            b[9 + c]  = -(c + 1);           // Row 1: Black AI Pawns
-            b[49 + c] = (c + 1);            // Row 6: White Human Pawns
-            b[57 + c] = initialLayout[c];   // Row 7: White Human
-        } else {
-            b[1 + c]  = initialLayoutF[c];  // Row 0: White AI
-            b[9 + c]  = (c + 1);            // Row 1: White AI Pawns
-            b[49 + c] = -(c + 1);           // Row 6: Black Human Pawns
-            b[57 + c] = -initialLayoutF[c]; // Row 7: Black Human
-        }
-    }
-}
-
-static inline char getColChar(int colIdx) {
-    switch (colIdx) {
-        case 0: return 'A'; case 1: return 'B'; case 2: return 'C'; case 3: return 'D';
-        case 4: return 'E'; case 5: return 'F'; case 6: return 'G'; case 7: return 'H';
-        default: return '\0';
-    }
-}
-
-static inline char getRowChar(int rowIdx) {
-    switch (rowIdx) {
-        case 0: return '8'; case 1: return '7'; case 2: return '6'; case 3: return '5';
-        case 4: return '4'; case 5: return '3'; case 6: return '2'; case 7: return '1';
-        default: return '\0';
-    }
-}
-
-__attribute__((always_inline)) static inline void aiThinkAndRespond(MicroDosAPI* api);
-__attribute__((always_inline)) static inline void executeMove(const char* moveStr, bool* playerTurn, MicroDosAPI* api);
-
-int _start(int argc, char** argv, MicroDosAPI* api) {
-    _global_api_ptr = api;
-    if (!api) return -1;
-    if (!api->initGameMatrix()) return -1;
-
-    api->clear();
-    api->setFKeys(STRING(" NEW  "), STRING(" UNDO "), STRING(" FLIP "), STRING("      "), STRING(" QUIT "));
-    cacheAllChessSprites(api);
-    initToledoBoard();
-    drawBoard(api);
-    refreshBoard(api);
-
-    int selectX = -1, selectY = -1;
-    bool running = true;
-    bool playerTurn = true;
-    char moveStr[5] = "";
-
-    while (running) {
-        int key = api->inkey();
-	// QUIT
-        if (key == '\x15' || key == 'Q' || key == 'q') {
-            running = false;
-            break;
-        }
-	// UNDO
-        if (key == '\x12' || key == 'U' || key == 'u') {
-            if (executeUndo()) {
-                selectX = -1; selectY = -1;
-                refreshBoard(api);
-                api->delay(300);
-            }
-            continue;
-        }
-	// NEW
-        if (key == '\x11') {
-            humanIsWhite = true;
-            playerTurn = true;
-            selectX = -1; selectY = -1;
-            initToledoBoard();
-	    clearUndoHistory();
-	    strcpy(textBuf, "      ");
-	    bufLen = 6;
-            api->setFKeys(STRING(" NEW  "), STRING(" UNDO "), STRING(" FLIP "), STRING("      "), STRING(" QUIT "));
-            drawBoard(api);
-            for (int i = 1; i <= 32; i++) {
-              if (pieceSprites[i] != 0) {
-	        *(bool*)pieceSprites[i] = false;
-              }
-            }
-            refreshBoard(api);
-	    api->delay(300);
-	    continue;
-        }
-	// FLIP
-        if (key == '\x13') {
-            humanIsWhite = !humanIsWhite;
-            selectX = -1; selectY = -1;
-            for (int i = 1; i <= 32; i++) {
-                if (pieceSprites[i] != 0) *(bool*)pieceSprites[i] = false;
-            }
-
-            initToledoBoard();
-            clearUndoHistory();
-            playerTurn = true;
-            drawBoard(api);
-            refreshBoard(api);
-
-	    strcpy(textBuf, "      ");
-	    bufLen = 6;
-            api->setFKeys(STRING(" NEW  "), STRING(" UNDO "), STRING(" FLIP "), STRING("      "), STRING(" QUIT "));
-
-            if (!humanIsWhite) {
-                saveUndoState();
-                playerTurn = false;
-                aiThinkAndRespond(api);
-                refreshBoard(api);
-                playerTurn = true;
-            }
-
-            api->delay(300);
-            continue;
-        }
-        // Backspace
-        if (key == '\t') {
-            if (bufLen > 0) {
-                textBuf[--bufLen] = '\0';
-                if (bufLen == 0) {
-                    strcpy(textBuf, "      ");
-                    bufLen = 6;
-                }
-                api->setFKeys(STRING(" NEW  "), STRING(" UNDO "), STRING(" FLIP "), textBuf, STRING(" QUIT "));
-            }
-	    api->delay(200);
-	    continue;
-        }
-        // Enter
-        if (key == '\n') {
-            if (bufLen == 4) {
-                moveStr[0] = textBuf[0];
-                moveStr[1] = textBuf[1];
-                moveStr[2] = textBuf[2];
-                moveStr[3] = textBuf[3];
-                moveStr[4] = '\0';
-
-                saveUndoState();
-		executeMove(moveStr, &playerTurn, api);
-                strcpy(textBuf, "      ");
-	       	bufLen = 6;
-		memset(moveStr, 0, 5);
-                selectX = -1;
-                selectY = -1;
-            }
-	    api->delay(300);
-	    continue;
-        }
-        // Alphanumeric
-        else if (key >= 32 && key <= 126) {
-            if (bufLen == 6 && strcmp(textBuf, "      ") == 0) {
-                bufLen = 0;
-                memset(textBuf, 0, sizeof(textBuf));
-            }
-
-            if (bufLen < 4) {
-                textBuf[bufLen++] = (char)key;
-                textBuf[bufLen] = '\0';
-                api->setFKeys(STRING(" NEW  "), STRING(" UNDO "), STRING(" FLIP "), textBuf, STRING(" QUIT "));
-            }
-	    api->delay(200);
-	    continue;
-        }
-
-        TouchState touch;
-        api->getTouch(&touch);
-
-        if (touch.isPressed && touch.y >= 0 && touch.y < 320 && touch.x >= 0 && touch.x < 320) {
-            int gridX = touch.x / 40;
-            int gridY = touch.y / 40;
-
-            if (selectX == -1) {
-                int selectIdx = (gridY * 8) + gridX + 1;
-                int piece = b[selectIdx];
-
-                bool isHumanPiece = humanIsWhite ? (piece > 0) : (piece < 0);
-
-                if (piece != 0 && playerTurn && isHumanPiece) {
-                    selectX = gridX;
-                    selectY = gridY;
-                }
-            } else {
-                moveStr[0] = getColChar(selectX);
-                moveStr[1] = getRowChar(selectY);
-                moveStr[2] = getColChar(gridX);
-                moveStr[3] = getRowChar(gridY);
-                moveStr[4] = '\0';
-
-                saveUndoState();
-		executeMove(moveStr, &playerTurn, api);
-                strcpy(textBuf, "      ");
-	       	bufLen = 6;
-		memset(moveStr, 0, 5);
-                selectX = -1;
-                selectY = -1;
-            }
-            api->delay(300);
-        }
-        api->delay(30);
-    }
-
-    api->clearFKeys();
-    for (int i = 1; i <= 32; i++) {
-        if (pieceSprites[i] != 0) api->freeSprite(pieceSprites[i]);
-    }
-    api->closeGameMatrix();
-    api->delay(100);
-    return 0;
-}
-
-static inline void handlePawnPromotion() {
-    // Check Row 0 (Indices 1 to 8) - White promoting on Black's back rank
-    for (int col = 0; col < 8; col++) {
-        int idx = col + 1;
-        if (b[idx] >= 1 && b[idx] <= 8)   b[idx] = 15;  // White Pawn -> Standard White Queen
-        if (b[idx] <= -1 && b[idx] >= -8) b[idx] = -15; // Black Pawn -> Standard Black Queen
-    }
-
-    // Check Row 7 (Indices 57 to 64) - Black promoting on White's back rank
-    for (int col = 0; col < 8; col++) {
-        int idx = 56 + col + 1;
-        if (b[idx] >= 1 && b[idx] <= 8)   b[idx] = 15;  // White Pawn -> Standard White Queen
-        if (b[idx] <= -1 && b[idx] >= -8) b[idx] = -15; // Black Pawn -> Standard Black Queen
-    }
-}
-
-static inline void executeMove(const char* moveStr, bool* playerTurn, MicroDosAPI* api) {
+INLINE ALWAYS void executeMove(const char* moveStr, MicroDosAPI* api) {
     if (executeToledoMove(moveStr)) {
       handlePawnPromotion();
       refreshBoard(api);
       api->delay(200);
 
-      if (countLegalMoves(!humanIsWhite) == 0) {
-        if (isKingUnderAttack(!humanIsWhite)) {
+      if (countLegalMoves(humanIsWhite == 0) == 0) {
+        if (isKingUnderAttack(humanIsWhite == 0)) {
           api->setFKeys(STRING(" NEW  "), STRING(" UNDO "), STRING(" FLIP "), STRING("YOUWIN"), STRING(" QUIT "));
         } else {
           api->setFKeys(STRING(" NEW  "), STRING(" UNDO "), STRING(" FLIP "), STRING("DRAW!!"), STRING(" QUIT "));
@@ -465,15 +456,13 @@ static inline void executeMove(const char* moveStr, bool* playerTurn, MicroDosAP
         return;
       }
 
-      playerTurn = (bool*)false;
       aiThinkAndRespond(api);
       handlePawnPromotion();
       refreshBoard(api);
       api->delay(200);
-      playerTurn = (bool*)true;
 
-      if (countLegalMoves(humanIsWhite) == 0) {
-        if (isKingUnderAttack(humanIsWhite)) {
+      if (countLegalMoves(humanIsWhite != 0) == 0) {
+        if (isKingUnderAttack(humanIsWhite != 0)) {
           api->setFKeys(STRING(" NEW  "), STRING(" UNDO "), STRING(" FLIP "), STRING("DEFEAT"), STRING(" QUIT "));
         } else {
           api->setFKeys(STRING(" NEW  "), STRING(" UNDO "), STRING(" FLIP "), STRING("DRAW!!"), STRING(" QUIT "));
@@ -490,204 +479,274 @@ static inline void executeMove(const char* moveStr, bool* playerTurn, MicroDosAP
     api->setFKeys(STRING(" NEW  "), STRING(" UNDO "), STRING(" FLIP "), STRING("      "), STRING(" QUIT "));
 }
 
-
-static inline void aiThinkAndRespond(MicroDosAPI* api) {
-    int bestMoveFrom = 0;
-    int bestMoveTo   = 0;
-    bool aiIsWhite   = !humanIsWhite;
-
-    // Relative tracking: AI always wants the highest possible positive score
-    int bestScore = -999999;
-
-    for (int from = 1; from <= 64; from++) {
-        bool isAiPiece = aiIsWhite ? (b[from] > 0) : (b[from] < 0);
-
-        if (isAiPiece) {
-            for (int to = 1; to <= 64; to++) {
-                if (from == to) continue;
-
-                // Prevent friendly fire
-                if (b[to] != 0 && ((b[from] > 0 && b[to] > 0) || (b[from] < 0 && b[to] < 0))) continue;
-                if (!isMoveValid(from, to)) continue;
-
-                // Simulate Move
-                int capturedPiece = b[to];
-                b[to] = b[from];
-                b[from] = 0;
-
-                // Verify King safety
-                if (isKingUnderAttack(aiIsWhite)) {
-                    b[from] = b[to];
-                    b[to] = capturedPiece;
-                    continue;
-                }
-
-                // Calculate relative material layout
-                int materialScore = 0;
-                for (int i = 1; i <= 64; i++) {
-                    int pieceVal = b[i];
-                    if (pieceVal == 0) continue;
-
-                    int pieceId = ABS(pieceVal);
-                    if (pieceId > 16) pieceId = 16;
-
-                    // PERSPECTIVE FIX: Positive points for AI pieces, negative points for opponent pieces
-                    if (aiIsWhite) {
-                        if (pieceVal > 0)  materialScore += pieceWeights[pieceId];
-                        if (pieceVal < 0)  materialScore -= pieceWeights[pieceId];
-                    } else {
-                        if (pieceVal < 0)  materialScore += pieceWeights[pieceId];
-                        if (pieceVal > 0)  materialScore -= pieceWeights[pieceId];
-                    }
-                }
-
-                bool squareIsDefended = false;
-                for (int attackerIdx = 1; attackerIdx <= 64; attackerIdx++) {
-                    int enemyPiece = b[attackerIdx];
-                    if (enemyPiece == 0) continue;
-
-                    // Check if the enemy piece can legally capture on our 'to' square
-                    bool isEnemy = aiIsWhite ? (enemyPiece < 0) : (enemyPiece > 0);
-                    if (isEnemy) {
-                        if (isMoveValid(attackerIdx, to)) {
-                            squareIsDefended = true;
-                            break;
-                        }
-                    }
-                }
-
-                // If the square is guarded, penalize this score by the value of the AI's moving piece
-                if (squareIsDefended) {
-                    int movingPieceId = ABS(b[to]); // This is the piece that just moved there
-                    if (movingPieceId > 16) movingPieceId = 16;
-                    materialScore -= pieceWeights[movingPieceId];
-                }
-
-                // Positional Control Bonus: Target center ring squares
-                int toRow = (to - 1) / 8;
-                int toCol = (to - 1) % 8;
-                if (toRow >= 3 && toRow <= 4 && toCol >= 3 && toCol <= 4) {
-                    materialScore += 15; // Always add a bonus for controlling the center
-                }
-
-                // AI always maximizes this relative score profile
-                if (materialScore > bestScore) {
-                    bestScore = materialScore;
-                    bestMoveFrom = from;
-                    bestMoveTo = to;
-                }
-
-                // Revert Simulation state
-                b[from] = b[to];
-                b[to] = capturedPiece;
-            }
+INLINE ALWAYS void drawBoard(MicroDosAPI* api) {
+    for (int32_t r = 0; r < 8; r++) {
+        for (int32_t c = 0; c < 8; c++) {
+            int32_t colorId = -1;
+            colorId = ((r + c) % 2 == 0) ? 15 : 2;
+            api->rect(c * 40, r * 40, 40, 40, colorId);
         }
     }
+    api->flushGameMatrix();
+}
 
-    // Execute the final chosen best move path
-    if (bestMoveFrom != 0 && bestMoveTo != 0) {
-        int fRow = (bestMoveFrom - 1) / 8;
-        int fCol = (bestMoveFrom - 1) % 8;
-        int tRow = (bestMoveTo - 1) / 8;
-        int tCol = (bestMoveTo - 1) % 8;
+INLINE ALWAYS void initToledoBoard() {
+    static const int32_t initialLayout[] __attribute__((aligned(4))) = {13, 9, 11, 15, 16, 12, 10, 14};
+    static const int32_t initialLayoutF[] __attribute__((aligned(4))) = {13, 9, 11, 16, 15, 12, 10, 14};
 
-        char cpuMove[5];
-        cpuMove[0] = getColChar(fCol);
-        cpuMove[1] = getRowChar(fRow);
-        cpuMove[2] = getColChar(tCol);
-        cpuMove[3] = getRowChar(tRow);
-        cpuMove[4] = '\0';
+    for (int32_t i = 0; i < 68; i++) b[i] = 0;
 
-        executeToledoMove(cpuMove);
+    whiteCastleQueensSide = 1;
+    whiteCastleKingsSide = 1;
+    blackCastleQueensSide = 1;
+    blackCastleKingsSide = 1;
+
+    for (int32_t c = 0; c < 8; c++) {
+        if (humanIsWhite != 0) {
+            b[1 + c]  = -initialLayout[c];  // Row 0: Black AI
+            b[9 + c]  = -(c + 1);           // Row 1: Black AI Pawns
+            b[49 + c] = (c + 1);            // Row 6: White Human Pawns
+            b[57 + c] = initialLayout[c];   // Row 7: White Human
+        } else {
+            b[1 + c]  = initialLayoutF[c];  // Row 0: White AI
+            b[9 + c]  = (c + 1);            // Row 1: White AI Pawns
+            b[49 + c] = -(c + 1);           // Row 6: Black Human Pawns
+            b[57 + c] = -initialLayoutF[c]; // Row 7: Black Human
+        }
     }
 }
 
-static inline bool isMoveValid(int fromIdx, int toIdx) {
-    if (fromIdx < 1 || fromIdx > 64 || toIdx < 1 || toIdx > 64) return false;
-    if (fromIdx == toIdx) return false;
+INLINE ALWAYS void saveUndoState() {
+    memcpy(undoHistory[undoHead], b, sizeof(b));
+    undoHead = (undoHead + 1) % UNDO_DEPTH;
+    if (undoCount < UNDO_DEPTH) undoCount++;
+}
 
-    int p = b[fromIdx];
-    int t = b[toIdx];
+INLINE ALWAYS bool executeUndo() {
+    if (undoCount <= 0) return false;
+    undoHead = (undoHead - 1 + UNDO_DEPTH) % UNDO_DEPTH;
+    memcpy(b, undoHistory[undoHead], sizeof(b));
+    undoCount--;
+    return true;
+}
 
-    if (p == 0) return false;
-    if (t != 0 && ((p > 0 && t > 0) || (p < 0 && t < 0))) return false;
+INLINE ALWAYS void clearUndoHistory() {
+    undoHead = 0;
+    undoCount = 0;
+}
 
-    int fCol = (fromIdx - 1) % 8;
-    int fRow = (fromIdx - 1) / 8;
-    int tCol = (toIdx - 1) % 8;
-    int tRow = (toIdx - 1) / 8;
+INLINE ALWAYS void cacheAllChessSprites(MicroDosAPI* api) {
+    const char* chessSpriteFiles[12] = {
+        STRING("Chess_plt60.spr"), // 0: Pawn
+        STRING("Chess_nlt60.spr"), // 1: Knight
+        STRING("Chess_blt60.spr"), // 2: Bishop
+        STRING("Chess_rlt60.spr"), // 3: Rook
+        STRING("Chess_qlt60.spr"), // 4: Queen
+        STRING("Chess_klt60.spr"), // 5: King
+        STRING("Chess_pdt60.spr"), // 6: Dark Pawn
+        STRING("Chess_ndt60.spr"), // 7: Dark Knight
+        STRING("Chess_bdt60.spr"), // 8: Dark Bishop
+        STRING("Chess_rdt60.spr"), // 9: Dark Rook
+        STRING("Chess_qdt60.spr"), // 10: Dark Queen
+        STRING("Chess_kdt60.spr")  // 11: Dark King
+    };
 
-    int dc = tCol - fCol;
-    int dr = tRow - fRow;
-    int absDc = ABS(dc);
-    int absDr = ABS(dr);
+    for (int32_t i = 1; i <= 32; i++) {
+        int32_t fileIdx = -1;
 
-    int sCol = (dc == 0) ? 0 : (dc > 0 ? 1 : -1);
-    int sRow = (dr == 0) ? 0 : (dr > 0 ? 1 : -1);
+        if (i >= 1 && i <= 8)        fileIdx = 0;  // White Pawns
+        else if (i == 9 || i == 10)  fileIdx = 1;  // White Knights
+        else if (i == 11 || i == 12) fileIdx = 2;  // White Bishops
+        else if (i == 13 || i == 14) fileIdx = 3;  // White Rooks
+        else if (i == 15)            fileIdx = 4;  // White Queen
+        else if (i == 16)            fileIdx = 5;  // White King
+        else if (i >= 17 && i <= 24) fileIdx = 6;  // Black Pawns
+        else if (i == 25 || i == 26) fileIdx = 7;  // Black Knights
+        else if (i == 27 || i == 28) fileIdx = 8;  // Black Bishops
+        else if (i == 29 || i == 30) fileIdx = 9;  // Black Rooks
+        else if (i == 31)            fileIdx = 10; // Black Queen
+        else if (i == 32)            fileIdx = 11; // Black King
 
-    int pieceType = ABS(p);
-
-    // PAWNS (IDs 1 to 8)
-    if (pieceType >= 1 && pieceType <= 8) {
-        bool movesUp = (p > 0) ? humanIsWhite : !humanIsWhite;
-
-        if (movesUp) {
-            if (dc == 0 && dr == -1 && t == 0) return true;
-            if (dc == 0 && dr == -2 && fRow == 6 && b[fromIdx - 8] == 0 && t == 0) return true;
-            if (absDc == 1 && dr == -1 && t != 0) return true;
-        } else {
-            if (dc == 0 && dr == 1 && t == 0) return true;
-            if (dc == 0 && dr == 2 && fRow == 1 && b[fromIdx + 8] == 0 && t == 0) return true;
-            if (absDc == 1 && dr == 1 && t != 0) return true;
+        if (fileIdx != -1) {
+            pieceSprites[i] = api->createSprite(chessSpriteFiles[fileIdx]);
         }
-        return false;
     }
+}
 
-    //  KNIGHTS (IDs 9 and 10)
-    if (pieceType == 9 || pieceType == 10) {
-        return (absDc == 1 && absDr == 2) || (absDc == 2 && absDr == 1);
-    }
+extern "C" int _start(int argc, char** argv, MicroDosAPI* api) {
+    _global_api_ptr = api;
+    if (!api) return -1;
+    if (!api->initGameMatrix()) return -1;
 
-    //  BISHOPS (IDs 11 and 12)
-    if (pieceType == 11 || pieceType == 12) {
-        if (absDc != absDr) return false;
-        int c = fCol + sCol, r = fRow + sRow;
-        while (c != tCol && r != tRow) {
-            if (c < 0 || c > 7 || r < 0 || r > 7) return false;
-            if (b[(r * 8) + c + 1] != 0) return false;
-            c += sCol; r += sRow;
+    api->clear();
+    api->setFKeys(STRING(" NEW  "), STRING(" UNDO "), STRING(" FLIP "), STRING("      "), STRING(" QUIT "));
+    cacheAllChessSprites(api);
+    initToledoBoard();
+    drawBoard(api);
+    refreshBoard(api);
+
+    int32_t selectX = -1, selectY = -1;
+    bool running = true;
+    bool playerTurn = true;
+
+    static char moveStr[8] __attribute__((aligned(4))) = "";
+    static char textBuf[8] __attribute__((aligned(4))) = "      ";
+    static char blankBuf[8] __attribute__((aligned(4))) = "      ";
+
+    while (running) {
+        int32_t key = api->inkey();
+        // QUIT
+        if (key == '\x15' || key == 'Q' || key == 'q') {
+            running = false;
+            break;
         }
-        return true;
-    }
-
-    //  ROOKS (IDs 13 and 14)
-    if (pieceType == 13 || pieceType == 14) {
-        if (dc != 0 && dr != 0) return false;
-        int c = fCol + sCol, r = fRow + sRow;
-        while (c != tCol || r != tRow) {
-            if (c < 0 || c > 7 || r < 0 || r > 7) return false;
-            if (b[(r * 8) + c + 1] != 0) return false;
-            c += sCol; r += sRow;
+        // UNDO
+        if (key == '\x12' || key == 'U' || key == 'u') {
+            if (executeUndo()) {
+                selectX = -1; selectY = -1;
+                refreshBoard(api);
+                api->delay(300);
+            }
+            continue;
         }
-        return true;
-    }
-
-    //  QUEENS (ID 15)
-    if (pieceType == 15) {
-        if (absDc != absDr && dc != 0 && dr != 0) return false;
-        int c = fCol + sCol, r = fRow + sRow;
-        while (c != tCol || r != tRow) {
-            if (c < 0 || c > 7 || r < 0 || r > 7) return false;
-            if (b[(r * 8) + c + 1] != 0) return false;
-            c += sCol; r += sRow;
+        // NEW
+        if (key == '\x11') {
+            humanIsWhite = 1;
+            playerTurn = true;
+            selectX = -1; selectY = -1;
+            initToledoBoard();
+            clearUndoHistory();
+            memcpy(textBuf, blankBuf, sizeof(blankBuf));
+            bufLen = 6;
+            api->setFKeys(STRING(" NEW  "), STRING(" UNDO "), STRING(" FLIP "), STRING("      "), STRING(" QUIT "));
+            drawBoard(api);
+            for (int32_t i = 1; i <= 32; i++) {
+              if (pieceSprites[i] != 0) { *(bool*)pieceSprites[i] = false; }
+            }
+            refreshBoard(api);
+            api->delay(300);
+            continue;
         }
-        return true;
+        // FLIP
+        if (key == '\x13') {
+            humanIsWhite = (humanIsWhite == 0) ? 1 : 0;
+            selectX = -1; selectY = -1;
+            for (int32_t i = 1; i <= 32; i++) {
+                if (pieceSprites[i] != 0) *(bool*)pieceSprites[i] = false;
+            }
+
+            initToledoBoard();
+            clearUndoHistory();
+            playerTurn = true;
+            drawBoard(api);
+            refreshBoard(api);
+
+            memcpy(textBuf, blankBuf, sizeof(blankBuf));
+            bufLen = 6;
+            api->setFKeys(STRING(" NEW  "), STRING(" UNDO "), STRING(" FLIP "), textBuf, STRING(" QUIT "));
+
+            if (humanIsWhite == 0) {
+                saveUndoState();
+                playerTurn = false;
+                aiThinkAndRespond(api);
+                refreshBoard(api);
+                playerTurn = true;
+            }
+
+            api->delay(300);
+            continue;
+        }
+        // Backspace
+        if (key == '\t') {
+            if (bufLen > 0) {
+                textBuf[--bufLen] = '\0';
+                if (bufLen == 0) {
+                    memcpy(textBuf, blankBuf, sizeof(blankBuf));
+                    bufLen = 6;
+                }
+                api->setFKeys(STRING(" NEW  "), STRING(" UNDO "), STRING(" FLIP "), textBuf, STRING(" QUIT "));
+            }
+            api->delay(200);
+            continue;
+        }
+        // Enter
+        if (key == '\n') {
+            if (bufLen == 4) {
+                moveStr[0] = textBuf[0];
+                moveStr[1] = textBuf[1];
+                moveStr[2] = textBuf[2];
+                moveStr[3] = textBuf[3];
+                moveStr[4] = '\0';
+
+                saveUndoState();
+                memcpy(textBuf, blankBuf, sizeof(blankBuf));
+                bufLen = 6;
+                executeMove(moveStr, api);
+                memset(moveStr, 0, sizeof(moveStr));
+                selectX = -1;
+                selectY = -1;
+            }
+            api->delay(300);
+            continue;
+        }
+        // Alphanumeric
+        else if (key >= 32 && key <= 126) {
+            if (bufLen == 6 && strcmp(textBuf, blankBuf) == 0) {
+                bufLen = 0;
+                memset(textBuf, 0, sizeof(textBuf));
+            }
+
+            if (bufLen < 4) {
+                textBuf[bufLen++] = (char)key;
+                textBuf[bufLen] = '\0';
+                api->setFKeys(STRING(" NEW  "), STRING(" UNDO "), STRING(" FLIP "), textBuf, STRING(" QUIT "));
+            }
+            api->delay(200);
+            continue;
+        }
+
+        TouchState touch;
+        api->getTouch(&touch);
+
+        if (touch.isPressed && touch.y >= 0 && touch.y < 320 && touch.x >= 0 && touch.x < 320) {
+            int32_t gridX = touch.x / 40;
+            int32_t gridY = touch.y / 40;
+
+            if (selectX == -1) {
+                int32_t selectIdx = (gridY * 8) + gridX + 1;
+                int32_t piece = b[selectIdx];
+
+                bool isHumanPiece = (humanIsWhite != 0) ? (piece > 0) : (piece < 0);
+
+                if (piece != 0 && playerTurn && isHumanPiece) {
+                    selectX = gridX;
+                    selectY = gridY;
+                }
+            } else {
+                moveStr[0] = (char)('A' + selectX);
+                moveStr[1] = (char)('8' - selectY);
+                moveStr[2] = (char)('A' + gridX);
+                moveStr[3] = (char)('8' - gridY);
+                moveStr[4] = '\0';
+
+                saveUndoState();
+                memcpy(textBuf, blankBuf, sizeof(blankBuf));
+                bufLen = 6;
+                executeMove(moveStr, api);
+                memset(moveStr, 0, sizeof(moveStr));
+                selectX = -1;
+                selectY = -1;
+            }
+            api->delay(300);
+        }
+        api->delay(30);
     }
 
-    //  KINGS (ID 16)
-    if (pieceType == 16) {
-        return (absDc <= 1 && absDr <= 1);
+    api->clearFKeys();
+    for (int32_t i = 1; i <= 32; i++) {
+        if (pieceSprites[i] != 0) api->freeSprite(pieceSprites[i]);
     }
-
-    return false;
+    api->closeGameMatrix();
+    api->delay(100);
+    return 0;
 }

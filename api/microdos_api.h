@@ -108,9 +108,14 @@ __attribute__((weak)) MicroDosAPI* _global_api_ptr = 0;
 // ============================================================================
 //   STRING ALIGNMENT AND CREATION UTILITIES
 // ============================================================================
+
+#undef STRING
 #define STRING(str) (__extension__({ \
-    static const char __aligned_str[] __attribute__((aligned(4))) = str; \
-    __aligned_str; \
+    struct __attribute__((aligned(4))) AlignedStrWrapper { \
+        char data[sizeof(str)]; \
+    }; \
+    static const struct AlignedStrWrapper __wrapped_str = { str }; \
+    __wrapped_str.data; \
 }))
 
 #define NEW_STRING(varName, str) \
@@ -141,20 +146,40 @@ __attribute__((weak)) int strcmp(const char* s1, const char* s2) {
 }
 
 __attribute__((weak)) void* memcpy(void* dest, const void* src, unsigned int count) {
-  char* d = (char*)dest;
-  const char* s = (const char*)src;
-  while (count--) {
-    *d++ = *s++;
-  }
-  return dest;
+    if (((size_t)dest % 4 == 0) && ((size_t)src % 4 == 0) && (count % 4 == 0)) {
+        uint32_t* d = (uint32_t*)dest;
+        const uint32_t* s = (const uint32_t*)src;
+        unsigned int words = count / 4;
+        while (words--) {
+            *d++ = *s++;
+        }
+    } else {
+        char* d = (char*)dest;
+        const char* s = (const char*)src;
+        while (count--) {
+            *d++ = *s++;
+        }
+    }
+    return dest;
 }
 
 __attribute__((weak)) void* memset(void* dest, int value, unsigned int count) {
-  char* d = (char*)dest;
-  while (count--) {
-    *d++ = (char)value;
-  }
-  return dest;
+    if (((size_t)dest % 4 == 0) && (count % 4 == 0)) {
+        uint32_t* d = (uint32_t*)dest;
+        uint32_t val32 = (uint8_t)value;
+        val32 |= (val32 << 8);
+        val32 |= (val32 << 16);
+        unsigned int words = count / 4;
+        while (words--) {
+            *d++ = val32;
+        }
+    } else {
+        char* d = (char*)dest;
+        while (count--) {
+            *d++ = (char)value;
+        }
+    }
+    return dest;
 }
 
 __attribute__((weak)) void* malloc(unsigned int size) {
@@ -187,35 +212,34 @@ __attribute__((weak)) void free(void* ptr) {
 // Main entry point
 int _start(int argc, char** argv, MicroDosAPI* api);
 
-// Direct access link to the underlying microkernel structure instance
 static inline MicroDosAPI* kernel() {
     return _global_api_ptr;
 }
 
 // --- CONSOLE & TERMINAL WRAPPERS ---
-__attribute__((always_inline)) static inline void print(const char* text)   { kernel()->print(text); }
-__attribute__((always_inline)) static inline void println(const char* text) { kernel()->println(text); }
-__attribute__((always_inline)) static inline void clearScreen()             { kernel()->clear(); }
-__attribute__((always_inline)) static inline int  readKey()                 { return kernel()->inkey(); }
+__attribute__((always_inline)) static inline void print(const char* text)    { kernel()->print(text); }
+__attribute__((always_inline)) static inline void println(const char* text)  { kernel()->println(text); }
+__attribute__((always_inline)) static inline void clearScreen()              { kernel()->clear(); }
+__attribute__((always_inline)) static inline int  readKey()                  { return kernel()->inkey(); }
 
 // --- HARDWARE INTERFACES ---
-__attribute__((always_inline)) static inline void delayMs(int ms)           { kernel()->delay(ms); }
-__attribute__((always_inline)) static inline void playTone(int freq, int ms){ kernel()->beep(freq, ms); }
-__attribute__((always_inline)) static inline void setPinMode(int pin, int m){ kernel()->pinMode(pin, m); }
-__attribute__((always_inline)) static inline void writeDigital(int p, int v){ kernel()->digitalWrite(p, v); }
-__attribute__((always_inline)) static inline int  readDigital(int pin)     { return kernel()->digitalRead(pin); }
+__attribute__((always_inline)) static inline void delayMs(int ms)            { kernel()->delay(ms); }
+__attribute__((always_inline)) static inline void playTone(int freq, int ms) { kernel()->beep(freq, ms); }
+__attribute__((always_inline)) static inline void setPinMode(int pin, int m) { kernel()->pinMode(pin, m); }
+__attribute__((always_inline)) static inline void writeDigital(int p, int v) { kernel()->digitalWrite(p, v); }
+__attribute__((always_inline)) static inline int  readDigital(int pin)       { return kernel()->digitalRead(pin); }
 
 // --- LOW-LEVEL GRAPHICS ENGINE WRAPPERS ---
-__attribute__((always_inline)) static inline void setColor(int colorId)     { kernel()->color(colorId); }
-__attribute__((always_inline)) static inline void drawPixel(int x, int y, int c) { kernel()->plot(x, y, c); }
+__attribute__((always_inline)) static inline void setColor(int colorId)                           { kernel()->color(colorId); }
+__attribute__((always_inline)) static inline void drawPixel(int x, int y, int c)                  { kernel()->plot(x, y, c); }
 __attribute__((always_inline)) static inline void drawLine(int x1, int y1, int x2, int y2, int c) { kernel()->line(x1, y1, x2, y2, c); }
 __attribute__((always_inline)) static inline void drawRect(int x, int y, int w, int h, int c)     { kernel()->rect(x, y, w, h, c); }
-__attribute__((always_inline)) static inline void drawCircle(int x, int y, int r, int c)         { kernel()->circle(x, y, r, c); }
+__attribute__((always_inline)) static inline void drawCircle(int x, int y, int r, int c)          { kernel()->circle(x, y, r, c); }
 
 // --- AUTONOMOUS SPRITE ENGINE WRAPPERS ---
-__attribute__((always_inline)) static inline uint32_t loadSprite(const char* file)  { return kernel()->createSprite(file); }
+__attribute__((always_inline)) static inline uint32_t loadSprite(const char* file)       { return kernel()->createSprite(file); }
 __attribute__((always_inline)) static inline void drawSprite(uint32_t spr, int x, int y) { kernel()->drawSprite(spr, x, y); }
-__attribute__((always_inline)) static inline void unloadSprite(uint32_t spr)         { kernel()->freeSprite(spr); }
+__attribute__((always_inline)) static inline void unloadSprite(uint32_t spr)             { kernel()->freeSprite(spr); }
 
 #ifdef __cplusplus
 }
