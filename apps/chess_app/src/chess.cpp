@@ -424,6 +424,7 @@ INLINE void handlePawnPromotion() {
 static uint32_t pieceSprites[36] __attribute__((aligned(4)));
 
 INLINE ALWAYS void refreshBoard(MicroDosAPI* api) {
+    int fSize = api->termWidth / 8;
     for (int32_t r = 0; r < 8; r++) {
         for (int32_t c = 0; c < 8; c++) {
             int32_t boardIdx = (r * 8) + c + 1;
@@ -433,7 +434,7 @@ INLINE ALWAYS void refreshBoard(MicroDosAPI* api) {
                   int32_t spriteIdx = (pieceVal > 0) ? pieceVal : (-pieceVal + 16);
                   uint32_t handle = pieceSprites[spriteIdx];
                   if (handle != 0) {
-                    api->drawSprite(handle, c * 40, r * 40);
+                    api->drawSprite(handle, c * fSize, r * fSize);
                   }
             }
         }
@@ -480,11 +481,12 @@ INLINE ALWAYS void executeMove(const char* moveStr, MicroDosAPI* api) {
 }
 
 INLINE ALWAYS void drawBoard(MicroDosAPI* api) {
+    int fSize = api->termWidth / 8;
     for (int32_t r = 0; r < 8; r++) {
         for (int32_t c = 0; c < 8; c++) {
             int32_t colorId = -1;
             colorId = ((r + c) % 2 == 0) ? 15 : 2;
-            api->rect(c * 40, r * 40, 40, 40, colorId);
+            api->rect(c * fSize, r * fSize, fSize, fSize, colorId);
         }
     }
     api->flushGameMatrix();
@@ -536,19 +538,21 @@ INLINE ALWAYS void clearUndoHistory() {
 }
 
 INLINE ALWAYS void cacheAllChessSprites(MicroDosAPI* api) {
+    int fSize = api->termWidth/8;
+
     const char* chessSpriteFiles[12] = {
-        STRING("Chess_plt60.spr"), // 0: Pawn
-        STRING("Chess_nlt60.spr"), // 1: Knight
-        STRING("Chess_blt60.spr"), // 2: Bishop
-        STRING("Chess_rlt60.spr"), // 3: Rook
-        STRING("Chess_qlt60.spr"), // 4: Queen
-        STRING("Chess_klt60.spr"), // 5: King
-        STRING("Chess_pdt60.spr"), // 6: Dark Pawn
-        STRING("Chess_ndt60.spr"), // 7: Dark Knight
-        STRING("Chess_bdt60.spr"), // 8: Dark Bishop
-        STRING("Chess_rdt60.spr"), // 9: Dark Rook
-        STRING("Chess_qdt60.spr"), // 10: Dark Queen
-        STRING("Chess_kdt60.spr")  // 11: Dark King
+        STRING("Chess_plt"), // 0: Pawn
+        STRING("Chess_nlt"), // 1: Knight
+        STRING("Chess_blt"), // 2: Bishop
+        STRING("Chess_rlt"), // 3: Rook
+        STRING("Chess_qlt"), // 4: Queen
+        STRING("Chess_klt"), // 5: King
+        STRING("Chess_pdt"), // 6: Dark Pawn
+        STRING("Chess_ndt"), // 7: Dark Knight
+        STRING("Chess_bdt"), // 8: Dark Bishop
+        STRING("Chess_rdt"), // 9: Dark Rook
+        STRING("Chess_qdt"), // 10: Dark Queen
+        STRING("Chess_kdt")  // 11: Dark King
     };
 
     for (int32_t i = 1; i <= 32; i++) {
@@ -568,7 +572,24 @@ INLINE ALWAYS void cacheAllChessSprites(MicroDosAPI* api) {
         else if (i == 32)            fileIdx = 11; // Black King
 
         if (fileIdx != -1) {
-            pieceSprites[i] = api->createSprite(chessSpriteFiles[fileIdx]);
+            char sFilename[64];
+            char tempPath[64];
+            char numBuf[16];
+
+            // Inline micro-itoa conversion for bare metal
+            int val = fSize, idx = 0;
+            char rev[16];
+            if (val == 0) rev[idx++] = '0';
+            while (val > 0) { rev[idx++] = (val % 10) + '0'; val /= 10; }
+            for (int j = 0; j < idx; j++) numBuf[j] = rev[idx - 1 - j];
+            numBuf[idx] = '\0';
+
+            // Sequential concatenation pipeline
+            concat("CHESS.DAT/", chessSpriteFiles[fileIdx], tempPath); // "CHESS.DAT/Chess_xxx"
+            concat(tempPath, numBuf, sFilename);                       // "CHESS.DAT/Chess_xxx64"
+            concat(sFilename, ".spr", tempPath);                       // "CHESS.DAT/Chess_xxx64.spr"
+
+            pieceSprites[i] = api->createSprite(tempPath, fSize);
         }
     }
 }
@@ -577,6 +598,7 @@ extern "C" int _start(int argc, char** argv, MicroDosAPI* api) {
     _global_api_ptr = api;
     if (!api) return -1;
     if (!api->initGameMatrix()) return -1;
+    int fSize = api->termWidth / 8;
 
     api->clear();
     api->setFKeys(STRING(" NEW  "), STRING(" UNDO "), STRING(" FLIP "), STRING("      "), STRING(" QUIT "));
@@ -708,9 +730,9 @@ extern "C" int _start(int argc, char** argv, MicroDosAPI* api) {
         TouchState touch;
         api->getTouch(&touch);
 
-        if (touch.isPressed && touch.y >= 0 && touch.y < 320 && touch.x >= 0 && touch.x < 320) {
-            int32_t gridX = touch.x / 40;
-            int32_t gridY = touch.y / 40;
+        if (touch.isPressed && touch.y >= 0 && touch.y < api->termHeight && touch.x >= 0 && touch.x < api->termWidth) {
+            int32_t gridX = touch.x / fSize;
+            int32_t gridY = touch.y / fSize;
 
             if (selectX == -1) {
                 int32_t selectIdx = (gridY * 8) + gridX + 1;

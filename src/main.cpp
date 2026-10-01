@@ -60,7 +60,6 @@ const uint16_t ramOSPalette[16] = {
 
 #define KEY_REPEAT_DELAY 300
 
-#define SPRITE_SIZE 40
 #define COLOR_DEPTH 4
 #define COMPRESSED_4BIT_SIZE 400
 
@@ -114,8 +113,6 @@ const uint16_t ramOSPalette[16] = {
 #define TFT_WIDTH_DRAW TFT_WIDTH
 
 #define KEYBOARD_Y_START (TFT_HEIGHT - (KEY_ROWS*KEY_HEIGHT))
-
-#define PACKED_BYTES_PER_SPRITE ((SPRITE_SIZE * SPRITE_SIZE) / (8 / COLOR_DEPTH))
 
 #define MATRIX_ACTIVE (bgCanvas.frameBuffer(0) != nullptr)
 #define CLAMP(val, min, max) ((val) < (min) ? (min) : ((val) > (max) ? (max) : (val)))
@@ -508,13 +505,14 @@ struct OSSprite_t {
     size_t rawSize;
     uint8_t backupSprite[COMPRESSED_4BIT_SIZE];
     size_t backupSize;
+    size_t spriteSize;
     int lastX, lastY;
 };
 
-int compress4BitRLE(const uint8_t* source, uint8_t* destination) {
+int compress4BitRLE(const uint8_t* source, uint8_t* destination, size_t spriteSize) {
     int srcIdx = 0;
     int destIdx = 0;
-    int totalPixels = SPRITE_SIZE * SPRITE_SIZE;
+    int totalPixels = spriteSize * spriteSize;
 
     while (srcIdx < totalPixels) {
         uint8_t currentColor = (srcIdx % 2 == 0) ? (source[srcIdx / 2] >> 4) : (source[srcIdx / 2] & 0x0F);
@@ -535,7 +533,7 @@ int compress4BitRLE(const uint8_t* source, uint8_t* destination) {
     return destIdx;
 }
 
-void decompressRLEToCanvas(TFT_eSprite* canvas, int startX, int startY, const uint8_t* rleData, int rleSize) {
+void decompressRLEToCanvas(TFT_eSprite* canvas, int startX, int startY, const uint8_t* rleData, int rleSize, size_t spriteSize) {
     uint8_t* buffer = (uint8_t*)canvas->frameBuffer(0);
     if (!buffer) return;
 
@@ -547,8 +545,8 @@ void decompressRLEToCanvas(TFT_eSprite* canvas, int startX, int startY, const ui
         uint8_t run   = rleData[i] & 0x0F;
 
         for (int r = 0; r < run; r++) {
-            int localX = pixelCount % SPRITE_SIZE;
-            int localY = pixelCount / SPRITE_SIZE;
+            int localX = pixelCount % spriteSize;
+            int localY = pixelCount / spriteSize;
             pixelCount++;
 
             int targetX = startX + localX;
@@ -605,7 +603,7 @@ struct MicroDosAPI {
   void (*clearFKeys)();
   void* (*malloc)(unsigned int size);
   void  (*free)(void* ptr);
-  uint32_t (*createSprite)(const char* filename);
+  uint32_t (*createSprite)(const char* filename, int spriteSize);
   void  (*drawSprite)(uint32_t spriteHandle, int x, int y);
   void  (*freeSprite)(uint32_t spriteHandle);
   bool  (*initGameMatrix)();
@@ -4077,7 +4075,7 @@ void api_setup() {
     if (ptr) free(ptr);
   };
 
-  kernelAPI.createSprite = [](const char* filename) -> uint32_t {
+  kernelAPI.createSprite = [](const char* filename, int spriteSize) -> uint32_t {
     if (!filename || filename[0] == '\0' || !sdAvailable) return 0;
 
     char safePath[64];
@@ -4094,10 +4092,15 @@ void api_setup() {
     if (!spr) return 0;
 
     File f = SD.open(safePath, FILE_READ);
-    f.read((uint8_t*)tempSprite.frameBuffer(0), PACKED_BYTES_PER_SPRITE);
+    tempSprite.deleteSprite();
+    tempSprite.setColorDepth(COLOR_DEPTH);
+    tempSprite.createSprite(spriteSize, spriteSize);
+    tempSprite.createPalette((uint16_t*)ramOSPalette);
+    f.read((uint8_t*)tempSprite.frameBuffer(0), ((spriteSize * spriteSize) / (8 / COLOR_DEPTH)));
     f.close();
 
-    spr->rawSize = compress4BitRLE((uint8_t*)tempSprite.frameBuffer(0), (uint8_t*)spr->rawSprite);
+    spr->spriteSize = spriteSize;
+    spr->rawSize = compress4BitRLE((uint8_t*)tempSprite.frameBuffer(0), (uint8_t*)spr->rawSprite, spr->spriteSize);
     spr->lastX = 0; spr->lastY = 0;
     spr->isOnScreen = false;
 
@@ -4108,30 +4111,38 @@ void api_setup() {
     OSSprite_t* spr = (OSSprite_t*)spriteHandle;
     if (!spr) return;
 
+    tempSprite.deleteSprite();
+    tempSprite.setColorDepth(COLOR_DEPTH);
+    tempSprite.createSprite(spr->spriteSize, spr->spriteSize);
+    tempSprite.createPalette((uint16_t*)ramOSPalette);
     if (spr->isOnScreen) {
       if (MATRIX_ACTIVE) {
-        decompressRLEToCanvas(&tempSprite, 0, 0, (uint8_t*)spr->backupSprite, spr->backupSize);
+        decompressRLEToCanvas(&tempSprite, 0, 0, (uint8_t*)spr->backupSprite, spr->backupSize, spr->spriteSize);
         tempSprite.pushSprite(spr->lastX, spr->lastY);
       }
       spr->isOnScreen = false;
     }
 
-    if (x < 0 || x > (TFT_WIDTH_DRAW - SPRITE_SIZE) || y < 0 || y > (TFT_HEIGHT_DRAW - SPRITE_SIZE)) {
+    if (x < 0 || x > (TFT_WIDTH_DRAW - spr->spriteSize) || y < 0 || y > (TFT_HEIGHT_DRAW - spr->spriteSize)) {
       return;
     }
 
+    renderSprite.deleteSprite();
+    renderSprite.setColorDepth(COLOR_DEPTH);
+    renderSprite.createSprite(spr->spriteSize, spr->spriteSize);
+    renderSprite.createPalette((uint16_t*)ramOSPalette);
     if (MATRIX_ACTIVE) {
       uint8_t* inb = (uint8_t*)bgCanvas.frameBuffer(0);
       uint8_t* out_backup = (uint8_t*)tempSprite.frameBuffer(0);
       uint8_t* out_render = (uint8_t*)renderSprite.frameBuffer(0);
 
-      int bytesPerSpriteRow = SPRITE_SIZE / (8 / COLOR_DEPTH);
+      int bytesPerSpriteRow = spr->spriteSize / (8 / COLOR_DEPTH);
       int bytesPerCanvasRow = TFT_WIDTH_DRAW / (8 / COLOR_DEPTH);
 
       int alignedX = x & ~1;
       int startByteX = alignedX >> 1;
 
-      for (int row = 0; row < SPRITE_SIZE; row++) {
+      for (int row = 0; row < spr->spriteSize; row++) {
         int targetY = y + row;
         if (targetY >= TFT_HEIGHT_DRAW) break;
 
@@ -4143,13 +4154,13 @@ void api_setup() {
       }
     }
 
-    spr->backupSize = compress4BitRLE((uint8_t*)tempSprite.frameBuffer(0), (uint8_t*)spr->backupSprite);
+    spr->backupSize = compress4BitRLE((uint8_t*)tempSprite.frameBuffer(0), (uint8_t*)spr->backupSprite, spr->spriteSize);
 
-    decompressRLEToCanvas(&tempSprite, 0, 0, (uint8_t*)spr->rawSprite, spr->rawSize);
+    decompressRLEToCanvas(&tempSprite, 0, 0, (uint8_t*)spr->rawSprite, spr->rawSize, spr->spriteSize);
 
     uint8_t* in = (uint8_t*)tempSprite.frameBuffer(0);
     uint8_t* out = (uint8_t*)renderSprite.frameBuffer(0);
-    int totalPackedBytes = (SPRITE_SIZE * SPRITE_SIZE) / (8 / COLOR_DEPTH);
+    int totalPackedBytes = (spr->spriteSize * spr->spriteSize) / (8 / COLOR_DEPTH);
 
     for (int c = 0; c < totalPackedBytes; c++) {
       uint8_t inByte  = in[c];
@@ -4178,7 +4189,7 @@ void api_setup() {
     OSSprite_t* spr = (OSSprite_t*)spriteHandle;
     if (spr) {
       if (spr->isOnScreen && MATRIX_ACTIVE) {
-        decompressRLEToCanvas(&tempSprite, 0, 0, (uint8_t*)spr->backupSprite, spr->backupSize);
+        decompressRLEToCanvas(&tempSprite, 0, 0, (uint8_t*)spr->backupSprite, spr->backupSize, spr->spriteSize);
         tempSprite.pushSprite(spr->lastX, spr->lastY);
         spr->isOnScreen = false;
       }
@@ -4188,19 +4199,13 @@ void api_setup() {
 
   kernelAPI.initGameMatrix = []() -> bool {
     if (!MATRIX_ACTIVE) {
+      tempSprite.deleteSprite();
+      renderSprite.deleteSprite();
+      bgCanvas.deleteSprite();
+
       bgCanvas.setColorDepth(COLOR_DEPTH);
       bgCanvas.createSprite(TFT_WIDTH_DRAW, TFT_HEIGHT_DRAW);
       bgCanvas.createPalette((uint16_t*)ramOSPalette);
-
-      tempSprite.deleteSprite();
-      tempSprite.setColorDepth(COLOR_DEPTH);
-      tempSprite.createSprite(SPRITE_SIZE, SPRITE_SIZE);
-      tempSprite.createPalette((uint16_t*)ramOSPalette);
-
-      renderSprite.deleteSprite();
-      renderSprite.setColorDepth(COLOR_DEPTH);
-      renderSprite.createSprite(SPRITE_SIZE, SPRITE_SIZE);
-      renderSprite.createPalette((uint16_t*)ramOSPalette);
     }
     bgCanvas.fillSprite(TFT_BLACK);
     bgCanvas.pushSprite(0, 0);

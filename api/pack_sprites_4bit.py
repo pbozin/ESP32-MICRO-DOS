@@ -43,44 +43,46 @@ def get_closest_palette_index(r, g, b):
 
     return closest_idx
 
-print("--- EXPORTING 4-BIT SPRITES ---")
+for TARGET_SIZE in [30, 40]:
+    print(f"--- EXPORTING 4-BIT SPRITES {TARGET_SIZE}x{TARGET_SIZE} ---")
 
-for filename in os.listdir(INPUT_DIR):
-    if not filename.endswith(".png"):
-        continue
+    for filename in os.listdir(INPUT_DIR):
+        if not filename.endswith(".png"):
+            continue
 
-    filepath = os.path.join(INPUT_DIR, filename)
-    src_img = Image.open(filepath).convert("RGBA")
-    resized_img = src_img.resize((TARGET_SIZE, TARGET_SIZE), Image.Resampling.LANCZOS)
+        filepath = os.path.join(INPUT_DIR, filename)
+        src_img = Image.open(filepath).convert("RGBA")
+        resized_img = src_img.resize((TARGET_SIZE, TARGET_SIZE), Image.Resampling.LANCZOS)
 
-    basename = os.path.splitext(filename)[0]
-    out_path = os.path.join(OUTPUT_DIR, f"{basename}.spr")
+        basename = os.path.splitext(filename)[0]
+        basename = basename.replace("60", f"{TARGET_SIZE}")
+        out_path = os.path.join(OUTPUT_DIR, f"{basename}.spr")
 
-    pixel_indices = []
+        pixel_indices = []
 
-    for y in range(TARGET_SIZE):
-        for x in range(TARGET_SIZE):
-            r, g, b, a = resized_img.getpixel((x, y))
+        for y in range(TARGET_SIZE):
+            for x in range(TARGET_SIZE):
+                r, g, b, a = resized_img.getpixel((x, y))
 
-            # Transparency mask processing
-            if a < 128:
-                pixel_idx = 15 # Index 15 is Chroma Key
-            else:
-                # Map pixel down to exact 15 system colors
-                pixel_idx = get_closest_palette_index(r, g, b)
+                # Transparency mask processing
+                if a < 128:
+                    pixel_idx = 15 # Index 15 is Chroma Key
+                else:
+                    # Map pixel down to exact 15 system colors
+                    pixel_idx = get_closest_palette_index(r, g, b)
 
-                # Prevent collision corruption
-                if pixel_idx == 15:
-                    pixel_idx = 14 # Fallback to Pink
+                    # Prevent collision corruption
+                    if pixel_idx == 15:
+                        pixel_idx = 14 # Fallback to Pink
 
-            pixel_indices.append(pixel_idx & 0x0F)
+                pixel_indices.append(pixel_idx & 0x0F)
 
-    # Pack pixel pairs sequentially into single bytes (High/Low Nibbles)
-    with open(out_path, "wb") as f:
-        for i in range(0, len(pixel_indices), 2):
-            high_nibble = pixel_indices[i]
-            low_nibble  = pixel_indices[i + 1]
-            packed_byte = (high_nibble << 4) | low_nibble
-            f.write(struct.pack("B", packed_byte))
+        # Pack pixel pairs sequentially into single bytes (High/Low Nibbles)
+        with open(out_path, "wb") as f:
+            for i in range(0, len(pixel_indices), 2):
+                high_nibble = pixel_indices[i]
+                low_nibble  = pixel_indices[i + 1]
+                packed_byte = (high_nibble << 4) | low_nibble
+                f.write(struct.pack("B", packed_byte))
 
 print("--- ALL 4-BIT SPRITES ENCODED SUCCESSFULLY ---")

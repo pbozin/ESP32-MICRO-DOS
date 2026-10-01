@@ -20,7 +20,7 @@ extern "C" int _start(int argc, char** argv, MicroDosAPI* api) {
     int u = 4;
     int v = -4;
 
-    api->setFKeys(STRING("  <-  "), STRING("      "), STRING(" ESC  "), STRING("      "), STRING("  ->  "));
+    api->setFKeys(STRING("  <-  "), STRING("      "), STRING("  ESC "), STRING("      "), STRING("  ->  "));
     api->clear();
     api->color(GREEN);
     api->println(STRING("BRICKS STARTING"));

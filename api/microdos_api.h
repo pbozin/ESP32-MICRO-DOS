@@ -72,7 +72,7 @@ typedef struct {
   void  (*free)(void* ptr);
 
   // --- Sprite Engine ---
-  uint32_t (*createSprite)(const char* filename);
+  uint32_t (*createSprite)(const char* filename, int spriteSize);
   void  (*drawSprite)(uint32_t spriteHandle, int x, int y);
   void  (*freeSprite)(uint32_t spriteHandle);
   bool  (*initGameMatrix)();
@@ -137,6 +137,15 @@ __attribute__((always_inline)) static inline void padString(char* dest, const ch
 // ============================================================================
 //   RUNTIME METADATA UTILITIES (WEAK LINKAGE)
 // ============================================================================
+
+__attribute__((weak)) static inline char* concat(const char* first, const char* second, char* result) {
+    char* ptr = result;
+    while (*first)  *ptr++ = *first++;
+    while (*second) *ptr++ = *second++;
+    *ptr = '\0';
+    return result;
+}
+
 __attribute__((weak)) int strcmp(const char* s1, const char* s2) {
     while (*s1 && (*s1 == *s2)) {
         s1++;
@@ -237,9 +246,9 @@ __attribute__((always_inline)) static inline void drawRect(int x, int y, int w, 
 __attribute__((always_inline)) static inline void drawCircle(int x, int y, int r, int c)          { kernel()->circle(x, y, r, c); }
 
 // --- AUTONOMOUS SPRITE ENGINE WRAPPERS ---
-__attribute__((always_inline)) static inline uint32_t loadSprite(const char* file)       { return kernel()->createSprite(file); }
-__attribute__((always_inline)) static inline void drawSprite(uint32_t spr, int x, int y) { kernel()->drawSprite(spr, x, y); }
-__attribute__((always_inline)) static inline void unloadSprite(uint32_t spr)             { kernel()->freeSprite(spr); }
+__attribute__((always_inline)) static inline uint32_t loadSprite(const char* file, int size)      { return kernel()->createSprite(file, size); }
+__attribute__((always_inline)) static inline void drawSprite(uint32_t spr, int x, int y)          { kernel()->drawSprite(spr, x, y); }
+__attribute__((always_inline)) static inline void unloadSprite(uint32_t spr)                      { kernel()->freeSprite(spr); }
 
 #ifdef __cplusplus
 }

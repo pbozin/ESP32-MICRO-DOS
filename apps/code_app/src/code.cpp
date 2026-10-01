@@ -30,9 +30,13 @@ int _start(int argc, char** argv, MicroDosAPI* api) {
 
     setColor(YELLOW);
     print(STRING("  --[ "));
-    print(ollama_model);
-    print(STRING(" ]--[ "));
-    print(ollama_server);
+    if (api->termWidth < 320) {
+        print(ollama_model);
+    } else {
+        print(ollama_model);
+        print(STRING(" ]--[ "));
+        print(ollama_server);
+    }
     println(STRING(" ]--"));
 
     while (chatting) {
@@ -61,7 +65,7 @@ int _start(int argc, char** argv, MicroDosAPI* api) {
 
         if (status != 0) {
             setColor(RED);
-            println(STRING("ERR: TRANSMISSION COMPROMISED OR SERVER OFFLINE"));
+            println(STRING("ERR: SERVER OFFLINE"));
         }
         println(STRING(""));
     }
