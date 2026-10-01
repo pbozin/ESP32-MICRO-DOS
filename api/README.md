@@ -91,7 +91,7 @@ api->println(mySystemLog);
 ---
 
 
-### ⚠️ Crucial Compilation & Inline Optimization Constraints
+## ⚠️ Crucial Compilation & Inline Optimization Constraints
 
 When developing native applications for the MicroDOS runtime environment using the `-mtext-section-literals` directive, engineers must strictly manage compiler function attributes to avoid memory relocation panic crashes:
 
