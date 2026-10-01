@@ -40,7 +40,7 @@ To maintain fluid, zero-flicker rendering loops under rigorous RAM constraints, 
 
 ## ⌨️ Built-in Shell Utility Dictionary
 
-Run these commands directly inside the interactive interactive touch console interface:
+Run these commands directly inside the interactive touch console interface:
 
 | Command | Classification | Functional Profile Description |
 | :--- | :--- | :--- |
@@ -94,8 +94,7 @@ To build plugins that can survive runtime relative offset assignments, use these
 platform = espressif32
 board = esp32dev
 build_flags =
-    -O2
-    -fpack-struct=4
+    -Os
     -fPIC                               ; Position Independent Code flag
     -mlongcalls                         ; Issue far assembly call strings
     -fno-jump-tables                    ; Suppress absolute optimization lookups
@@ -104,6 +103,11 @@ build_flags =
     -Wl,-e,_start                       ; Map entry target strictly to start pointer
     -Wl,-T,mdb.ld                       ; Enforce custom layout linker map script
     -mtext-section-literals             ; Interleave literals to maintain L32R safety limits
+    -fno-tree-loop-distribute-patterns
+    -fno-tree-switch-conversion
+    -fno-toplevel-reorder
+    -mtarget-align
+    -fno-merge-constants
 extra_scripts = post:extract_bin.py     ; Extract packaged segment tracks automatically
 ```
 
