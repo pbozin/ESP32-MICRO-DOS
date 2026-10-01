@@ -87,3 +87,18 @@ api->print(STRING("Starting Subsystem Check..."));
 NEW_STRING(mySystemLog, "Booting Complete.");
 api->println(mySystemLog);
 ```
+
+---
+
+
+### ⚠️ Crucial Compilation & Inline Optimization Constraints
+
+When developing native applications for the MicroDOS runtime environment using the `-mtext-section-literals` directive, engineers must strictly manage compiler function attributes to avoid memory relocation panic crashes:
+
+1. **Avoid Universal Forced Inlining on Loops:** Forcing `__attribute__((always_inline))` across deep recursive chains or massive conditional evaluation loops (such as Alpha-Beta search trees) will violate the compiler's structural inline thresholds. This forces functions to remain standalone, generating text-embedded literal table entries beyond the primary entry boundary box that cause immediate hardware exceptions (`InstrFetchProhibited`).
+2. **Dynamic Function Pointer Relocation:** If a complex, multi-loop validation routing path cannot be natively inlined without bloating code footprints, store the function targets inside global pointer variables within the initialized DRAM data region:
+   ```cpp
+   static bool (*isMoveValidPtr)(int32_t, int32_t) __attribute__((aligned(4))) = isMoveValid;
+   ```
+   This shifts the cross-call tracking index directly into the global safe-patch table layout handled by the loader.
+3. **Strict Boundary Compiling:** All custom file verification scripts (`extract_bin.py`) must evaluate structural assignments starting from byte 16 up to `header.entryOffset` to isolate true data pointer relocation faults from raw executable machine instructions.
