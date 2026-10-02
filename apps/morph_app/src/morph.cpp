@@ -37,7 +37,7 @@ static const Edge3D wireframeTopology[12] = {
     {0, 4}, {1, 5}, {2, 6}, {3, 7}
 };
 
-extern "C" int _start(int argc, char** argv, MicroDosAPI* api) {
+int _start(int argc, char** argv, MicroDosAPI* api) {
     _global_api_ptr = api;
     if (!api || !api->initGameMatrix()) return -1;
 
