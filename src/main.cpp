@@ -63,18 +63,15 @@ const uint16_t ramOSPalette[16] = {
 #define COLOR_DEPTH 4
 #define COMPRESSED_4BIT_SIZE 400
 
-#define MAX_PROGRAM_LINES 50
 #define MAX_LINE_LEN 80
 
-#define MAX_VARS 12
 #define MAX_VAR_NAME_LEN 12
-#define MAX_STR_VARS 12
 #define MAX_STR_LEN  50
 
 #define MAX_STACK_DEPTH 12
 #define MAX_FOR_NEST 4
 
-#define SYSTEM_RAM_SIZE 128
+#define SYSTEM_RAM_SIZE 256
 #define CONTEXT_BUF_SIZE 2048
 
 #define CURSOR_SIZE 2
@@ -96,7 +93,7 @@ const uint16_t ramOSPalette[16] = {
 #define TERM_COLS   int(TFT_WIDTH / CHAR_WIDTH)
 #define TERM_ROWS   int(TFT_WIDTH / CHAR_HEIGHT)
 
-#define TOTAL_ROWS (TERM_ROWS * 4)  // Total capacity of historical terminal memory
+#define TOTAL_ROWS (TERM_ROWS * 4)
 
 #define INPUT_BUF_SIZE (TERM_COLS * 2)
 
@@ -619,24 +616,27 @@ struct ProgramLine {
   int lineNumber;
   char code[MAX_LINE_LEN];
 };
-ProgramLine programMemory[MAX_PROGRAM_LINES];
+ProgramLine* programMemory = nullptr;
 int programLineCount = 0;
+int programLineCapacity = 0;
 
 struct Variable {
   char name[MAX_VAR_NAME_LEN];
   int value;
 };
 
-Variable sysVariables[MAX_VARS];
+Variable* sysVariables = nullptr;
 int variableCount = 0;
+int variableCapacity = 0;
 
 struct StringVariable {
     char name[MAX_VAR_NAME_LEN];
     char value[MAX_STR_LEN];
 };
 
-static StringVariable stringRegistry[MAX_STR_VARS];
-static int stringRegistryCount = 0;
+StringVariable* stringRegistry = nullptr;
+int stringRegistryCount = 0;
+int stringRegistryCapacity = 0;
 
 int subroutineCallStack[MAX_STACK_DEPTH];
 int stackPointer = 0;
@@ -878,6 +878,49 @@ void trimCString(char* str) {
   if(start > 0) memmove(str, str + start, l - start + 1);
 }
 
+int getVariable(const char* name) {
+  char upperName[MAX_VAR_NAME_LEN];
+  strncpy(upperName, name, MAX_VAR_NAME_LEN);
+  upperName[MAX_VAR_NAME_LEN - 1] = '\0';
+  for (int i = 0; upperName[i]; i++) upperName[i] = toupper((unsigned char)upperName[i]);
+
+  for (int i = 0; i < variableCount; i++) {
+    if (strcmp(sysVariables[i].name, upperName) == 0) return sysVariables[i].value;
+  }
+  return 0;
+}
+
+void setVariable(const char* name, int val) {
+  char upperName[MAX_VAR_NAME_LEN];
+  strncpy(upperName, name, MAX_VAR_NAME_LEN);
+  upperName[MAX_VAR_NAME_LEN - 1] = '\0';
+  for (int i = 0; upperName[i]; i++) upperName[i] = toupper((unsigned char)upperName[i]);
+
+  for (int i = 0; i < variableCount; i++) {
+    if (strcmp(sysVariables[i].name, upperName) == 0) { sysVariables[i].value = val; return; }
+  }
+
+  if (variableCount >= variableCapacity) {
+    int newCapacity = (variableCapacity == 0) ? 8 : variableCapacity + 8;
+    Variable* newMem = (Variable*)kernelAPI.malloc(newCapacity * sizeof(Variable));
+    if (!newMem) {
+      terminalPrintln("ERR: OUT OF RAM (VARS)");
+      return;
+    }
+
+    if (sysVariables != nullptr) {
+      memcpy(newMem, sysVariables, variableCount * sizeof(Variable));
+      kernelAPI.free(sysVariables);
+    }
+    sysVariables = newMem;
+    variableCapacity = newCapacity;
+  }
+
+  strncpy(sysVariables[variableCount].name, upperName, sizeof(sysVariables[variableCount].name));
+  sysVariables[variableCount].value = val;
+  variableCount++;
+}
+
 void setStringVariable(const char* name, const char* val) {
     char trimmedName[MAX_VAR_NAME_LEN];
     strncpy(trimmedName, name, MAX_VAR_NAME_LEN);
@@ -890,13 +933,26 @@ void setStringVariable(const char* name, const char* val) {
             return;
         }
     }
-    if (stringRegistryCount < MAX_STR_VARS) {
-        snprintf(stringRegistry[stringRegistryCount].name, MAX_VAR_NAME_LEN, "%s", trimmedName);
-        snprintf(stringRegistry[stringRegistryCount].value, MAX_STR_LEN, "%s", val);
-        stringRegistryCount++;
-    } else {
-        terminalPrintln("ERR: STRING REGISTRY FULL");
+
+    if (stringRegistryCount >= stringRegistryCapacity) {
+        int newCapacity = (stringRegistryCapacity == 0) ? 8 : stringRegistryCapacity + 8;
+        StringVariable* newMem = (StringVariable*)kernelAPI.malloc(newCapacity * sizeof(StringVariable));
+        if (!newMem) {
+            terminalPrintln("ERR: OUT OF RAM (STRINGS)");
+            return;
+        }
+
+        if (stringRegistry != nullptr) {
+            memcpy(newMem, stringRegistry, stringRegistryCount * sizeof(StringVariable));
+            kernelAPI.free(stringRegistry);
+        }
+        stringRegistry = newMem;
+        stringRegistryCapacity = newCapacity;
     }
+
+    snprintf(stringRegistry[stringRegistryCount].name, MAX_VAR_NAME_LEN, "%s", trimmedName);
+    snprintf(stringRegistry[stringRegistryCount].value, MAX_STR_LEN, "%s", val);
+    stringRegistryCount++;
 }
 
 const char* getStringVariable(const char* name) {
@@ -1139,6 +1195,26 @@ void saveBuffer(const char* filename) {
   terminalPrintln("OK.");
 }
 
+void clearProgram() {
+  if (programMemory != nullptr) { kernelAPI.free(programMemory); programMemory = nullptr; }
+  programLineCapacity = 0;
+  programLineCount = 0;
+
+  if (sysVariables != nullptr) { kernelAPI.free(sysVariables); sysVariables = nullptr; }
+  variableCapacity = 0;
+  variableCount = 0;
+
+  if (stringRegistry != nullptr) { kernelAPI.free(stringRegistry); stringRegistry = nullptr; }
+  stringRegistryCapacity = 0;
+  stringRegistryCount = 0;
+
+  for (int i = 0; i < SYSTEM_RAM_SIZE; i++) {
+    systemRAM[i] = 0;
+  }
+  stackPointer = 0;
+  forStackPointer = 0;
+}
+
 void saveFile(const char* filename) {
   if (!sdAvailable) { terminalPrintln("ERR: NO DISK"); return; }
 
@@ -1165,6 +1241,131 @@ void saveFile(const char* filename) {
   }
   file.close();
   terminalPrintln("OK.");
+}
+
+void storeLine(int num, const char* codeLine) {
+  char cleanLine[MAX_LINE_LEN];
+  strncpy(cleanLine, codeLine, MAX_LINE_LEN);
+  cleanLine[MAX_LINE_LEN - 1] = '\0';
+  trimCString(cleanLine);
+
+  if (strlen(cleanLine) == 0) {
+    for (int i = 0; i < programLineCount; i++) {
+      if (programMemory[i].lineNumber == num) {
+        for (int j = i; j < programLineCount - 1; j++) {
+          programMemory[j] = programMemory[j + 1];
+        }
+        programLineCount--;
+
+        if (programLineCount > 0 && programLineCount <= programLineCapacity - 8) {
+          int newCapacity = programLineCapacity - 8;
+          ProgramLine* newMem = (ProgramLine*)kernelAPI.malloc(newCapacity * sizeof(ProgramLine));
+          if (newMem) {
+            memcpy(newMem, programMemory, programLineCount * sizeof(ProgramLine));
+            kernelAPI.free(programMemory);
+            programMemory = newMem;
+            programLineCapacity = newCapacity;
+          }
+        } else if (programLineCount == 0) {
+          kernelAPI.free(programMemory);
+          programMemory = nullptr;
+          programLineCapacity = 0;
+        }
+        return;
+      }
+    }
+    return;
+  }
+
+  for (int i = 0; i < programLineCount; i++) {
+    if (programMemory[i].lineNumber == num) {
+      strncpy(programMemory[i].code, cleanLine, MAX_LINE_LEN);
+      programMemory[i].code[MAX_LINE_LEN - 1] = '\0';
+      return;
+    }
+  }
+
+  if (programLineCount >= programLineCapacity) {
+    int newCapacity = (programLineCapacity == 0) ? 8 : programLineCapacity + 8;
+    ProgramLine* newMem = (ProgramLine*)kernelAPI.malloc(newCapacity * sizeof(ProgramLine));
+    if (!newMem) {
+      terminalPrintln("ERR: OUT OF RAM");
+      return;
+    }
+
+    if (programMemory != nullptr) {
+      memcpy(newMem, programMemory, programLineCount * sizeof(ProgramLine));
+      kernelAPI.free(programMemory);
+    }
+    programMemory = newMem;
+    programLineCapacity = newCapacity;
+  }
+
+  int insertPos = programLineCount;
+  for (int i = 0; i < programLineCount; i++) {
+    if (programMemory[i].lineNumber > num) { insertPos = i; break; }
+  }
+  for (int i = programLineCount; i > insertPos; i--) {
+    programMemory[i] = programMemory[i - 1];
+  }
+
+  programMemory[insertPos].lineNumber = num;
+  strncpy(programMemory[insertPos].code, cleanLine, MAX_LINE_LEN);
+  programMemory[insertPos].code[MAX_LINE_LEN - 1] = '\0';
+  programLineCount++;
+}
+
+void listProgramRange(int start, int end) {
+  if (programLineCount == 0) { terminalPrintln("NO PROG."); return; }
+  int printedCount = 0;
+  char listBuf[MAX_LINE_LEN];
+  for (int i = 0; i < programLineCount; i++) {
+    int currentNum = programMemory[i].lineNumber;
+    if (currentNum >= start && currentNum <= end) {
+      snprintf(listBuf, MAX_LINE_LEN, "%d %s", currentNum, programMemory[i].code);
+      terminalPrintln(listBuf);
+      printedCount++;
+    }
+  }
+  if (printedCount == 0) terminalPrintln("LINE NOT FOUND.");
+}
+
+void listProgram() {
+  if (programLineCount == 0) { terminalPrintln("NO PROG."); return; }
+  char listBuf[MAX_LINE_LEN];
+  for (int i = 0; i < programLineCount; i++) {
+    snprintf(listBuf, MAX_LINE_LEN, "%d %s", programMemory[i].lineNumber, programMemory[i].code);
+    terminalPrintln(listBuf);
+  }
+}
+
+void executeProgram() {
+  int currentIdx = 0;
+  variableCount = 0;
+  memset(logBuf, 0, TERM_COLS);
+
+  while (currentIdx < programLineCount) {
+    if (digitalRead(0) == LOW) {
+      snprintf(logBuf, TERM_COLS, "\nBREAK AT LINE %d", programMemory[currentIdx].lineNumber);
+      terminalPrintln(logBuf);
+      while (digitalRead(0) == LOW) { delay(10); }
+      break;
+    }
+
+    int trackingIdx = currentIdx;
+    if (!runMultiStatementLine(programMemory[currentIdx].code, trackingIdx)) {
+      snprintf(logBuf, TERM_COLS, "HALT AT %d", programMemory[currentIdx].lineNumber);
+      terminalPrintln(logBuf);
+      break;
+    }
+
+    if (trackingIdx == currentIdx) {
+      currentIdx++;
+    } else {
+      currentIdx = trackingIdx;
+    }
+    delay(1);
+  }
 }
 
 void redrawTerminal() {
@@ -1535,21 +1736,6 @@ void printLogo() {
   terminalPrintln("READY.");
 }
 
-void clearProgram() {
-  for (int i = 0; i < MAX_PROGRAM_LINES; i++) {
-    programMemory[i].lineNumber = 0;
-    programMemory[i].code[0] = '\0';
-  }
-  for (int i = 0; i < SYSTEM_RAM_SIZE; i++) {
-    systemRAM[i] = 0;
-  }
-  stringRegistryCount = 0;
-  programLineCount = 0;
-  variableCount = 0;
-  stackPointer = 0;
-  forStackPointer = 0;
-}
-
 bool matchFuncBounds(const char* str, const char* prefix, int prefixLen, int &innerLen) {
   int totalLen = strlen(str);
   if (totalLen >= prefixLen + 1 && strncmp(str, prefix, prefixLen) == 0 && str[totalLen - 1] == ')') {
@@ -1570,6 +1756,9 @@ int evaluateExpression(const char* rawExpr) {
 
   if (strcasecmp(expr, "TRUE") == 0)  return 1;
   if (strcasecmp(expr, "FALSE") == 0) return 0;
+
+  if (strcasecmp(expr, "TERMWIDTH") == 0)  return TFT_WIDTH_DRAW;
+  if (strcasecmp(expr, "TERMHEIGHT") == 0) return TFT_HEIGHT_DRAW;
 
   if (strcmp(expr, "RND") == 0) {
     return random(0, 100);
@@ -1689,96 +1878,6 @@ int evaluateExpression(const char* rawExpr) {
   return atoi(expr);
 }
 
-int getVariable(const char* name) {
-  char upperName[MAX_VAR_NAME_LEN];
-  strncpy(upperName, name, MAX_VAR_NAME_LEN);
-  upperName[MAX_VAR_NAME_LEN - 1] = '\0';
-  for (int i = 0; upperName[i]; i++) upperName[i] = toupper((unsigned char)upperName[i]);
-
-  for (int i = 0; i < variableCount; i++) {
-    if (strcmp(sysVariables[i].name, upperName) == 0) return sysVariables[i].value;
-  }
-  return 0;
-}
-
-void setVariable(const char* name, int val) {
-  char upperName[MAX_VAR_NAME_LEN];
-  strncpy(upperName, name, MAX_VAR_NAME_LEN);
-  upperName[MAX_VAR_NAME_LEN - 1] = '\0';
-  for (int i = 0; upperName[i]; i++) upperName[i] = toupper((unsigned char)upperName[i]);
-
-  for (int i = 0; i < variableCount; i++) {
-    if (strcmp(sysVariables[i].name, upperName) == 0) { sysVariables[i].value = val; return; }
-  }
-  if (variableCount < MAX_VARS) {
-    strncpy(sysVariables[variableCount].name, upperName, sizeof(sysVariables[variableCount].name));
-    sysVariables[variableCount].value = val;
-    variableCount++;
-  }
-}
-
-void storeLine(int num, const char* codeLine) {
-  char cleanLine[MAX_LINE_LEN];
-  strncpy(cleanLine, codeLine, MAX_LINE_LEN);
-  cleanLine[MAX_LINE_LEN - 1] = '\0';
-  trimCString(cleanLine);
-
-  if (strlen(cleanLine) == 0) {
-    for (int i = 0; i < programLineCount; i++) {
-      if (programMemory[i].lineNumber == num) {
-        for (int j = i; j < programLineCount - 1; j++) programMemory[j] = programMemory[j + 1];
-        programLineCount--;
-        return;
-      }
-    }
-    return;
-  }
-  for (int i = 0; i < programLineCount; i++) {
-    if (programMemory[i].lineNumber == num) {
-      strncpy(programMemory[i].code, cleanLine, MAX_LINE_LEN);
-      programMemory[i].code[MAX_LINE_LEN - 1] = '\0';
-      return;
-    }
-  }
-  if (programLineCount < MAX_PROGRAM_LINES) {
-    int insertPos = programLineCount;
-    for (int i = 0; i < programLineCount; i++) {
-      if (programMemory[i].lineNumber > num) { insertPos = i; break; }
-    }
-    for (int i = programLineCount; i > insertPos; i--) programMemory[i] = programMemory[i - 1];
-    programMemory[insertPos].lineNumber = num;
-    strncpy(programMemory[insertPos].code, cleanLine, MAX_LINE_LEN);
-    programMemory[insertPos].code[MAX_LINE_LEN - 1] = '\0';
-    programLineCount++;
-  } else {
-    terminalPrintln("ERR: MEM FULL");
-  }
-}
-
-void listProgramRange(int start, int end) {
-  if (programLineCount == 0) { terminalPrintln("NO PROG."); return; }
-  int printedCount = 0;
-  char listBuf[MAX_LINE_LEN];
-  for (int i = 0; i < programLineCount; i++) {
-    int currentNum = programMemory[i].lineNumber;
-    if (currentNum >= start && currentNum <= end) {
-      snprintf(listBuf, MAX_LINE_LEN, "%d %s", currentNum, programMemory[i].code);
-      terminalPrintln(listBuf);
-      printedCount++;
-    }
-  }
-  if (printedCount == 0) terminalPrintln("LINE NOT FOUND.");
-}
-
-void listProgram() {
-  if (programLineCount == 0) { terminalPrintln("NO PROG."); return; }
-  char listBuf[MAX_LINE_LEN];
-  for (int i = 0; i < programLineCount; i++) {
-    snprintf(listBuf, MAX_LINE_LEN, "%d %s", programMemory[i].lineNumber, programMemory[i].code);
-    terminalPrintln(listBuf);
-  }
-}
-
 bool runMultiStatementLine(const char* fullLine, int &nextIdx) {
   char cleanLine[MAX_LINE_LEN + PROMPT_SIZE + CURSOR_SIZE];
   strncpy(cleanLine, fullLine, (MAX_LINE_LEN + PROMPT_SIZE + CURSOR_SIZE));
@@ -1822,34 +1921,6 @@ bool runMultiStatementLine(const char* fullLine, int &nextIdx) {
   }
   return res;
 }
-void executeProgram() {
-  int currentIdx = 0;
-  variableCount = 0;
-  memset(logBuf, 0, TERM_COLS);
-
-  while (currentIdx < programLineCount) {
-    if (digitalRead(0) == LOW) {
-      snprintf(logBuf, TERM_COLS, "\nBREAK AT LINE %d", programMemory[currentIdx].lineNumber);
-      terminalPrintln(logBuf);
-      while (digitalRead(0) == LOW) { delay(10); }
-      break;
-    }
-
-    int trackingIdx = currentIdx;
-    if (!runMultiStatementLine(programMemory[currentIdx].code, trackingIdx)) {
-      snprintf(logBuf, TERM_COLS, "HALT AT %d", programMemory[currentIdx].lineNumber);
-      terminalPrintln(logBuf);
-      break;
-    }
-
-    if (trackingIdx == currentIdx) {
-      currentIdx++;
-    } else {
-      currentIdx = trackingIdx;
-    }
-    delay(1);
-  }
-}
 
 void stripQuotes(char* str) {
   int i = 0, j = 0;
@@ -1860,6 +1931,73 @@ void stripQuotes(char* str) {
     i++;
   }
   str[j] = '\0';
+}
+
+void printMemoryMap(bool showVars) {
+  uint32_t totalFree = ESP.getFreeHeap();
+
+  uint32_t largestBlock = 0;
+#if defined(ESP32) || defined(ARDUINO_ARCH_ESP32)
+  largestBlock = ESP.getMaxAllocHeap();
+#else
+  largestBlock = totalFree;
+#endif
+
+  uint32_t progSize   = programLineCapacity * sizeof(ProgramLine);
+  uint32_t numVarSize = variableCapacity * sizeof(Variable);
+  uint32_t strRegSize = stringRegistryCapacity * sizeof(StringVariable);
+  uint32_t totalAllocatedEngineBytes = progSize + numVarSize + strRegSize;
+
+  char outBuf[MAX_LINE_LEN];
+  terminalPrintln("");
+  terminalPrintln("=============== MICRODOS CORE HEAP =================");
+
+  snprintf(outBuf, sizeof(outBuf), "TOTAL LIVE FREE RAM : %u BYTES", totalFree);
+  terminalPrintln(outBuf);
+  snprintf(outBuf, sizeof(outBuf), "LARGEST BLOCK FREE  : %u BYTES", largestBlock);
+  terminalPrintln(outBuf);
+
+  if (totalFree > 0 && largestBlock < (totalFree / 2)) {
+    terminalPrintln("WARNING: HEAP FRAGMENTATION IS HIGH. RUN 'NEW' TO CLEAR.");
+  } else {
+    terminalPrintln("HEAP STATUS         : HEALTHY (CONSOLIDATED)\n");
+  }
+
+  terminalPrintln("--- ENGINE DYNAMIC ALLOCATIONS ---");
+  terminalPrintln("[ TARGET ]    [ SLOTS ]  [ CAPACITY ] [ HEAP SIZE ]");
+
+  snprintf(outBuf, sizeof(outBuf), "PROG_MEM    : %-10d %-12d %u Bytes", programLineCount, programLineCapacity, progSize);
+  terminalPrintln(outBuf);
+
+  snprintf(outBuf, sizeof(outBuf), "NUM_VARS    : %-10d %-12d %u Bytes", variableCount, variableCapacity, numVarSize);
+  terminalPrintln(outBuf);
+
+  snprintf(outBuf, sizeof(outBuf), "STR_REG     : %-10d %-12d %u Bytes", stringRegistryCount, stringRegistryCapacity, strRegSize);
+  terminalPrintln(outBuf);
+
+  if (showVars) {
+    terminalPrintln("");
+    terminalPrintln("--- ACTIVE INTERPRETER VARIABLE REGISTRY ---");
+    if (variableCount == 0 && stringRegistryCount == 0) {
+      terminalPrintln("(NO VARIABLES INITIALIZED YET)");
+    } else {
+      if (variableCount > 0) {
+        terminalPrintln("[ NUMERIC VARS ]");
+        for (int i = 0; i < variableCount; i++) {
+          snprintf(outBuf, sizeof(outBuf), "  %s = %d", sysVariables[i].name, sysVariables[i].value);
+          terminalPrintln(outBuf);
+        }
+      }
+      if (stringRegistryCount > 0) {
+        terminalPrintln("[ STRING VARS ]");
+        for (int i = 0; i < stringRegistryCount; i++) {
+          snprintf(outBuf, sizeof(outBuf), "  %s$ = \"%s\"", stringRegistry[i].name, stringRegistry[i].value);
+          terminalPrintln(outBuf);
+        }
+      }
+    }
+  }
+  terminalPrintln("=====================================================");
 }
 
 void processCommand(const char* rawCmd) {
@@ -2636,9 +2774,6 @@ void processCommand(const char* rawCmd) {
       }
 
 #ifdef SERIAL_DEBUG
-      // ============================================================================
-      // DIAGNOSTIC BLOCK: FIRST 32 BYTES OF DRAM (RAW CHARACTER VIEW)
-      // ============================================================================
       Serial.printf("\n\rFirst 32 Bytes of DRAM Payload (Raw Character Look):\n\r");
       for (int i = 0; i < 32; i += 4) {
           Serial.printf("  DRAM + 0x%02X: %02X %02X %02X %02X | %c%c%c%c\n\r",
@@ -2747,14 +2882,37 @@ void processCommand(const char* rawCmd) {
     terminalPrintln(ramBuf);
     return;
   }
+  else if (strcmp(firstToken, "MEMMAP") == 0) {
+    bool includeVars = false;
+
+    if (firstSpace != NULL) {
+      char varArg[16];
+      memset(varArg, 0, sizeof(varArg));
+      strncpy(varArg, firstSpace + 1, sizeof(varArg) - 1);
+      varArg[sizeof(varArg) - 1] = '\0';
+      trimCString(varArg);
+
+      if (strcasecmp(varArg, "VARS") == 0) {
+        includeVars = true;
+      }
+    }
+
+    printMemoryMap(includeVars);
+    return;
+  }
   else if (strcmp(firstToken, "HELP") == 0) {
     terminalPrintln("SYS:  FREE, HELP, LIST, NEW, RUN");
-    terminalPrintln("DOS:  DIR, LOAD, LOAD$, SAVE, SAVE$, DELETE");
-    terminalPrintln("CODE: BEEP, CIRCLE, CLEAR, COLOR, DELAY, DUMP,");
-    terminalPrintln("      DUMPS, EDIT, EXEC, GOSUB, GOTO, HIGH, IF,");
-    terminalPrintln("      IMVIEW, INKEY, INPUT, INREAD, IOSET, KEY,");
-    terminalPrintln("      LINE, LOW, PEEK, PLOT, POKE, PRINT, RECT, ");
-    terminalPrintln("      RETURN, RND, TOUCH, WIFIUP, WIFIDOWN");
+    terminalPrintln("DOS:  DIR, LOAD, LOAD$, SAVE, SAVE$,");
+    terminalPrintln("      DELETE");
+    terminalPrintln("CODE: BEEP, CIRCLE, CLEAR, COLOR, COS(,");
+    terminalPrintln("      DELAY, DUMP, DUMPS, EDIT, EXEC,");
+    terminalPrintln("      FALSE, GOSUB, GOTO, HIGH, IF,");
+    terminalPrintln("      IMVIEW, INKEY, INPUT, INREAD, INT(");
+    terminalPrintln("      IOSET, KEY, LINE, LN(, LOW, MEMMAP,");
+    terminalPrintln("      PEEK, PLOT, POKE, PRINT, RECT,");
+    terminalPrintln("      RETURN, RND, RND(, SIN(, SQR(,");
+    terminalPrintln("      TERMHEIGHT, TERMWIDTH, TOUCH,");
+    terminalPrintln("      TRUE, VAL(, WIFIUP, WIFIDOWN");
     return;
   }
   else {
@@ -3306,7 +3464,7 @@ bool runSingleLine(const char* rawLine, int &currentLineIdx) {
   }
 
   // ==========================================
-  // WI-FI MANAGEMENT ACTIONS
+  // 9. WI-FI MANAGEMENT ACTIONS
   // ==========================================
   if (strncmp(line, "WIFIUP ", 7) == 0) {
     char* args = line + 7;
@@ -3348,7 +3506,7 @@ bool runSingleLine(const char* rawLine, int &currentLineIdx) {
   }
 
   // ==========================================
-  // FOR LOOP INITIALIZATION
+  // 10. FOR LOOP INITIALIZATION
   // ==========================================
   if (strncmp(line, "FOR ", 4) == 0) {
     char* args = line + 4;
@@ -3398,7 +3556,7 @@ bool runSingleLine(const char* rawLine, int &currentLineIdx) {
   }
 	
   // ==========================================
-  // NEXT LOOP EVALUATION
+  // 11. NEXT LOOP EVALUATION
   // ==========================================
   if (strncmp(line, "NEXT", 4) == 0) {
     char varStr[MAX_VAR_NAME_LEN];
@@ -3434,14 +3592,14 @@ bool runSingleLine(const char* rawLine, int &currentLineIdx) {
   }
 
   // ==========================================
-  // 10. COMMENTS FILTER
+  // 12. COMMENTS FILTER
   // ==========================================
   if (strncmp(line, "REM", 3) == 0) {
     return true;
   }
 
   // ==========================================
-  // 11. VARIABLE ASSIGNMENT PIPELINE
+  // 13. VARIABLE ASSIGNMENT PIPELINE
   // ==========================================
   char* workLine = line;
   if (strncmp(workLine, "LET ", 4) == 0) {
@@ -3562,7 +3720,7 @@ void processIncomingToken(const char* token, const char* m, bool &isRecordingCod
     appendToBuffer(fullAssistantResponse, cleanToken, farMaxSize);
 
     // ==========================================
-    // 2. MARKDOWN EXTRACTION ENGINE (CODER ONLY)
+    // MARKDOWN EXTRACTION ENGINE (CODER ONLY)
     // ==========================================
     if (strstr(m, "coder") != NULL) {
         slideWindowAppend(markdownBuffer, cleanToken, mdMaxSize);
@@ -3613,7 +3771,7 @@ void processIncomingToken(const char* token, const char* m, bool &isRecordingCod
     }
 
     // ==========================================
-    // 3. CONSOLE TEXT DRAWING ENGINE
+    // CONSOLE TEXT DRAWING ENGINE
     // ==========================================
     if (streamToConsole == 1) {
         if (strcmp(token, "\\n") == 0)      terminalPrintln("");
