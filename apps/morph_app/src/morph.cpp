@@ -1,75 +1,37 @@
 #include "microdos_api.h"
+#include "microdos_3d.h"
 
-#define M_PI_F 3.14159265f
-
-ALWAYS INLINE float custom_reciprocal(float x) {
-    if (x == 0.0f) x = 0.001f;
-
-    int32_t i = *(int32_t*)&x;
-    i = 0x7EEEEEEE - i;
-    float y = *(float*)&i;
-
-    y = y * (2.0f - x * y);
-    y = y * (2.0f - x * y);
-
-    return y;
-}
-
-ALWAYS INLINE float custom_sinf(float x) {
-    while (x > M_PI_F)  x -= (2.0f * M_PI_F);
-    while (x < -M_PI_F) x += (2.0f * M_PI_F);
-    
-    float sinVal = 0.0f;
-    if (x < 0.0f) {
-        sinVal = 1.27323954f * x + 0.405284735f * x * x;
-        if (sinVal < 0.0f) sinVal = 0.225f * (sinVal * (-sinVal) - sinVal) + sinVal;
-        else               sinVal = 0.225f * (sinVal * sinVal - sinVal) + sinVal;
-    } else {
-        sinVal = 1.27323954f * x - 0.405284735f * x * x;
-        if (sinVal < 0.0f) sinVal = 0.225f * (sinVal * (-sinVal) - sinVal) + sinVal;
-        else               sinVal = 0.225f * (sinVal * sinVal - sinVal) + sinVal;
-    }
-    return sinVal;
-}
-
-ALWAYS INLINE float custom_cosf(float x) {
-    return custom_sinf(x + (M_PI_F * 0.5f));
-}
-
-struct Point3D {
-    float x;
-    float y;
-    float z;
+// --- Shape 1: A standard Unit Cube ---
+static const Vector3D cubeLayout[8] __attribute__((aligned(4))) = {
+    {-1.0f, -1.0f, -1.0f},
+    { 1.0f, -1.0f, -1.0f},
+    { 1.0f,  1.0f, -1.0f},
+    {-1.0f,  1.0f, -1.0f},
+    {-1.0f, -1.0f,  1.0f},
+    { 1.0f, -1.0f,  1.0f},
+    { 1.0f,  1.0f,  1.0f},
+    {-1.0f,  1.0f,  1.0f}
 };
 
-struct Point2D {
-    int x;
-    int y;
+// --- Shape 2: An Octahedron (Collapsed Cube) ---
+static const Vector3D octaLayout[8] __attribute__((aligned(4))) = {
+    { 0.0f,  0.0f, -1.414f}, { 1.414f, 0.0f,  0.0f}, { 0.0f,  0.0f,  1.414f}, {-1.414f, 0.0f,  0.0f},
+    { 0.0f,  0.0f, -1.414f}, { 0.0f, -1.414f, 0.0f}, { 0.0f,  0.0f,  1.414f}, { 0.0f,  1.414f, 0.0f}
 };
 
-static const Point3D cubeVertices[8] __attribute__((aligned(4))) = {
-    {-1.0f, -1.0f, -1.0f}, 
-    { 1.0f, -1.0f, -1.0f}, 
-    { 1.0f,  1.0f, -1.0f}, 
-    {-1.0f,  1.0f, -1.0f}, 
-    {-1.0f, -1.0f,  1.0f}, 
-    { 1.0f, -1.0f,  1.0f}, 
-    { 1.0f,  1.0f,  1.0f}, 
-    {-1.0f,  1.0f,  1.0f}  
+// --- Shape 3: A Tetrahedron (Cube collapsed into 4 nodes) ---
+static const Vector3D tetraLayout[8] __attribute__((aligned(4))) = {
+    {-1.2f, -1.2f, -1.2f}, // (Node A)
+    { 1.2f,  1.2f, -1.2f}, // (Node B)
+    { 1.2f,  1.2f, -1.2f}, // (Node B - Collapsed)
+    {-1.2f, -1.2f, -1.2f}, // (Node A - Collapsed)
+    { 1.2f, -1.2f,  1.2f}, // (Node C)
+    { 1.2f, -1.2f,  1.2f}, // (Node C - Collapsed)
+    {-1.2f,  1.2f,  1.2f}, // (Node D)
+    {-1.2f,  1.2f,  1.2f}  // (Node D - Collapsed)
 };
 
-static const Point3D octaVertices[8] __attribute__((aligned(4))) = {
-    { 0.0f,  0.0f, -1.414f}, 
-    { 1.414f, 0.0f,  0.0f},  
-    { 0.0f,  0.0f,  1.414f}, 
-    {-1.414f, 0.0f,  0.0f},  
-    { 0.0f,  0.0f, -1.414f}, 
-    { 0.0f, -1.414f, 0.0f},  
-    { 0.0f,  0.0f,  1.414f}, 
-    { 0.0f,  1.414f, 0.0f}   
-};
-
-static const uint8_t edges[12][2] = {
+static const Edge3D wireframeTopology[12] = {
     {0, 1}, {1, 2}, {2, 3}, {3, 0},
     {4, 5}, {5, 6}, {6, 7}, {7, 4},
     {0, 4}, {1, 5}, {2, 6}, {3, 7}
@@ -77,90 +39,74 @@ static const uint8_t edges[12][2] = {
 
 extern "C" int _start(int argc, char** argv, MicroDosAPI* api) {
     _global_api_ptr = api;
-    if (!api) return -1;
-    
-    if (!api->initGameMatrix()) return -1;
+    if (!api || !api->initGameMatrix()) return -1;
 
     api->clear();
-    api->setFKeys(STRING("      "), STRING("      "), STRING("      "), STRING("      "), STRING(" QUIT "));
+    api->setFKeys(STRING("ZOOM-"), STRING("ZOOM+"), STRING("      "), STRING("      "), STRING(" QUIT "));
 
-    float angleX = 0.0f;
-    float angleY = 0.0f;
-    float angleZ = 0.0f;
-
-    float morphTime = 0.0f;
-    bool morphDirection = true; 
+    float angleX = 0.0f, angleY = 0.0f, angleZ = 0.0f;
+    float currentGlobalState = 0.0f;
+    bool cyclingForward = true;
 
     float screenWidth = (float)api->termWidth;
     float screenHeight = (float)api->termHeight;
     float minDimension = (screenWidth < screenHeight) ? screenWidth : screenHeight;
     
-    float scaleFactor = minDimension * 0.25f; 
-    float cameraDistance = 3.5f; 
+    float scaleFactor = minDimension * 0.25f;
+    float cameraDistance = 3.5f;
 
-    Point2D projectedPoints[8];
+    Vector2D displayCoordinates[8];
     bool running = true;
 
     while (running) {
         int key = api->inkey();
-        if (key == '\x15' || key == 'Q' || key == 'q') {
-            running = false;
-            break;
-        }
+        if (key == '\x15' || key == 'Q' || key == 'q') break;
+        
+        if (key == '\x11') scaleFactor -= 10.0f;
+        if (key == '\x12') scaleFactor += 10.0f;
 
-        if (morphDirection) {
-            morphTime += 0.015f;
-            if (morphTime >= 1.0f) { morphTime = 1.0f; morphDirection = false; api->delay(500); }
+        if (cyclingForward) {
+            currentGlobalState += 0.01f;
+            if (currentGlobalState >= 2.0f) {
+                currentGlobalState = 2.0f; cyclingForward = false; api->delay(800);
+            }
         } else {
-            morphTime -= 0.015f;
-            if (morphTime <= 0.0f) { morphTime = 0.0f; morphDirection = true; api->delay(500); }
+            currentGlobalState -= 0.01f;
+            if (currentGlobalState <= 0.0f) {
+                currentGlobalState = 0.0f; cyclingForward = true; api->delay(800);
+            }
         }
 
-        float t = (custom_sinf((morphTime * M_PI_F) - (M_PI_F * 0.5f)) + 1.0f) * 0.5f;
-
-        float cx = custom_cosf(angleX), sx = custom_sinf(angleX);
-        float cy = custom_cosf(angleY), sy = custom_sinf(angleY);
-        float cz = custom_cosf(angleZ), sz = custom_sinf(angleZ);
-
-        for (int i = 0; i < 8; i++) {
-            float mx = cubeVertices[i].x + t * (octaVertices[i].x - cubeVertices[i].x);
-            float my = cubeVertices[i].y + t * (octaVertices[i].y - cubeVertices[i].y);
-            float mz = cubeVertices[i].z + t * (octaVertices[i].z - cubeVertices[i].z);
-
-            float y1 = my * cx - mz * sx;
-            float z1 = my * sx + mz * cx;
-
-            float x2 = mx * cy + z1 * sy;
-            float z2 = -mx * sy + z1 * cy;
-
-            float x3 = x2 * cz - y1 * sz;
-            float y3 = x2 * sz + y1 * cz;
-
-            float perspectiveZ = cameraDistance + z2;
-            float invZ = custom_reciprocal(perspectiveZ);
-            
-            projectedPoints[i].x = (int)((x3 * scaleFactor) * invZ + (screenWidth * 0.5f));
-            projectedPoints[i].y = (int)((y3 * scaleFactor) * invZ + (screenHeight * 0.5f));
-        }
+        m3d_transform_and_project(
+            cubeLayout, displayCoordinates, 8,
+            angleX, angleY, angleZ,
+            currentGlobalState, 
+            octaLayout, tetraLayout,
+            scaleFactor, cameraDistance,
+            screenWidth, screenHeight
+        );
 
         api->rect(0, 0, api->termWidth, api->termHeight, BLACK);
 
-        int activeColor = (t < 0.5f) ? CYAN : MAGENTA;
+        int strokeColor = CYAN;
+        if (currentGlobalState > 1.0f)     strokeColor = GREEN;
+        else if (currentGlobalState > 0.5f) strokeColor = MAGENTA;
 
         for (int i = 0; i < 12; i++) {
-            int p1 = edges[i][0];
-            int p2 = edges[i][1];
-            api->line(projectedPoints[p1].x, projectedPoints[p1].y, 
-                      projectedPoints[p2].x, projectedPoints[p2].y, 
-                      activeColor);
+            uint8_t a = wireframeTopology[i].p1;
+            uint8_t b = wireframeTopology[i].p2;
+            api->line(displayCoordinates[a].x, displayCoordinates[a].y,
+                      displayCoordinates[b].x, displayCoordinates[b].y,
+                      strokeColor);
         }
 
         api->flushGameMatrix();
+        
         angleX += 0.02f;
         angleY += 0.03f;
         angleZ += 0.01f;
-
-        api->delay(20); 
+        
+        api->delay(20);
     }
 
     api->clearFKeys();
