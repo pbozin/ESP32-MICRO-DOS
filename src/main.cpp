@@ -7,6 +7,111 @@
 #include <TJpg_Decoder.h>
 #include <string.h>
 
+#define KEY_REPEAT_DELAY 300
+
+#define COLOR_DEPTH 4
+#define COMPRESSED_4BIT_SIZE 400
+
+#define MAX_LINE_LEN 80
+
+#define MAX_VAR_NAME_LEN 12
+#define MAX_STR_LEN  50
+
+#define MAX_STACK_DEPTH 12
+#define MAX_FOR_NEST 4
+
+#define SYSTEM_RAM_SIZE 256
+#define CONTEXT_BUF_SIZE 2048
+
+#define CURSOR_SIZE 2
+#define FILENAME_SIZE 20
+#define PROMPT_SIZE 40
+
+#define KEY_ROWS   4
+#define KEY_COLS   10
+
+#define CHAR_WIDTH  6
+#define CHAR_HEIGHT 16
+
+#define F_KEY_LABEL_SIZE 7
+
+#define TKN_F1 '\x11'
+#define TKN_F2 '\x12'
+#define TKN_F3 '\x13'
+#define TKN_F4 '\x14'
+#define TKN_F5 '\x15'
+
+// =================================
+
+// --- CORE SYSTEM CONTROLS ---
+#ifndef RND_SEED_PIN
+  #define RND_SEED_PIN     -1
+#endif
+#ifndef HARD_BREAK_PIN
+  #define HARD_BREAK_PIN   -1
+#endif
+
+// --- DISPLAY BUS MACROS ---
+#ifndef TFT_BL
+  #define TFT_BL           -1
+#endif
+#ifndef TFT_CS
+  #define TFT_CS           -1
+#endif
+#ifndef TFT_SCK
+  #define TFT_SCK          -1
+#endif
+#ifndef TFT_DC
+  #define TFT_DC           -1
+#endif
+#ifndef TFT_MOSI
+  #define TFT_MOSI         -1
+#endif
+#ifndef TFT_MISO
+  #define TFT_MISO         -1
+#endif
+#ifndef TFT_D0
+  #define TFT_D0           -1
+#endif
+#ifndef TFT_D1
+  #define TFT_D1           -1
+#endif
+#ifndef TFT_D2
+  #define TFT_D2           -1
+#endif
+#ifndef TFT_D3
+  #define TFT_D3           -1
+#endif
+
+// --- TOUCH INTERFACE MACROS ---
+#ifndef TOUCH_CS
+  #define TOUCH_CS         -1
+#endif
+#ifndef TOUCH_INT
+  #define TOUCH_INT        -1
+#endif
+#ifndef TOUCH_SDA
+  #define TOUCH_SDA        -1
+#endif
+#ifndef TOUCH_SCL
+  #define TOUCH_SCL        -1
+#endif
+
+// --- STORAGE BUS (SD & SD_MMC) ---
+#ifndef SYS_SD_CS
+  #define SYS_SD_CS        -1
+#endif
+#ifndef SYS_SD_CLK
+  #define SYS_SD_CLK       -1
+#endif
+#ifndef SYS_SD_CMD
+  #define SYS_SD_CMD       -1
+#endif
+#ifndef SYS_SD_D0
+  #define SYS_SD_D0        -1
+#endif
+
+// =================================
 
 #if defined(BOARD_CYD)
 #include <SD.h>
@@ -58,38 +163,6 @@ const uint16_t ramOSPalette[16] = {
     TFT_DARKGREY    // Index 15  <- Chroma key or dark grey
 };
 
-#define KEY_REPEAT_DELAY 300
-
-#define COLOR_DEPTH 4
-#define COMPRESSED_4BIT_SIZE 400
-
-#define MAX_LINE_LEN 80
-
-#define MAX_VAR_NAME_LEN 12
-#define MAX_STR_LEN  50
-
-#define MAX_STACK_DEPTH 12
-#define MAX_FOR_NEST 4
-
-#define SYSTEM_RAM_SIZE 256
-#define CONTEXT_BUF_SIZE 2048
-
-#define CURSOR_SIZE 2
-#define FILENAME_SIZE 20
-#define PROMPT_SIZE 40
-
-#define KEY_ROWS   4
-#define KEY_COLS   10
-
-#define F_KEY_LABEL_SIZE 7
-#define TKN_F1 '\x11'
-#define TKN_F2 '\x12'
-#define TKN_F3 '\x13'
-#define TKN_F4 '\x14'
-#define TKN_F5 '\x15'
-
-#define CHAR_WIDTH  6
-#define CHAR_HEIGHT 16
 #define TERM_COLS   int(TFT_WIDTH / CHAR_WIDTH)
 #define TERM_ROWS   int(TFT_WIDTH / CHAR_HEIGHT)
 
@@ -1077,14 +1150,14 @@ void playBeep(int frequency, int durationMs) {
 
 void initSD() {
 #if defined(BOARD_CYD)
-  sdSPI.begin(SD_SCLK, SD_MISO, SD_MOSI, SD_CS_PIN);
-  if (!SD.begin(SD_CS_PIN, sdSPI, SPI_FREQUENCY)) {
+  sdSPI.begin(SYS_SD_CLK, SYS_SD_D0, SYS_SD_CMD, SYS_SD_CS);
+  if (!SD.begin(SYS_SD_CS, sdSPI, SPI_FREQUENCY)) {
     sdAvailable = false;
   } else {
     sdAvailable = true;
   }
 #elif defined(BOARD_JC3248)
-  SD_MMC.setPins(SD_MMC_CLK, SD_MMC_CMD, SD_MMC_D0);
+  SD_MMC.setPins(SYS_SD_CLK, SYS_SD_CMD, SYS_SD_D0);
 
   if (!SD_MMC.begin("/sd", true)) {
     sdAvailable = false;
@@ -3780,6 +3853,17 @@ void processIncomingToken(const char* token, const char* m, bool &isRecordingCod
     }
 }
 
+bool isPinProtected(int pin) {
+    if (pin < 0 || pin > 49) return false;
+    return (pin == RND_SEED_PIN || pin == HARD_BREAK_PIN ||
+	    pin == AUDIO_EN_PIN || pin == AUDIO_DATA_PIN ||
+            pin == SYS_SD_CS    || pin == SYS_SD_CLK     || pin == SYS_SD_CMD || pin == SYS_SD_D0 ||
+            pin == TOUCH_CS     || pin == TOUCH_INT      || pin == TOUCH_SDA  || pin == TOUCH_SCL ||
+            pin == TFT_BL       || pin == TFT_CS         || pin == TFT_SCK    || pin == TFT_DC    ||
+            pin == TFT_MOSI     || pin == TFT_MISO       || pin == TFT_D0     || pin == TFT_D1    ||
+            pin == TFT_D2       || pin == TFT_D3);
+}
+
 void api_setup() {
   kernelAPI.print   = [] (const char* t) {
     if (t) terminalPrint(t);
@@ -3881,13 +3965,13 @@ void api_setup() {
   };
 
   kernelAPI.pinMode = [] (int pin, int mode) {
-    if (pin != 5 && pin != 12 && pin != 13 && pin != 14 && pin != 15 && pin != 18 && pin != 19 && pin != 23) {
+    if (!isPinProtected(pin)) {
       pinMode(pin, mode);
     }
   };
 
   kernelAPI.digitalWrite = [] (int pin, int val) {
-    if (pin != 5 && pin != 12 && pin != 13 && pin != 14 && pin != 15 && pin != 18 && pin != 19 && pin != 23) {
+    if (!isPinProtected(pin)) {
       digitalWrite(pin, val);
     }
   };
