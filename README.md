@@ -5,9 +5,10 @@
 
 # ESP32 MicroDOS
 
-An advanced, retro-style retro-operating system and interactive environment designed for ESP32 boards with 320x480 display: 
-- [tested] CYD clones [https://www.lcdwiki.com/4.0inch_ESP32-32E_Display]
-- [tested] JC3248W535C [https://www.aliexpress.com/item/1005007566332450.html]
+An advanced, retro-style retro-operating system and interactive environment designed for ESP32 boards with touch displays: 
+* 320x480 E32R40T [https://www.lcdwiki.com/4.0inch_ESP32-32E_Display]
+* 240x320 E32R32P [https://www.lcdwiki.com/3.2inch_ESP32-32E_Display] 
+* 320x480 JC3248W535C [https://www.aliexpress.com/item/1005007566332450.html]
 
 Unlike typical monolithic microcontroller firmware, **MicroDOS** behaves like a classic 1980s disk operating system with modern AI features. It features a custom multi-statement **BASIC interpreter**, a **Universal Dynamic Linker/Loader** capable of running precompiled native C binaries from an SD card, an indexed **4-bit Sprite Game Engine**, and a memory-efficient **Ollama LLM live-streaming engine** that can generate BASIC programs and store them in the host system on the fly.
 
@@ -17,7 +18,7 @@ Unlike typical monolithic microcontroller firmware, **MicroDOS** behaves like a 
 
 ### 1. Dual Hardware Abstraction Layer (HAL)
 MicroDOS supports two highly popular, low-cost smart display paradigms out of the box via compiler flags:
-* **Classic CYD (`BOARD_CYD`)**: Targeting the E32N40T board variant utilizing SPI-based resistive touch and `TFT_eSPI` register calls.
+* **Classic CYD (`BOARD_CYD`)**: Targeting CYD variants utilizing 320x480 pixel ST7796 (or 240x320 ILI9341 and ST7789) and SPI-based resistive touch and `TFT_eSPI` register calls.
 * **Capacitive High-Res Display (`BOARD_JC3248`)**: Targeting QSPI smart-displays (such as the AXS15231B architecture) over `Arduino_GFX` bound to an I2C capacitive touch grid controller.
 
 ### 2. Universal Dual-Segment Relocation Loader (`EXEC`)
