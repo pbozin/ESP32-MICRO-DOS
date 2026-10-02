@@ -138,7 +138,7 @@ __attribute__((always_inline)) static inline void padString(char* dest, const ch
 //   RUNTIME METADATA UTILITIES (WEAK LINKAGE)
 // ============================================================================
 
-__attribute__((weak)) static inline char* concat(const char* first, const char* second, char* result) {
+__attribute__((always_inline)) static inline char* concat(const char* first, const char* second, char* result) {
     char* ptr = result;
     while (*first)  *ptr++ = *first++;
     while (*second) *ptr++ = *second++;

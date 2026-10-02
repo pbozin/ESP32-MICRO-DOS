@@ -3856,7 +3856,7 @@ void processIncomingToken(const char* token, const char* m, bool &isRecordingCod
 bool isPinProtected(int pin) {
     if (pin < 0 || pin > 49) return false;
     return (pin == RND_SEED_PIN || pin == HARD_BREAK_PIN ||
-	    pin == AUDIO_EN_PIN || pin == AUDIO_DATA_PIN ||
+            pin == AUDIO_EN_PIN || pin == AUDIO_DATA_PIN ||
             pin == SYS_SD_CS    || pin == SYS_SD_CLK     || pin == SYS_SD_CMD || pin == SYS_SD_D0 ||
             pin == TOUCH_CS     || pin == TOUCH_INT      || pin == TOUCH_SDA  || pin == TOUCH_SCL ||
             pin == TFT_BL       || pin == TFT_CS         || pin == TFT_SCK    || pin == TFT_DC    ||
