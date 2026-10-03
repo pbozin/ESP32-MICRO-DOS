@@ -15,7 +15,7 @@ struct TouchState {
   int y;
 };
 
-typedef struct {
+struct MicroDosAPI {
   // --- Console Printing Vectors ---
   void (*print)(const char* text);
   void (*println)(const char* text);
@@ -78,12 +78,15 @@ typedef struct {
   bool  (*initGameMatrix)();
   void  (*flushGameMatrix)();
   void  (*closeGameMatrix)();
-} MicroDosAPI;
+  void  (*sysDebugDump)(const char* label, const void* memoryAddress, unsigned int byteCount, uint32_t virtualAddr);
+};
 
 // Tracking pointer instance to link standard malloc lodops cleanly
-__attribute__((weak)) MicroDosAPI* _global_api_ptr = 0;
+WEAK MicroDosAPI* _global_api_ptr = 0;
 
-#define INLINE static inline
+#define ALIGNED __attribute__((aligned(4)))
+#define WEAK __attribute__((weak)) 
+#define INLINE static inline 
 #define ALWAYS __attribute__((always_inline))
 
 // ============================================================================
@@ -111,7 +114,7 @@ __attribute__((weak)) MicroDosAPI* _global_api_ptr = 0;
 
 #undef STRING
 #define STRING(str) (__extension__({ \
-    struct __attribute__((aligned(4))) AlignedStrWrapper { \
+    struct ALIGNED AlignedStrWrapper { \
         char data[sizeof(str)]; \
     }; \
     static const struct AlignedStrWrapper __wrapped_str = { str }; \
@@ -119,9 +122,9 @@ __attribute__((weak)) MicroDosAPI* _global_api_ptr = 0;
 }))
 
 #define NEW_STRING(varName, str) \
-    static const char varName[] __attribute__((aligned(4))) = str
+    static const char varName[] ALIGNED = str
 
-__attribute__((always_inline)) static inline void padString(char* dest, const char* src, size_t fixedLen) {
+ALWAYS INLINE void padString(char* dest, const char* src, size_t fixedLen) {
     size_t i = 0;
     while (src[i] != '\0' && i < fixedLen) {
         dest[i] = src[i];
@@ -138,7 +141,7 @@ __attribute__((always_inline)) static inline void padString(char* dest, const ch
 //   RUNTIME METADATA UTILITIES (WEAK LINKAGE)
 // ============================================================================
 
-__attribute__((always_inline)) static inline char* concat(const char* first, const char* second, char* result) {
+ALWAYS INLINE char* concat(const char* first, const char* second, char* result) {
     char* ptr = result;
     while (*first)  *ptr++ = *first++;
     while (*second) *ptr++ = *second++;
@@ -146,7 +149,7 @@ __attribute__((always_inline)) static inline char* concat(const char* first, con
     return result;
 }
 
-__attribute__((weak)) int strcmp(const char* s1, const char* s2) {
+WEAK int strcmp(const char* s1, const char* s2) {
     while (*s1 && (*s1 == *s2)) {
         s1++;
         s2++;
@@ -154,7 +157,7 @@ __attribute__((weak)) int strcmp(const char* s1, const char* s2) {
     return *(const unsigned char*)s1 - *(const unsigned char*)s2;
 }
 
-__attribute__((weak)) void* memcpy(void* dest, const void* src, unsigned int count) {
+WEAK void* memcpy(void* dest, const void* src, unsigned int count) {
     if (((size_t)dest % 4 == 0) && ((size_t)src % 4 == 0) && (count % 4 == 0)) {
         uint32_t* d = (uint32_t*)dest;
         const uint32_t* s = (const uint32_t*)src;
@@ -172,7 +175,7 @@ __attribute__((weak)) void* memcpy(void* dest, const void* src, unsigned int cou
     return dest;
 }
 
-__attribute__((weak)) void* memset(void* dest, int value, unsigned int count) {
+WEAK void* memset(void* dest, int value, unsigned int count) {
     if (((size_t)dest % 4 == 0) && (count % 4 == 0)) {
         uint32_t* d = (uint32_t*)dest;
         uint32_t val32 = (uint8_t)value;
@@ -191,14 +194,14 @@ __attribute__((weak)) void* memset(void* dest, int value, unsigned int count) {
     return dest;
 }
 
-__attribute__((weak)) void* malloc(unsigned int size) {
+WEAK void* malloc(unsigned int size) {
   if (_global_api_ptr && _global_api_ptr->malloc) {
     return _global_api_ptr->malloc(size);
   }
   return 0;
 }
 
-__attribute__((weak)) void free(void* ptr) {
+WEAK void free(void* ptr) {
   if (ptr && _global_api_ptr && _global_api_ptr->free) {
     _global_api_ptr->free(ptr);
   }
@@ -218,37 +221,43 @@ __attribute__((weak)) void free(void* ptr) {
     ((state).isPressed && (state).x >= (bx) && (state).x < ((bx) + (bw)) && \
      (state).y >= (by) && (state).y < ((by) + (bh)))
 
-// Main entry point
-int _start(int argc, char** argv, MicroDosAPI* api);
-
-static inline MicroDosAPI* kernel() {
+INLINE MicroDosAPI* kernel() {
     return _global_api_ptr;
 }
 
+ALWAYS INLINE void kernelDebug(const char* lbl, const void* ptr, unsigned int len, uint32_t vAddr) {
+    if (kernel()->sysDebugDump) {
+        kernel()->sysDebugDump(lbl, ptr, len, vAddr);
+    }
+}
+
 // --- CONSOLE & TERMINAL WRAPPERS ---
-__attribute__((always_inline)) static inline void print(const char* text)    { kernel()->print(text); }
-__attribute__((always_inline)) static inline void println(const char* text)  { kernel()->println(text); }
-__attribute__((always_inline)) static inline void clearScreen()              { kernel()->clear(); }
-__attribute__((always_inline)) static inline int  readKey()                  { return kernel()->inkey(); }
+ALWAYS INLINE void print(const char* text)    { kernel()->print(text); }
+ALWAYS INLINE void println(const char* text)  { kernel()->println(text); }
+ALWAYS INLINE void clearScreen()              { kernel()->clear(); }
+ALWAYS INLINE int  readKey()                  { return kernel()->inkey(); }
 
 // --- HARDWARE INTERFACES ---
-__attribute__((always_inline)) static inline void delayMs(int ms)            { kernel()->delay(ms); }
-__attribute__((always_inline)) static inline void playTone(int freq, int ms) { kernel()->beep(freq, ms); }
-__attribute__((always_inline)) static inline void setPinMode(int pin, int m) { kernel()->pinMode(pin, m); }
-__attribute__((always_inline)) static inline void writeDigital(int p, int v) { kernel()->digitalWrite(p, v); }
-__attribute__((always_inline)) static inline int  readDigital(int pin)       { return kernel()->digitalRead(pin); }
+ALWAYS INLINE void delayMs(int ms)            { kernel()->delay(ms); }
+ALWAYS INLINE void playTone(int freq, int ms) { kernel()->beep(freq, ms); }
+ALWAYS INLINE void setPinMode(int pin, int m) { kernel()->pinMode(pin, m); }
+ALWAYS INLINE void writeDigital(int p, int v) { kernel()->digitalWrite(p, v); }
+ALWAYS INLINE int  readDigital(int pin)       { return kernel()->digitalRead(pin); }
 
 // --- LOW-LEVEL GRAPHICS ENGINE WRAPPERS ---
-__attribute__((always_inline)) static inline void setColor(int colorId)                           { kernel()->color(colorId); }
-__attribute__((always_inline)) static inline void drawPixel(int x, int y, int c)                  { kernel()->plot(x, y, c); }
-__attribute__((always_inline)) static inline void drawLine(int x1, int y1, int x2, int y2, int c) { kernel()->line(x1, y1, x2, y2, c); }
-__attribute__((always_inline)) static inline void drawRect(int x, int y, int w, int h, int c)     { kernel()->rect(x, y, w, h, c); }
-__attribute__((always_inline)) static inline void drawCircle(int x, int y, int r, int c)          { kernel()->circle(x, y, r, c); }
+ALWAYS INLINE void setColor(int colorId)                           { kernel()->color(colorId); }
+ALWAYS INLINE void drawPixel(int x, int y, int c)                  { kernel()->plot(x, y, c); }
+ALWAYS INLINE void drawLine(int x1, int y1, int x2, int y2, int c) { kernel()->line(x1, y1, x2, y2, c); }
+ALWAYS INLINE void drawRect(int x, int y, int w, int h, int c)     { kernel()->rect(x, y, w, h, c); }
+ALWAYS INLINE void drawCircle(int x, int y, int r, int c)          { kernel()->circle(x, y, r, c); }
 
 // --- AUTONOMOUS SPRITE ENGINE WRAPPERS ---
-__attribute__((always_inline)) static inline uint32_t loadSprite(const char* file, int size)      { return kernel()->createSprite(file, size); }
-__attribute__((always_inline)) static inline void drawSprite(uint32_t spr, int x, int y)          { kernel()->drawSprite(spr, x, y); }
-__attribute__((always_inline)) static inline void unloadSprite(uint32_t spr)                      { kernel()->freeSprite(spr); }
+ALWAYS INLINE uint32_t loadSprite(const char* file, int size)      { return kernel()->createSprite(file, size); }
+ALWAYS INLINE void drawSprite(uint32_t spr, int x, int y)          { kernel()->drawSprite(spr, x, y); }
+ALWAYS INLINE void unloadSprite(uint32_t spr)                      { kernel()->freeSprite(spr); }
+
+// Main entry point
+int _start(int argc, char** argv, MicroDosAPI* api);
 
 #ifdef __cplusplus
 }
