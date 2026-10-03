@@ -1,5 +1,7 @@
-10 CLEAR
-30 P = 140 : Q = 300 : X = 160 : Y = 150 : U = 4 : V = -4
+10 CLEAR : REM DYNAMIC RESOLUTION RETRO BRICKS
+20 W = TERMWIDTH : H = TERMHEIGHT
+25 BW = W / 10 : BH = H / 20
+30 P = (W / 2) - 30 : Q = H - 20 : X = W / 2 : Y = H / 2 : U = 4 : V = -4
 40 I = 0
 50 POKE I, 1
 60 I = I + 1 : IF I < 20 GOTO 50
@@ -9,42 +11,42 @@
 100 P = P - 8 : IF P < 0 GOTO 105
 102 GOTO 120
 105 P = 0 : GOTO 120
-110 P = P + 8 : IF P > 260 GOTO 115
+110 P = P + 8 : M = W - 60 : IF P > M GOTO 115
 112 GOTO 120
-115 P = 260
+115 P = M
 120 A = X - 3 : B = Y - 3 : RECT A, B, 6, 6, 0
 130 X = X + U : Y = Y + V
 140 IF X < 4 GOTO 170
-150 IF X > 312 GOTO 180
+150 M = W - 8 : IF X > M GOTO 180
 160 GOTO 190
 170 X = 4 : U = 0 - U : BEEP 800, 10 : GOTO 190
-180 X = 312 : U = 0 - U : BEEP 800, 10
+180 X = M : U = 0 - U : BEEP 800, 10
 190 IF Y < 4 GOTO 210
 200 GOTO 220
 210 Y = 4 : V = 0 - V : BEEP 800, 10
-220 IF Y < 80 GOTO 250
+220 M = BH * 2 : IF Y < M GOTO 250
 230 GOTO 320
-250 R = Y / 15 : C = X / 32 : N = R * 10 : N = N + C
+250 R = Y / BH : C = X / BW : N = R * 10 : N = N + C
 260 IF N < 0 GOTO 320
 265 IF N > 19 GOTO 320
 270 S = PEEK(N) : IF S == 0 GOTO 320
 280 POKE N, 0 : V = 0 - V : BEEP 1200, 15
-290 A = C * 32 : B = R * 15
-300 RECT A, B, 30, 12, 0
-320 IF Y > 294 GOTO 340
+290 A = C * BW : B = R * BH
+300 RECT A, B, BW - 2, BH - 2, 0
+320 M = Q - 6 : IF Y > M GOTO 340
 330 GOTO 400
 340 IF X < P GOTO 400
 350 M = P + 60 : IF X > M GOTO 400
-360 Y = 294 : V = 0 - V : BEEP 1000, 20
+360 Y = Q - 6 : V = 0 - V : BEEP 1000, 20
 400 RECT P, Q, 60, 6, 1
 410 A = X - 3 : B = Y - 3 : RECT A, B, 6, 6, 6
 420 I = 0
 430 S = PEEK(I) : IF S == 0 GOTO 470
-440 R = I / 10 : C = I % 10 : A = C * 32 : B = R * 15
-450 RECT A, B, 30, 12, 3
+440 R = I / 10 : C = I % 10 : A = C * BW : B = R * BH
+450 RECT A, B, BW - 2, BH - 2, 3
 470 I = I + 1 : IF I < 20 GOTO 430
 480 A = P - 8 : RECT A, Q, 8, 6, 0 : A = P + 60 : RECT A, Q, 8, 6, 0
-490 IF Y > 310 GOTO 520
+490 M = H - 10 : IF Y > M GOTO 520
 500 GOTO 70
 520 BEEP 150, 600 : COLOR 2 : PRINT "GAME OVER!"
 522 DELAY 2000
