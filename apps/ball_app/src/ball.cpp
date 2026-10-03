@@ -14,38 +14,42 @@ struct Edge {
     uint16_t p2;
 };
 
-static Vector3D sphereVertices[TOTAL_VERTICES] ALIGNED;
-static Edge sphereEdges[MAX_EDGES] ALIGNED;
-static Vector2D projectedPoints[TOTAL_VERTICES] ALIGNED;
-static int edgeCount ALIGNED = 0;
+struct AppDataBuffer {
+    Vector3D sphereVertices[TOTAL_VERTICES];
+    Edge sphereEdges[MAX_EDGES];
+    Vector2D projectedPoints[TOTAL_VERTICES];
+    int edgeCount;
+};
 
-ALWAYS INLINE void generateProceduralSphere(float radius, MicroDosAPI* api) {
+static struct AppDataBuffer db __attribute__((aligned(4)));
+
+ALWAYS INLINE void generateProceduralSphere(float radius) {
     int vIdx = 0;
     int localEdgeCount = 0;
-    sphereVertices[vIdx++] = { 0.0f, radius, 0.0f };
+    db.sphereVertices[vIdx++] = { 0.0f, radius, 0.0f };
 
     for (int lat = 1; lat < LATITUDE_BANDS; lat++) {
-        float theta ALIGNED = ((float)lat * M_PI_F) * INV_LAT_BANDS;
-        float sinTheta ALIGNED = m3d_sinf(theta);
-        float cosTheta ALIGNED = m3d_cosf(theta);
+        float theta = ((float)lat * M_PI_F) * INV_LAT_BANDS;
+        float sinTheta = m3d_sinf(theta);
+        float cosTheta = m3d_cosf(theta);
 
         for (int lon = 0; lon < LONGITUDE_BANDS; lon++) {
-            float phi ALIGNED = ((float)lon * 2.0f * M_PI_F) * INV_LON_BANDS;
-            
-            float x ALIGNED = radius * sinTheta * m3d_cosf(phi);
-            float y ALIGNED = radius * cosTheta;
-            float z ALIGNED = radius * sinTheta * m3d_sinf(phi);
+            float phi = ((float)lon * 2.0f * M_PI_F) * INV_LON_BANDS;
 
-            sphereVertices[vIdx++] = { x, y, z };
+            float x = radius * sinTheta * m3d_cosf(phi);
+            float y = radius * cosTheta;
+            float z = radius * sinTheta * m3d_sinf(phi);
+
+            db.sphereVertices[vIdx++] = { x, y, z };
         }
     }
 
     int bottomPoleIdx = vIdx;
-    sphereVertices[vIdx++] = { 0.0f, -radius, 0.0f };
+    db.sphereVertices[vIdx++] = { 0.0f, -radius, 0.0f };
 
     // Connect Top Pole
     for (int lon = 0; lon < LONGITUDE_BANDS; lon++) {
-        sphereEdges[localEdgeCount++] = { 0, (uint16_t)(1 + lon) };
+        db.sphereEdges[localEdgeCount++] = { 0, (uint16_t)(1 + lon) };
     }
 
     // Connect intermediate rings
@@ -55,82 +59,90 @@ ALWAYS INLINE void generateProceduralSphere(float radius, MicroDosAPI* api) {
 
         for (int lon = 0; lon < LONGITUDE_BANDS; lon++) {
             int nextLon = (lon + 1) % LONGITUDE_BANDS;
-            sphereEdges[localEdgeCount++] = { (uint16_t)(ringStart + lon), (uint16_t)(nextRingStart + lon) };
-            sphereEdges[localEdgeCount++] = { (uint16_t)(ringStart + lon), (uint16_t)(ringStart + nextLon) };
+            db.sphereEdges[localEdgeCount++] = { (uint16_t)(ringStart + lon), (uint16_t)(nextRingStart + lon) };
+            db.sphereEdges[localEdgeCount++] = { (uint16_t)(ringStart + lon), (uint16_t)(ringStart + nextLon) };
         }
     }
 
-    // Connect Bottom Pole
+    // Connect Bottom Pole (Fixed tracking index variables)
     int finalRingStart = 1 + (LATITUDE_BANDS - 2) * LONGITUDE_BANDS;
     for (int lon = 0; lon < LONGITUDE_BANDS; lon++) {
         int nextLon = (lon + 1) % LONGITUDE_BANDS;
-        sphereEdges[localEdgeCount++] = { (uint16_t)(finalRingStart + lon), (uint16_t)bottomPoleIdx };
-        sphereEdges[localEdgeCount++] = { (uint16_t)(finalRingStart + lon), (uint16_t)(finalRingStart + nextLon) };
+        db.sphereEdges[localEdgeCount++] = { (uint16_t)(finalRingStart + lon), (uint16_t)bottomPoleIdx };
+        db.sphereEdges[localEdgeCount++] = { (uint16_t)(finalRingStart + lon), (uint16_t)(finalRingStart + nextLon) };
     }
 
-    edgeCount = localEdgeCount;
+    db.edgeCount = localEdgeCount;
 }
 
-int _start(int argc, char** argv, MicroDosAPI* api) {
+extern "C" int _start(int argc, char** argv, MicroDosAPI* api) {
     _global_api_ptr = api;
     if (!api || !api->initGameMatrix()) return -1;
 
     api->setFKeys(STRING(" ZOOM-"), STRING(" ZOOM+"), STRING("      "), STRING("      "), STRING(" QUIT "));
 
-    float screenWidth  ALIGNED = (float)api->termWidth;
-    float screenHeight ALIGNED = (float)api->termHeight;
-    float ballX        ALIGNED = screenWidth * 0.5f;
-    float ballY        ALIGNED = screenHeight * 0.33f;
+    float screenWidth  = (float)api->termWidth;
+    float screenHeight = (float)api->termHeight;
 
-    float velX         ALIGNED = 2.5f;
-    float velY         ALIGNED = 0.0f;
-    float gravity      ALIGNED = 0.18f;
-    float bounceLoss   ALIGNED = -0.85f;
+    float radiusLimit  = screenWidth * 0.25f;
 
-    float angleX       ALIGNED = 0.0f;
-    float angleY       ALIGNED = 0.0f;
-    float spinSpeedY   ALIGNED = 0.04f;
-    float radiusLimit  ALIGNED = screenWidth * 0.12f;
+    float ballX        = screenWidth * 0.5f;
+    float ballY        = screenHeight * 0.33f;
 
-    generateProceduralSphere(1.0f, api);
+    float velX         = 2.5f;
+    float velY         = 0.0f;
+    float gravity      = 0.18f;
+    float bounceLoss   = -0.85f;
 
-    kernelDebug(STRING("SPHERE VERTICES BASE"), sphereVertices, TOTAL_VERTICES, (uint32_t)sphereVertices);
-    kernelDebug(STRING("PROJECTED BUFFER BASE"), projectedPoints, TOTAL_VERTICES, (uint32_t)projectedPoints);
+    float angleX       = 0.0f;
+    float angleY       = 0.0f;
+    float spinSpeedY   = 0.04f;
 
-    bool running ALIGNED = true;
+    generateProceduralSphere(1.0f);
+
+    bool running = true;
 
     while (running) {
         int key = api->inkey();
-
         if (key == '\x15' || key == 'Q' || key == 'q') break;
 
-        if (key == '\x11') { 
-            radiusLimit -= 5.0f; 
+        if (key == '\x11') {
+            radiusLimit -= 5.0f;
+            if (radiusLimit < 10.0f) radiusLimit = 10.0f;
         }
-        if (key == '\x12') { 
-            radiusLimit += 5.0f; 
+        if (key == '\x12') {
+            radiusLimit += 5.0f;
+            if (radiusLimit > (screenWidth * 0.75f)) radiusLimit = screenWidth * 0.75f;
         }
 
         velY += gravity;
         ballX += velX;
         ballY += velY;
 
-        if (ballX - radiusLimit < 0.0f) { ballX = radiusLimit; velX = -velX; }
-        if (ballX + radiusLimit > screenWidth) { ballX = screenWidth - radiusLimit; velX = -velX; }
-        
-        if (ballY + radiusLimit > screenHeight) {
-            ballY = screenHeight - radiusLimit;
+        float realRadius = radiusLimit * 0.45f;
+
+        if (ballX - realRadius < 0.0f) {
+            ballX = realRadius;
+            velX = -velX;
+        }
+        if (ballX + realRadius > screenWidth) {
+            ballX = screenWidth - realRadius;
+            velX = -velX;
+        }
+
+        if (ballY + realRadius > screenHeight) {
+            ballY = screenHeight - realRadius;
             velY *= bounceLoss;
-            if (m3d_reciprocal(velY) > 5.0f && velY > -0.5f) velY = -3.5f; 
+            if (m3d_reciprocal(velY) > 5.0f && velY > -0.5f) velY = -3.5f;
         }
 
         angleY += spinSpeedY;
-        angleX += 0.01f; 
+        angleX += 0.01f;
 
         m3d_transform_and_project(
-            sphereVertices, projectedPoints, TOTAL_VERTICES,
+            db.sphereVertices, db.projectedPoints, TOTAL_VERTICES,
             angleX, angleY, 0.0f,
-            0.0f, sphereVertices, sphereVertices, 
+            0.0f, db.sphereVertices, db.sphereVertices,
             radiusLimit, 2.5f,
             screenWidth, screenHeight
         );
@@ -140,18 +152,18 @@ int _start(int argc, char** argv, MicroDosAPI* api) {
         int offsetX = (int)ballX - (int)(screenWidth * 0.5f);
         int offsetY = (int)ballY - (int)(screenHeight * 0.5f);
 
-        for (int i = 0; i < edgeCount; i++) {
-            uint16_t p1 = sphereEdges[i].p1;
-            uint16_t p2 = sphereEdges[i].p2;
+        for (int i = 0; i < db.edgeCount; i++) {
+            uint16_t p1 = db.sphereEdges[i].p1;
+            uint16_t p2 = db.sphereEdges[i].p2;
             int strokeColor = (p1 % 2 == 0) ? RED : WHITE;
 
-            api->line(projectedPoints[p1].x + offsetX, projectedPoints[p1].y + offsetY,
-                      projectedPoints[p2].x + offsetX, projectedPoints[p2].y + offsetY,
+            api->line(db.projectedPoints[p1].x + offsetX, db.projectedPoints[p1].y + offsetY,
+                      db.projectedPoints[p2].x + offsetX, db.projectedPoints[p2].y + offsetY,
                       strokeColor);
         }
 
         api->flushGameMatrix();
-        api->delay(16); 
+        api->delay(16);
     }
 
     api->clearFKeys();
