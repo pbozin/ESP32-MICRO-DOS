@@ -2026,7 +2026,7 @@ void printMemoryMap(bool showVars) {
 
   char outBuf[MAX_LINE_LEN];
   terminalPrintln("");
-  terminalPrintln("=============== MICRODOS CORE HEAP =================");
+  terminalPrintln("========= MICRODOS CORE HEAP ==========");
 
   snprintf(outBuf, sizeof(outBuf), "TOTAL LIVE FREE RAM : %u BYTES", totalFree);
   terminalPrintln(outBuf);
@@ -2034,26 +2034,26 @@ void printMemoryMap(bool showVars) {
   terminalPrintln(outBuf);
 
   if (totalFree > 0 && largestBlock < (totalFree / 2)) {
-    terminalPrintln("WARNING: HEAP FRAGMENTATION IS HIGH. RUN 'NEW' TO CLEAR.");
+    terminalPrintln("WARNING: HEAP FRAGMENTATION IS HIGH");
   } else {
-    terminalPrintln("HEAP STATUS         : HEALTHY (CONSOLIDATED)\n");
+    terminalPrintln("HEAP STATUS         : HEALTHY\n");
   }
 
-  terminalPrintln("--- ENGINE DYNAMIC ALLOCATIONS ---");
-  terminalPrintln("[ TARGET ]    [ SLOTS ]  [ CAPACITY ] [ HEAP SIZE ]");
+  terminalPrintln("------ ENGINE DYNAMIC ALLOCATIONS ------");
+  terminalPrintln("TARGET   SLOTS   CAPACITY   HEAP SIZE");
 
-  snprintf(outBuf, sizeof(outBuf), "PROG_MEM    : %-10d %-12d %u Bytes", programLineCount, programLineCapacity, progSize);
+  snprintf(outBuf, sizeof(outBuf), "PROG_MEM : %-6d %-9d %u Bytes", programLineCount, programLineCapacity, progSize);
   terminalPrintln(outBuf);
 
-  snprintf(outBuf, sizeof(outBuf), "NUM_VARS    : %-10d %-12d %u Bytes", variableCount, variableCapacity, numVarSize);
+  snprintf(outBuf, sizeof(outBuf), "NUM_VARS : %-6d %-9d %u Bytes", variableCount, variableCapacity, numVarSize);
   terminalPrintln(outBuf);
 
-  snprintf(outBuf, sizeof(outBuf), "STR_REG     : %-10d %-12d %u Bytes", stringRegistryCount, stringRegistryCapacity, strRegSize);
+  snprintf(outBuf, sizeof(outBuf), "STR_REG  : %-6d %-9d %u Bytes", stringRegistryCount, stringRegistryCapacity, strRegSize);
   terminalPrintln(outBuf);
 
   if (showVars) {
     terminalPrintln("");
-    terminalPrintln("--- ACTIVE INTERPRETER VARIABLE REGISTRY ---");
+    terminalPrintln("- ACTIVE INTERPRETER VARIABLE REGISTRY -");
     if (variableCount == 0 && stringRegistryCount == 0) {
       terminalPrintln("(NO VARIABLES INITIALIZED YET)");
     } else {
@@ -2073,7 +2073,7 @@ void printMemoryMap(bool showVars) {
       }
     }
   }
-  terminalPrintln("=====================================================");
+  terminalPrintln("=======================================");
 }
 
 void processCommand(const char* rawCmd) {
