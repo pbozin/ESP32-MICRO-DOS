@@ -664,21 +664,22 @@ struct MicroDosAPI {
   void (*wifiDown)();
   int  (*ollamaStream)(const char* prompt, const char* serverIp, const char* modelName, const char* sysPrompt, int streamToConsole);
   void (*getTouch)(TouchState* state);
-  int termWidth;
-  int termHeight;
+  int  termWidth;
+  int  termHeight;
   int  charWidth;
   int  charHeight;
   void (*drawJpeg)(const char* filename, int x, int y);
   void (*setFKeys)(const char* l1, const char* l2, const char* l3, const char* l4, const char* l5);
   void (*clearFKeys)();
   void* (*malloc)(unsigned int size);
-  void  (*free)(void* ptr);
+  void (*free)(void* ptr);
   uint32_t (*createSprite)(const char* filename, int spriteSize);
-  void  (*drawSprite)(uint32_t spriteHandle, int x, int y);
-  void  (*freeSprite)(uint32_t spriteHandle);
-  bool  (*initGameMatrix)();
-  void  (*flushGameMatrix)();
-  void  (*closeGameMatrix)();
+  void (*drawSprite)(uint32_t spriteHandle, int x, int y);
+  void (*freeSprite)(uint32_t spriteHandle);
+  bool (*initGameMatrix)();
+  void (*flushGameMatrix)();
+  void (*closeGameMatrix)();
+  void (*sysDebugDump)(const char* label, const void* memoryAddress, unsigned int byteCount, uint32_t virtualAddr);
 };
 
 static MicroDosAPI kernelAPI;
@@ -749,13 +750,6 @@ void setup() {
   while (!Serial && (millis() - startWait < 1000)) { delay(10); }
   Serial.println(F("\nStarting ESP32 MicroDOS"));
 
-  initSD();
-  if (sdAvailable) {
-    Serial.println(F("- Init SD Card OK"));
-  } else {
-    Serial.println(F("- Init SD Card FAIL"));
-  }
-
   WiFi.mode(WIFI_STA);
   if (WiFi.mode(WIFI_OFF)) {
     Serial.println(F("- Init WiFi    OK"));
@@ -773,14 +767,23 @@ void setup() {
 
   Serial.println(F("- Init TFT     OK"));
 
+  Serial.println(F("\n\rTouch the screen!\n\r"));
   uint16_t cD[] = { 0, 0, 0, 0, 0 };
   tft.calibrateTouch(cD, TFT_RED, TFT_BLUE, TFT_WIDTH/20);
+  Serial.print("[ ");
   for (int i=0; i<5; i++) {
     Serial.print(cD[i]);
     Serial.print(" ");
   }
-  Serial.println("");
+  Serial.println(F("]\n\r\n\r- Calibration  OK"));
   tft.setTouch(cD);
+
+  initSD();
+  if (sdAvailable) {
+    Serial.println(F("- Init SD Card OK"));
+  } else {
+    Serial.println(F("- Init SD Card FAIL"));
+  }
 
   randomSeed(analogRead(RND_SEED_PIN));
   pinMode(HARD_BREAK_PIN, INPUT_PULLUP);
@@ -2705,7 +2708,9 @@ void processCommand(const char* rawCmd) {
 
       if (localDramBuffer == NULL || localIramBuffer == NULL || iramStagingArea == NULL) {
           terminalPrintln("ERR: OUT OF RAM");
+#ifdef SERIAL_DEBUG
 	  Serial.println("ERR: OUT OF RAM");
+#endif
           if (localDramBuffer) free(localDramBuffer);
           if (localIramBuffer) heap_caps_free(localIramBuffer);
           if (iramStagingArea) free(iramStagingArea);
@@ -3864,6 +3869,51 @@ bool isPinProtected(int pin) {
             pin == TFT_D2       || pin == TFT_D3);
 }
 
+void host_sysDebugDump(const char* label, const void* memoryAddress, unsigned int byteCount, uint32_t virtualAddr) {
+#ifdef SERIAL_DEBUG
+    const uint8_t* buffer = (const uint8_t*)memoryAddress;
+
+    uint8_t misalignment = ((uint32_t)memoryAddress) & 3;
+    if (misalignment != 0) {
+        Serial.printf("\n\r⚠️  [HAL DETECTED MISALIGNMENT] '%s' at 0x%08X is offset by %d bytes!\n\r",
+                      label, (uint32_t)memoryAddress, misalignment);
+    } else {
+        Serial.printf("\n\r✅ [HAL ALIGNMENT OK] '%s' sits at 4-byte boundary: 0x%08X\n\r",
+                      label, (uint32_t)memoryAddress);
+    }
+
+    Serial.printf("=== [MICRO-GDB SWEEP: %s (%d Bytes)] ===\n\r", label, byteCount);
+    Serial.printf("Virtual    | Hexadecimal Byte Matrix                  | Readable ASCII\n\r");
+    Serial.printf("-----------+------------------------------------------+----------------");
+
+    for (size_t i = 0; i < byteCount; i += 16) {
+        Serial.printf("\n\r0x%08X | ", virtualAddr + i);
+
+        for (size_t j = 0; j < 16; j++) {
+            if (i + j < byteCount) {
+                Serial.printf("%02X ", buffer[i + j]);
+            } else {
+                Serial.printf("   ");
+            }
+        }
+        Serial.printf("| ");
+
+        for (size_t j = 0; j < 16; j++) {
+            if (i + j < byteCount) {
+                uint8_t ch = buffer[i + j];
+                if (ch >= 32 && ch <= 126) {
+                    Serial.write(ch);
+                } else {
+                    Serial.write('.');
+                }
+            }
+        }
+    }
+    Serial.printf("\n\r========================================================================\n\r");
+    Serial.flush();
+#endif
+}
+
 void api_setup() {
   kernelAPI.print   = [] (const char* t) {
     if (t) terminalPrint(t);
@@ -4470,4 +4520,5 @@ void api_setup() {
     bgCanvas.deleteSprite();
   };
 
+  kernelAPI.sysDebugDump = host_sysDebugDump;
 }

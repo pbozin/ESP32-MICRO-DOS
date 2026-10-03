@@ -10,21 +10,22 @@ SECTIONS
         LONG(_got_file_offset);
     }
     _iram_start = .;
+    .mdb_literals : ALIGN(4) SUBALIGN(4) {
+        *(.literal)
+        *(.literal.*)
+        *(.literal_position)
+        . = ALIGN(4);
+    }
+    . = ALIGN(4);
     .text : ALIGN(4) SUBALIGN(4) {
         KEEP(*(.text._start))
-
-        _literal_start = .;
-        *(.literal .literal.*)
-        _literal_end = .;
-        . = ALIGN(4);
-
-        *(.text .text.*)
+        *(.text)
+        *(.text.*)
         . = ALIGN(4);
     }
     . = ALIGN(4);
     _iram_end = .;
     _iram_size = _iram_end - _iram_start;
-
     _dram_start = .;
     .rodata : ALIGN(4) SUBALIGN(4) {
         KEEP(*(.rodata .rodata.*))

@@ -44,15 +44,24 @@ ALWAYS INLINE float m3d_sinf(float x) {
     while (x > M_PI_F)  x -= (2.0f * M_PI_F);
     while (x < -M_PI_F) x += (2.0f * M_PI_F);
 
+    volatile uint32_t raw_c1 = 0x3FA2F983; // 1.27323954f
+    volatile uint32_t raw_c2 = 0x3ECF6666; // 0.405284735f
+    volatile uint32_t raw_c3 = 0x3E666666; // 0.225f
+
+    float c1, c2, c3;
+    memcpy(&c1, (const void*)&raw_c1, 4);
+    memcpy(&c2, (const void*)&raw_c2, 4);
+    memcpy(&c3, (const void*)&raw_c3, 4);
+
     float sinVal = 0.0f;
     if (x < 0.0f) {
-        sinVal = 1.27323954f * x + 0.405284735f * x * x;
-        if (sinVal < 0.0f) sinVal = 0.225f * (sinVal * (-sinVal) - sinVal) + sinVal;
-        else               sinVal = 0.225f * (sinVal * sinVal - sinVal) + sinVal;
+        sinVal = c1 * x + c2 * x * x;
+        if (sinVal < 0.0f) sinVal = c3 * (sinVal * (-sinVal) - sinVal) + sinVal;
+        else               sinVal = c3 * (sinVal * sinVal - sinVal) + sinVal;
     } else {
-        sinVal = 1.27323954f * x - 0.405284735f * x * x;
-        if (sinVal < 0.0f) sinVal = 0.225f * (sinVal * sinVal - sinVal) + sinVal;
-        else               sinVal = 0.225f * (sinVal * sinVal - sinVal) + sinVal;
+        sinVal = c1 * x - c2 * x * x;
+        if (sinVal < 0.0f) sinVal = c3 * (sinVal * (-sinVal) - sinVal) + sinVal;
+        else               sinVal = c3 * (sinVal * sinVal - sinVal) + sinVal;
     }
     return sinVal;
 }
