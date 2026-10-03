@@ -5,6 +5,11 @@
 #include <stdint.h>
 #include <stddef.h>
 
+#define ALIGNED __attribute__((aligned(4)))
+#define WEAK __attribute__((weak)) 
+#define INLINE static inline 
+#define ALWAYS __attribute__((always_inline))
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -83,11 +88,6 @@ struct MicroDosAPI {
 
 // Tracking pointer instance to link standard malloc lodops cleanly
 WEAK MicroDosAPI* _global_api_ptr = 0;
-
-#define ALIGNED __attribute__((aligned(4)))
-#define WEAK __attribute__((weak)) 
-#define INLINE static inline 
-#define ALWAYS __attribute__((always_inline))
 
 // ============================================================================
 //   4BIT COLOR PALETTE
