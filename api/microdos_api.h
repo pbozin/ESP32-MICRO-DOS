@@ -6,8 +6,8 @@
 #include <stddef.h>
 
 #define ALIGNED __attribute__((aligned(4)))
-#define WEAK __attribute__((weak)) 
-#define INLINE static inline 
+#define WEAK __attribute__((weak))
+#define INLINE static inline
 #define ALWAYS __attribute__((always_inline))
 
 #ifdef __cplusplus
@@ -72,7 +72,7 @@ struct MicroDosAPI {
   void (*setFKeys)(const char* l1, const char* l2, const char* l3, const char* l4, const char* l5);
   void (*clearFKeys)();
 
-  // --- Allocator Vectors hooks ---
+  // --- Allocator Vectors Hooks ---
   void* (*malloc)(unsigned int size);
   void  (*free)(void* ptr);
 
@@ -83,7 +83,19 @@ struct MicroDosAPI {
   bool  (*initGameMatrix)();
   void  (*flushGameMatrix)();
   void  (*closeGameMatrix)();
+
+  // --- Serial Debugger ---
   void  (*sysDebugDump)(const char* label, const void* memoryAddress, unsigned int byteCount, uint32_t virtualAddr);
+
+  // --- Misc ---
+  void (*printAt)(int x, int y, const char* text);
+  int  (*random)(int min, int max);
+
+  // --- Serial Port Handling ---
+  int  (*serialOpen)(uint32_t baud, int txPin, int rxPin);
+  void (*serialWrite)(const uint8_t* buffer, unsigned int length);
+  int  (*serialRead)(uint8_t* buffer, unsigned int maxLength);
+  void (*serialClose)();
 };
 
 // Tracking pointer instance to link standard malloc lodops cleanly
@@ -255,6 +267,17 @@ ALWAYS INLINE void drawCircle(int x, int y, int r, int c)          { kernel()->c
 ALWAYS INLINE uint32_t loadSprite(const char* file, int size)      { return kernel()->createSprite(file, size); }
 ALWAYS INLINE void drawSprite(uint32_t spr, int x, int y)          { kernel()->drawSprite(spr, x, y); }
 ALWAYS INLINE void unloadSprite(uint32_t spr)                      { kernel()->freeSprite(spr); }
+
+// --- MISC WRAPPERS ---
+ALWAYS INLINE int random(int min, int max)                         { return kernel()->random(min, max); }
+ALWAYS INLINE void delay(int ms)                                   { kernel()->delay(ms); }
+ALWAYS INLINE void printAt(int x, int y, const char* text)         { kernel()->printAt(x, y, text); }
+
+// --- SERIAL WRAPPERS ---
+ALWAYS INLINE int  serialOpen(uint32_t baud, int txPin, int rxPin) { return kernel()->serialOpen(baud, txPin, rxPin); }
+ALWAYS INLINE void serialWrite(const uint8_t* buffer, unsigned int length) { kernel()->serialWrite(buffer, length); }
+ALWAYS INLINE int  serialRead(uint8_t* buffer, unsigned int maxLength) { return kernel()->serialRead(buffer, maxLength); }
+ALWAYS INLINE void serialClose()                                   { kernel()->serialClose(); }
 
 // Main entry point
 int _start(int argc, char** argv, MicroDosAPI* api);

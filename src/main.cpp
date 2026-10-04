@@ -519,11 +519,48 @@ struct TouchState { bool isPressed; int x; int y; };
 void kernel_getTouchState(TouchState* state);
 void decompressRLEToCanvas(TFT_eSprite* canvas, int startX, int startY, const uint8_t* rleData, int rleSize);
 int compress4BitRLE(const uint8_t* source, uint8_t* destination);
+bool isPinProtected(int pin);
 void processIncomingToken(const char* token, const char* m, bool &isRecordingCode, char* textAccumulator,
 	         	  size_t textAccumMaxSize, char* markdownBuffer, size_t mdMaxSize, bool &insideThinkBlock,
 			  char* fullAssistantResponse, size_t farMaxSize, int streamToConsole);
 
+int host_serialOpen(uint32_t baud, int txPin, int rxPin) {
+    int resolved_tx = (txPin == -1) ? SYS_UART_TX : txPin;
+    int resolved_rx = (rxPin == -1) ? SYS_UART_RX : rxPin;
 
+    if (isPinProtected(resolved_tx) || isPinProtected(resolved_rx)) {
+        return -1;
+    }
+
+    Serial2.begin(baud, SERIAL_8N1, resolved_rx, resolved_tx);
+
+    return 0;
+}
+
+void host_serialWrite(const uint8_t* buffer, unsigned int length) {
+    if (buffer && length > 0) {
+        Serial2.write(buffer, length);
+    }
+}
+
+int host_serialRead(uint8_t* buffer, unsigned int maxLength) {
+    if (!buffer || maxLength == 0) return -1;
+
+    int availableBytes = Serial2.available();
+    if (availableBytes <= 0) {
+        return 0;
+    }
+
+    unsigned int bytesToRead = (availableBytes > (int)maxLength) ? maxLength : (unsigned int)availableBytes;
+
+    unsigned int bytesRead = Serial2.readBytes(buffer, bytesToRead);
+
+    return (int)bytesRead;
+}
+
+void host_serialClose() {
+    Serial2.end();
+}
 
 uint16_t getPaletteColor(int cId) {
   if (cId >= 0 && cId < 16) {
@@ -680,6 +717,12 @@ struct MicroDosAPI {
   void (*flushGameMatrix)();
   void (*closeGameMatrix)();
   void (*sysDebugDump)(const char* label, const void* memoryAddress, unsigned int byteCount, uint32_t virtualAddr);
+  void (*printAt)(int x, int y, const char* text);
+  int  (*random)(int min, int max);
+  int  (*serialOpen)(uint32_t baud, int txPin, int rxPin);
+  void (*serialWrite)(const uint8_t* buffer, unsigned int length);
+  int  (*serialRead)(uint8_t* buffer, unsigned int maxLength);
+  void (*serialClose)();
 };
 
 static MicroDosAPI kernelAPI;
@@ -1571,6 +1614,38 @@ void terminalPrint(const char* text) {
     cursorX = tft.textWidth(terminalBuffer[activeRowIndex]);
   }
   cursorY = (activeRowIndex - scrollOffset) * CHAR_HEIGHT;
+}
+
+void terminalPrintAt(int x, int y, const char* text) {
+  if (text == NULL || x < 0 || y < 0) {
+    return;
+  }
+
+  int pixelX = x * CHAR_WIDTH;
+  int pixelY = y * CHAR_HEIGHT;
+
+  if (pixelX >= TFT_WIDTH_DRAW || pixelY >= TERM_ROWS * CHAR_HEIGHT) {
+    return;
+  }
+
+  uint16_t activeFontColor = getPaletteColor(currentActivePaletteId);
+
+  if (MATRIX_ACTIVE) {
+    bgCanvas.setTextColor(activeFontColor, TFT_BLACK);
+    bgCanvas.setCursor(pixelX, pixelY);
+    bgCanvas.print(text);
+
+    bgCanvas.pushSprite(0, 0);
+  }
+  else {
+    tft.setTextColor(activeFontColor, TFT_BLACK);
+    tft.setCursor(pixelX, pixelY);
+    tft.print(text);
+
+#if defined(BOARD_JC3248)
+    canvas_bridge->flush();
+#endif
+  }
 }
 
 void drawKeyboard() {
@@ -4521,4 +4596,12 @@ void api_setup() {
   };
 
   kernelAPI.sysDebugDump = host_sysDebugDump;
+
+  kernelAPI.printAt = terminalPrintAt;
+  kernelAPI.random = [] (int min, int max) -> int { return random(min, max); };
+
+  kernelAPI.serialOpen  = host_serialOpen;
+  kernelAPI.serialWrite = host_serialWrite;
+  kernelAPI.serialRead  = host_serialRead;
+  kernelAPI.serialClose = host_serialClose;
 }
