@@ -39,8 +39,9 @@ def check_microdos_binary(file_path):
 
     if misalignments > 0:
         print("-" * 76)
-        print(f"❌ COMPONENT ERROR: Found {misalignments} true unaligned variable data allocation faults.")
+        print(f"❌ COMPONENT WARNING: Found {misalignments} true unaligned variable data allocation faults.")
         print("-" * 76)
+        print(f"[MDB Loader] Binary package size: {os.path.getsize(file_path)} bytes.\n")
         return False
     else:
         print(f"[MDB Loader] SUCCESS. Clean binary package size: {os.path.getsize(file_path)} bytes.\n")
