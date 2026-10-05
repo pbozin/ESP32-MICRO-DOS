@@ -114,21 +114,9 @@ ALWAYS INLINE void midiMsg(uint8_t cmd, uint8_t d1, uint8_t d2) {
     serialWrite(data_packet, 3);
 }
 
-ALWAYS INLINE void intToBuffer(uint32_t val, char* buf) {
-    int i = 0;
-    if (val == 0) { buf[i++] = '0'; buf[i] = '\0'; return; }
-    char tmp[12]; int j = 0;
-    while (val > 0) {
-        tmp[j++] = (val % 10) + '0';
-        val /= 10;
-    }
-    while (j > 0) { buf[i++] = tmp[--j]; }
-    buf[i] = '\0';
-}
-
 ALWAYS INLINE void displayValue(uint8_t simpleDisplayValue, uint8_t row) {
     char buf[12];
-    intToBuffer(simpleDisplayValue, buf);
+    itoa(simpleDisplayValue, buf);
     printAt(30, row, buf);
 }
 
