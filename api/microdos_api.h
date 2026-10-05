@@ -10,6 +10,11 @@
 #define INLINE static inline
 #define ALWAYS __attribute__((always_inline))
 
+#define INPUT 0x01
+#define OUTPUT 0x03
+#define INPUT_PULLUP 0x05
+#define INPUT_PULLDOWN 0x09
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -136,7 +141,11 @@ WEAK MicroDosAPI* _global_api_ptr = 0;
 #define NEW_STRING(varName, str) \
     static const char varName[] ALIGNED = str
 
-ALWAYS INLINE void padString(char* dest, const char* src, size_t fixedLen) {
+
+// ============================================================================
+//   RUNTIME METADATA UTILITIES (WEAK LINKAGE)
+// ============================================================================
+WEAK void padString(char* dest, const char* src, size_t fixedLen) {
     size_t i = 0;
     while (src[i] != '\0' && i < fixedLen) {
         dest[i] = src[i];
@@ -149,24 +158,12 @@ ALWAYS INLINE void padString(char* dest, const char* src, size_t fixedLen) {
     dest[fixedLen] = '\0';
 }
 
-// ============================================================================
-//   RUNTIME METADATA UTILITIES (WEAK LINKAGE)
-// ============================================================================
-
-ALWAYS INLINE char* concat(const char* first, const char* second, char* result) {
+WEAK char* concat(const char* first, const char* second, char* result) {
     char* ptr = result;
     while (*first)  *ptr++ = *first++;
     while (*second) *ptr++ = *second++;
     *ptr = '\0';
     return result;
-}
-
-WEAK int strcmp(const char* s1, const char* s2) {
-    while (*s1 && (*s1 == *s2)) {
-        s1++;
-        s2++;
-    }
-    return *(const unsigned char*)s1 - *(const unsigned char*)s2;
 }
 
 WEAK void* memcpy(void* dest, const void* src, unsigned int count) {
@@ -185,6 +182,111 @@ WEAK void* memcpy(void* dest, const void* src, unsigned int count) {
         }
     }
     return dest;
+}
+
+WEAK void reverse_str(char* str, int len) {
+    int i = 0, j = len - 1;
+    while (i < j) {
+        char temp = str[i];
+        str[i] = str[j];
+        str[j] = temp;
+        i++;
+        j--;
+    }
+}
+
+WEAK void ftoa(float value, char* buffer, int precision) {
+    int idx = 0;
+
+    uint32_t u;
+    memcpy(&u, &value, 4);
+
+    bool is_negative = (u & 0x80000000) != 0;
+    int32_t exp = ((u >> 23) & 0xFF) - 127;
+    uint32_t mantissa = (u & 0x007FFFFF) | 0x00800000;
+
+    if (is_negative) {
+        buffer[idx++] = '-';
+    }
+
+    if ((u & 0x7F800000) == 0) {
+        buffer[idx++] = '0';
+        if (precision > 0) {
+            buffer[idx++] = '.';
+            while (precision--) buffer[idx++] = '0';
+        }
+        buffer[idx] = '\0';
+        return;
+    }
+
+    uint64_t scale = 1;
+    for (int i = 0; i < precision; i++) {
+        scale *= 10;
+    }
+
+    uint64_t fixed_val = 0;
+    if (exp >= 0) {
+        fixed_val = ((uint64_t)mantissa * scale) << exp;
+        fixed_val /= 0x00800000;
+    } else {
+        fixed_val = ((uint64_t)mantissa * scale) >> (-exp);
+        fixed_val /= 0x00800000;
+    }
+
+    uint64_t int_part = fixed_val / scale;
+    uint64_t frac_part = fixed_val % scale;
+
+    int int_start = idx;
+    if (int_part == 0) {
+        buffer[idx++] = '0';
+    } else {
+        while (int_part > 0) {
+            buffer[idx++] = (char)('0' + (int_part % 10));
+            int_part /= 10;
+        }
+    }
+
+    int i = int_start, j = idx - 1;
+    while (i < j) {
+        char temp = buffer[i];
+        buffer[i] = buffer[j];
+        buffer[j] = temp;
+        i++; j--;
+    }
+
+    if (precision > 0) {
+        buffer[idx++] = '.';
+
+        uint64_t temp_scale = scale / 10;
+        while (temp_scale > 0) {
+            char digit = (char)('0' + (frac_part / temp_scale));
+            buffer[idx++] = digit;
+            frac_part %= temp_scale;
+            temp_scale /= 10;
+        }
+    }
+
+    buffer[idx] = '\0';
+}
+
+WEAK void itoa(uint32_t val, char* buf) {
+    int i = 0;
+    if (val == 0) { buf[i++] = '0'; buf[i] = '\0'; return; }
+    char tmp[12]; int j = 0;
+    while (val > 0) {
+        tmp[j++] = (val % 10) + '0';
+        val /= 10;
+    }
+    while (j > 0) { buf[i++] = tmp[--j]; }
+    buf[i] = '\0';
+}
+
+WEAK int strcmp(const char* s1, const char* s2) {
+    while (*s1 && (*s1 == *s2)) {
+        s1++;
+        s2++;
+    }
+    return *(const unsigned char*)s1 - *(const unsigned char*)s2;
 }
 
 WEAK void* memset(void* dest, int value, unsigned int count) {
@@ -237,12 +339,6 @@ INLINE MicroDosAPI* kernel() {
     return _global_api_ptr;
 }
 
-ALWAYS INLINE void kernelDebug(const char* lbl, const void* ptr, unsigned int len, uint32_t vAddr) {
-    if (kernel()->sysDebugDump) {
-        kernel()->sysDebugDump(lbl, ptr, len, vAddr);
-    }
-}
-
 // --- CONSOLE & TERMINAL WRAPPERS ---
 ALWAYS INLINE void print(const char* text)    { kernel()->print(text); }
 ALWAYS INLINE void println(const char* text)  { kernel()->println(text); }
@@ -272,6 +368,11 @@ ALWAYS INLINE void unloadSprite(uint32_t spr)                      { kernel()->f
 ALWAYS INLINE int random(int min, int max)                         { return kernel()->random(min, max); }
 ALWAYS INLINE void delay(int ms)                                   { kernel()->delay(ms); }
 ALWAYS INLINE void printAt(int x, int y, const char* text)         { kernel()->printAt(x, y, text); }
+ALWAYS INLINE void kernelDebug(const char* lbl, const void* ptr, unsigned int len, uint32_t vAddr) {
+    if (kernel()->sysDebugDump) {
+        kernel()->sysDebugDump(lbl, ptr, len, vAddr);
+    }
+}
 
 // --- SERIAL WRAPPERS ---
 ALWAYS INLINE int  serialOpen(uint32_t baud, int txPin, int rxPin) { return kernel()->serialOpen(baud, txPin, rxPin); }
