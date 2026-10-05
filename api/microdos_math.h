@@ -167,7 +167,7 @@ WEAK int64_t __fixsfdi(float f) {
     uint32_t u;
     memcpy(&u, &f, 4);
     int32_t exp = ((u >> 23) & 0xFF) - 127;
-    if (exp < 0) return 0; // Value is < 1
+    if (exp < 0) return 0;
     uint64_t man = (u & 0x007FFFFF) | 0x00800000;
     uint64_t res;
     if (exp <= 23) res = man >> (23 - exp);
@@ -179,7 +179,7 @@ WEAK int64_t __fixsfdi(float f) {
 WEAK uint64_t __fixunssfdi(float f) {
     uint32_t u;
     memcpy(&u, &f, 4);
-    if (u & 0x80000000) return 0; // Negative values cap at 0
+    if (u & 0x80000000) return 0;
     int32_t exp = ((u >> 23) & 0xFF) - 127;
     if (exp < 0) return 0;
     uint64_t man = (u & 0x007FFFFF) | 0x00800000;
@@ -192,7 +192,7 @@ WEAK uint64_t __fixunssfdi(float f) {
    4. SINGLE PRECISION SOFT-FLOAT DIVISION
    ========================================================================== */
 
-// Emulated Float Division using the dependencies written above
+// Float Division
 WEAK float __divsf3(float a, float b) {
     uint32_t ua, ub;
     memcpy(&ua, &a, 4);
@@ -202,9 +202,7 @@ WEAK float __divsf3(float a, float b) {
     int32_t exp_a = (ua >> 23) & 0xFF;
     int32_t exp_b = (ub >> 23) & 0xFF;
 
-    // Check for 0 denominators
     if (ub == 0 || (exp_b == 0 && (ub & 0x007FFFFF) == 0)) {
-        // Return infinity with proper sign sign
         uint32_t inf = (sign_a ^ sign_b) | 0x7F800000;
         float inf_f; memcpy(&inf_f, &inf, 4); return inf_f;
     }
@@ -223,8 +221,8 @@ WEAK float __divsf3(float a, float b) {
         res_man <<= 1;
         res_exp--;
     }
-    if (res_exp <= 0) return 0.0f; // Underflow
-    if (res_exp >= 255) {          // Overflow to Infinity
+    if (res_exp <= 0) return 0.0f;
+    if (res_exp >= 255) {
         uint32_t inf = res_sign | 0x7F800000;
         float inf_f; memcpy(&inf_f, &inf, 4); return inf_f;
     }
@@ -247,21 +245,16 @@ WEAK double __divdf3(double a, double b) {
 
     uint64_t res_sign = sign_a ^ sign_b;
 
-    // Handle Division by zero
     if (ub == 0 || (exp_b == 0 && (ub & 0x000FFFFFFFFFFFFFULL) == 0)) {
         uint64_t inf = res_sign | 0x7FF0000000000000ULL;
         double inf_d; memcpy(&inf_d, &inf, 8); return inf_d;
     }
 
-    // Extract Mantissas and append implicit 1-bit
     uint64_t man_a = (ua & 0x000FFFFFFFFFFFFFULL) | 0x0010000000000000ULL;
     uint64_t man_b = (ub & 0x000FFFFFFFFFFFFFULL) | 0x0010000000000000ULL;
 
     int64_t res_exp = exp_a - exp_b + 1023;
 
-    // Shift up dividend step-by-step using structural long division to handle accuracy
-    // Because we cannot shift a 53-bit integer left by 52 directly within 64-bit spaces,
-    // we use basic restoring bitwise divisions for precision.
     uint64_t quot = 0, rem = man_a;
     for (int i = 53; i >= 0; i--) {
         if (rem >= man_b) {
@@ -271,7 +264,6 @@ WEAK double __divdf3(double a, double b) {
         rem <<= 1;
     }
 
-    // Re-normalize double precision boundaries
     if (quot & 0x0020000000000000ULL) {
         quot >>= 1;
         res_exp++;
@@ -279,8 +271,8 @@ WEAK double __divdf3(double a, double b) {
         quot <<= 1;
         res_exp--;
     }
-    if (res_exp <= 0) return 0.0; // Underflow
-    if (res_exp >= 2047) { // Overflow
+    if (res_exp <= 0) return 0.0;
+    if (res_exp >= 2047) {
         uint64_t inf = res_sign | 0x7FF0000000000000ULL;
         double inf_d; memcpy(&inf_d, &inf, 8); return inf_d;
     }
@@ -307,7 +299,7 @@ WEAK double __floatdidf(int64_t a) {
         man = ua << (52 - msb);
     } else {
         man = ua >> (msb - 52);
-        if ((ua >> (msb - 53)) & 1) { // Rounding
+        if ((ua >> (msb - 53)) & 1) {
             man++;
             if (man & 0x0020000000000000ULL) { man >>= 1; exp++; }
         }
@@ -366,7 +358,7 @@ WEAK double __extendsfdf2(float a) {
     int32_t exp = (ua >> 23) & 0xFF;
     uint32_t man = ua & 0x007FFFFF;
 
-    if (exp == 0 && man == 0) { // Zero
+    if (exp == 0 && man == 0) {
         double zero; uint64_t zbits = sign; memcpy(&zero, &zbits, 8); return zero;
     }
     int64_t new_exp = (exp == 255) ? 2047 : (exp - 127 + 1023);
@@ -385,8 +377,8 @@ WEAK float __truncdfsf2(double a) {
         float zero; memcpy(&zero, &sign, 4); return zero;
     }
     int32_t new_exp = exp - 1023 + 127;
-    if (new_exp <= 0) return 0.0f; // Underflow bounds
-    if (new_exp >= 255 || exp == 2047) { // Overflow bounds
+    if (new_exp <= 0) return 0.0f;
+    if (new_exp >= 255 || exp == 2047) {
         uint32_t inf = sign | 0x7F800000;
         float inf_f; memcpy(&inf_f, &inf, 4); return inf_f;
     }
@@ -463,7 +455,7 @@ WEAK float __floatsisf(int32_t a) {
         man = ua << (23 - msb);
     } else {
         man = ua >> (msb - 23);
-        if ((ua >> (msb - 24)) & 1) { // Rounding bit check
+        if ((ua >> (msb - 24)) & 1) {
             man++;
             if (man & 0x01000000) { man >>= 1; exp++; }
         }
@@ -497,7 +489,7 @@ WEAK int32_t __fixsfsi(float f) {
     uint32_t u; memcpy(&u, &f, 4);
     int32_t exp = ((u >> 23) & 0xFF) - 127;
     if (exp < 0) return 0;
-    if (exp > 30) return (u & 0x80000000) ? INT32_MIN : INT32_MAX; // Saturate overflow
+    if (exp > 30) return (u & 0x80000000) ? INT32_MIN : INT32_MAX;
     uint32_t man = (u & 0x007FFFFF) | 0x00800000;
     uint32_t res;
     if (exp <= 23) res = man >> (23 - exp);
@@ -508,10 +500,10 @@ WEAK int32_t __fixsfsi(float f) {
 // 32-bit Float to Unsigned 32-bit Integer (__fixunssfsi)
 WEAK uint32_t __fixunssfsi(float f) {
     uint32_t u; memcpy(&u, &f, 4);
-    if (u & 0x80000000) return 0; // Caps negative assignments at zero
+    if (u & 0x80000000) return 0;
     int32_t exp = ((u >> 23) & 0xFF) - 127;
     if (exp < 0) return 0;
-    if (exp > 31) return UINT32_MAX; // Saturate overflow
+    if (exp > 31) return UINT32_MAX;
     uint32_t man = (u & 0x007FFFFF) | 0x00800000;
     if (exp <= 23) return man >> (23 - exp);
     return man << (exp - 23);
@@ -527,7 +519,6 @@ WEAK float __mulsf3(float a, float b) {
     int32_t exp_a = (ua >> 23) & 0xFF;
     int32_t exp_b = (ub >> 23) & 0xFF;
 
-    // Handle 0 cases quickly
     if (exp_a == 0 || exp_b == 0) {
         float zero = 0.0f;
         uint32_t zbits = sign_a ^ sign_b;
@@ -535,17 +526,14 @@ WEAK float __mulsf3(float a, float b) {
         return zero;
     }
 
-    // Extract mantissas and insert implicit leading 1-bit
     uint64_t man_a = (ua & 0x007FFFFF) | 0x00800000;
     uint64_t man_b = (ub & 0x007FFFFF) | 0x00800000;
 
     uint32_t res_sign = sign_a ^ sign_b;
     int32_t res_exp = exp_a + exp_b - 127;
 
-    // Perform 64-bit wide unsigned integer multiplication
     uint64_t res_man = man_a * man_b;
 
-    // Re-normalize layout bounds into 23-bit space
     if (res_man & 0x020000000000ULL) {
         res_man >>= 24;
         res_exp += 1;
@@ -553,7 +541,6 @@ WEAK float __mulsf3(float a, float b) {
         res_man >>= 23;
     }
 
-    // Handle underflow and overflow conditions
     if (res_exp <= 0) return 0.0f;
     if (res_exp >= 255) {
         uint32_t inf = res_sign | 0x7F800000;
