@@ -1,8 +1,7 @@
 #ifndef MICRODOS_3D_H
 #define MICRODOS_3D_H
 
-#include "microdos_api.h"
-#include <string.h>
+#include "microdos_util.h"
 
 #ifndef M_PI_F
 #define M_PI_F 3.14159265f
