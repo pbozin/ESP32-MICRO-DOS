@@ -43,6 +43,46 @@ A compact, highly optimized chess simulator featuring a dual-input control layou
 
 ---
 
+## 🎮 5. Bouncing 3D Wireframe Sphere (`ball.bin`)
+A high-frame-rate physics and graphics demonstration showcasing real-time 3D projection mechanics, localized vertex transformations, and kinetic vector line rendering.
+
+### Architectural Blueprint
+* **Procedural Vertex Topology Generation:** Dynamically calculates an interconnected latitude-and-longitude map of points using memory-aligned buffers (`__attribute__((aligned(4)))`). It stores geometric structures across unified edge arrays to bypass high SD card texture read latency.
+* **CPU-Driven 3D Projection Pipeline:** Processes raw trigonometric calculations in software via an isolated mathematical transform stack (`m3d_transform_and_project`). It rotates, projects, and scales local tracking spaces directly onto custom screen layouts relative to dynamic angle changes.
+* **Kinetic Vector Line Interceptor:** Calculates real-time 2D coordinate offsets based on basic gravity and bounce algorithms. It feeds dynamic positions directly into the line rasterizer loop (`drawLine`), mapping multi-colored edge strokes into frame arrays to simulate wireframe objects bouncing smoothly in real-time.
+
+---
+
+## 🌦️ 6. Atmospheric Environmental Dashboard (`sensor.bin`)
+A low-level telemetry terminal that executes a custom bit-banged I2C hardware driver protocol stack to extract, compensate, and render real-time climate data streams from a Bosch BME68x sensor cluster.
+
+### Architectural Blueprint
+* **Bit-Banged Protocol Layer:** Manages timing-critical register communication loops via inline assembly (`__asm__("nop")`) and software-driven digital pin polling (`digitalRead` / `digitalWrite`). It manually drives clock (`SCL_PIN`) and data (`SDA_PIN`) lines to implement standard START, STOP, and ACK I2C bus signals completely in software outside the hardware peripheral stack.
+* **Dual-Region Memory Calibration Unpacker:** Maps factory-fused compensation coefficients by parsing distinct physical sensor registers (`0x89` and `0xE1`) directly into memory-aligned runtime arrays (`ALIGNED`). This layout prevents multi-byte structures from throwing memory management tracking errors inside the Xtensa core layout.
+* **Bosch Fixed-Point Compensation Evaluator:** Decodes multi-byte raw data frames using structural coordinate bitwise shifts (`>>`) and algebraic multiplier formulas. It balances volatile integer values dynamically via internal memory references (`t_fine`) to convert analog physics registers into human-readable text buffers.
+
+---
+
+## 🎮 7. Real-Time Geometric Morphing Engine (`morph.bin`)
+A software-driven 3D vector engine displaying mathematical shape interpolation, dynamic color phase mapping, and automatic topological translation states.
+
+### Architectural Blueprint
+* **Multi-State Coordinate Array Interleaving:** Allocates memory-aligned, fixed-point array structures (`__attribute__((aligned(4)))`) containing unique 3D vertex configurations (Cube, Octahedron, and Tetrahedron). The topologies use identical vector node indices (`wireframeTopology`) to allow structural transitions without reallocating active runtime objects.
+* **Dynamic State Linear Interpolation:** Uses a state tracker variable (`currentGlobalState`) driven by an inversion loop to sweep back and forth between positions. It streams secondary and tertiary matrix data arrays (`octaLayout`, `tetraLayout`) into the software projection engine core (`m3d_transform_and_project`) to calculate intermediate coordinates on the fly.
+* **Phase-Mapped Vector Rasterizer:** Monitors real-time state tracking thresholds to inject adaptive color definitions (`CYAN`, `MAGENTA`, `GREEN`) across changing coordinate maps. It passes transformed 2D points into an optimized drawing routine (`drawLine`), keeping the line animations crisp and tear-free.
+
+---
+
+## 🎵 8. Algorithmic Markov MIDI Generative Sequencer (`midigen.bin`)
+A live music composition engine that processes dynamic Markov chains and geometric probability distributions entirely in software to stream real-time multi-channel MIDI note data down the system serial bus.
+
+### Architectural Blueprint
+* **Dynamic Software Markov Probability Calculator:** Implements an on-the-fly mathematical matrix engine (`markovMatrix`) utilizing custom fixed-point reciprocal operations (`65536U / total`). This creates balanced weight distributions for generative scale progressions without relying on hardware floating-point acceleration.
+* **Algorithmic Musical Topology Scales:** Allocates memory-aligned, multi-byte velocity arrays (`ALIGNED`) hosting specialized microtonal musical scales (Minor, Dorian, Abstract, Goa, Aeolian). These structures serve as safe algorithmic look-up tables that translate state adjustments directly into valid pitch outputs.
+* **Multi-Voice Serial Streaming Dispatcher:** Evaluates active beat metrics (`tickCount`, `stepIntervalMs`) completely in software, generating targeted three-byte serial packets (`midiMsg`). It automatically cycles voice routing through dynamic channel arrays to manage multi-instrument synthesis configurations.
+
+---
+
 ## 🛠️ Building & Deployment Guide
 
 Applications are compiled outside the core kernel image using **PlatformIO**:
