@@ -1,6 +1,5 @@
 #include "microdos_api.h"
-#include <cstring>
-#include <stdbool.h>
+#include "microdos_util.h"
 
 #define UNDO_DEPTH 6
 #define ABS(x) ((x) < 0 ? -(x) : (x))
@@ -445,7 +444,7 @@ INLINE ALWAYS void executeMove(const char* moveStr, MicroDosAPI* api) {
     if (executeToledoMove(moveStr)) {
       handlePawnPromotion();
       refreshBoard(api);
-      api->delay(200);
+      delayMs(200);
 
       if (countLegalMoves(humanIsWhite == 0) == 0) {
         if (isKingUnderAttack(humanIsWhite == 0)) {
@@ -453,14 +452,14 @@ INLINE ALWAYS void executeMove(const char* moveStr, MicroDosAPI* api) {
         } else {
           api->setFKeys(STRING(" NEW  "), STRING(" UNDO "), STRING(" FLIP "), STRING("DRAW!!"), STRING(" QUIT "));
         }
-        api->delay(2000);
+        delayMs(2000);
         return;
       }
 
       aiThinkAndRespond(api);
       handlePawnPromotion();
       refreshBoard(api);
-      api->delay(200);
+      delayMs(200);
 
       if (countLegalMoves(humanIsWhite != 0) == 0) {
         if (isKingUnderAttack(humanIsWhite != 0)) {
@@ -468,7 +467,7 @@ INLINE ALWAYS void executeMove(const char* moveStr, MicroDosAPI* api) {
         } else {
           api->setFKeys(STRING(" NEW  "), STRING(" UNDO "), STRING(" FLIP "), STRING("DRAW!!"), STRING(" QUIT "));
         }
-        api->delay(2000);
+        delayMs(2000);
         return;
       }
     } else {
@@ -627,7 +626,7 @@ extern "C" int _start(int argc, char** argv, MicroDosAPI* api) {
             if (executeUndo()) {
                 selectX = -1; selectY = -1;
                 refreshBoard(api);
-                api->delay(300);
+                delayMs(300);
             }
             continue;
         }
@@ -646,7 +645,7 @@ extern "C" int _start(int argc, char** argv, MicroDosAPI* api) {
               if (pieceSprites[i] != 0) { *(bool*)pieceSprites[i] = false; }
             }
             refreshBoard(api);
-            api->delay(300);
+            delayMs(300);
             continue;
         }
         // FLIP
@@ -675,7 +674,7 @@ extern "C" int _start(int argc, char** argv, MicroDosAPI* api) {
                 playerTurn = true;
             }
 
-            api->delay(300);
+            delayMs(300);
             continue;
         }
         // Backspace
@@ -688,7 +687,7 @@ extern "C" int _start(int argc, char** argv, MicroDosAPI* api) {
                 }
                 api->setFKeys(STRING(" NEW  "), STRING(" UNDO "), STRING(" FLIP "), textBuf, STRING(" QUIT "));
             }
-            api->delay(200);
+            delayMs(200);
             continue;
         }
         // Enter
@@ -708,7 +707,7 @@ extern "C" int _start(int argc, char** argv, MicroDosAPI* api) {
                 selectX = -1;
                 selectY = -1;
             }
-            api->delay(300);
+            delayMs(300);
             continue;
         }
         // Alphanumeric
@@ -723,7 +722,7 @@ extern "C" int _start(int argc, char** argv, MicroDosAPI* api) {
                 textBuf[bufLen] = '\0';
                 api->setFKeys(STRING(" NEW  "), STRING(" UNDO "), STRING(" FLIP "), textBuf, STRING(" QUIT "));
             }
-            api->delay(200);
+            delayMs(200);
             continue;
         }
 
@@ -759,16 +758,16 @@ extern "C" int _start(int argc, char** argv, MicroDosAPI* api) {
                 selectX = -1;
                 selectY = -1;
             }
-            api->delay(300);
+            delayMs(300);
         }
-        api->delay(30);
+        delayMs(30);
     }
 
-    api->clearFKeys();
+    clearFKeys();
     for (int32_t i = 1; i <= 32; i++) {
         if (pieceSprites[i] != 0) api->freeSprite(pieceSprites[i]);
     }
-    api->closeGameMatrix();
-    api->delay(100);
+    closeGameMatrix();
+    delayMs(100);
     return 0;
 }

@@ -1,4 +1,5 @@
 #include "microdos_api.h"
+#include "microdos_util.h"
 
 #define CLAMP(x, l, h) ((x) < (l) ? (l) : ((x) > (h) ? (h) : (x)))
 
@@ -117,7 +118,7 @@ ALWAYS INLINE void midiMsg(uint8_t cmd, uint8_t d1, uint8_t d2) {
 ALWAYS INLINE void displayValue(uint8_t simpleDisplayValue, uint8_t row) {
     char buf[12];
     itoa(simpleDisplayValue, buf);
-    printAt(30, row, buf);
+    termPrintAt(30, row, buf);
 }
 
 
@@ -131,7 +132,7 @@ ALWAYS INLINE void selectElectribePattern(uint16_t patternIndex) {
     midiMsg(0xC0, program, 0);
 
     displayValue(patternIndex, 2);
-    delay(40);
+    delayMs(40);
 }
 
 ALWAYS INLINE void silenceAllChannels() {
@@ -140,7 +141,7 @@ ALWAYS INLINE void silenceAllChannels() {
 
 ALWAYS INLINE void randomizeElectribePattern() {
     silenceAllChannels();
-    selectElectribePattern(random(1, 5));
+    selectElectribePattern(getRandom(1, 5));
 }
 
 ALWAYS INLINE void changeMarkovMatrix(uint8_t mode) {
@@ -157,7 +158,7 @@ ALWAYS INLINE void changeMarkovMatrix(uint8_t mode) {
             uint32_t weights[5];
             
             for (int j = 0; j < grid; j++) { 
-                weights[j] = random(10, 100); 
+                weights[j] = getRandom(10, 100); 
                 total += weights[j]; 
             }
             
@@ -181,7 +182,7 @@ ALWAYS INLINE void randomSynthChannel() {
     if (activeSynthChannel >= SYNTH_START && activeSynthChannel <= SYNTH_END) {
         midiMsg(0xB0 | (activeSynthChannel - 1), 123, 0);
     }
-    activeSynthChannel = random(SYNTH_START, SYNTH_END + 1);
+    activeSynthChannel = getRandom(SYNTH_START, SYNTH_END + 1);
     displayValue(activeSynthChannel, 4);
 }
 
@@ -189,7 +190,7 @@ ALWAYS INLINE void randomHatChannel() {
     if (activeHatChannel >= HAT_START && activeHatChannel <= HAT_END) {
         midiMsg(0xB0 | (activeHatChannel - 1), 123, 0);
     }
-    activeHatChannel = random(HAT_START, HAT_END + 1);
+    activeHatChannel = getRandom(HAT_START, HAT_END + 1);
     displayValue(activeHatChannel, 7);
 }
 
@@ -197,7 +198,7 @@ ALWAYS INLINE void randomDrumChannel() {
     if (activeDrumChannel >= DRUM_START && activeDrumChannel <= DRUM_END) {
         midiMsg(0xB0 | (activeDrumChannel - 1), 123, 0);
     }
-    activeDrumChannel = random(DRUM_START, DRUM_END + 1);
+    activeDrumChannel = getRandom(DRUM_START, DRUM_END + 1);
     displayValue(activeDrumChannel, 6);
 }
 
@@ -206,15 +207,15 @@ ALWAYS INLINE void randomBassChannel() {
         midiMsg(0xB0 | (activeBassChannel - 1), 123, 0);
     }
 
-    activeBassChannel = random(BASS_START, BASS_END + 1);
+    activeBassChannel = getRandom(BASS_START, BASS_END + 1);
 
     displayValue(activeBassChannel, 5);
 
 #ifdef SYNTH_XFM
     uint8_t safeBase = (BASS_START > 0) ? (BASS_START - 1) : 0;
 
-    uint8_t soundA = random(0, 16);
-    uint8_t soundB = random(0, 16);
+    uint8_t soundA = getRandom(0, 16);
+    uint8_t soundB = getRandom(0, 16);
     changeXFMSynths(soundA, soundB, safeBase);
 #endif
 }
@@ -222,46 +223,46 @@ ALWAYS INLINE void randomBassChannel() {
 ALWAYS INLINE void transitionToNextArtist() {
     silenceAllChannels();
     randomizeElectribePattern();
-    uint8_t nextStyle = currentArtistStyle + random(1, 5);
+    uint8_t nextStyle = currentArtistStyle + getRandom(1, 5);
     while (nextStyle >= 5) {
         nextStyle -= 5;
     }
     currentArtistStyle = nextStyle;
 
-    uint8_t currentMarkov = random(0, 3);
+    uint8_t currentMarkov = getRandom(0, 3);
     changeMarkovMatrix(currentMarkov);
     silenceAllChannels();
 
     switch (currentArtistStyle) {
         case 0:
-            currentTimeSignature = random(3, 6); currentBpm = random(90, 100);
+            currentTimeSignature = getRandom(3, 6); currentBpm = getRandom(90, 100);
             dynamicArpChance = 40; dynamicHatSkip = 6; globalDrumDensity = 20;
-            breakrollBase = random(15, 30); styleExpirationBar = random(300, 400);
-            changeRate = random(5, 10);
+            breakrollBase = getRandom(15, 30); styleExpirationBar = getRandom(300, 400);
+            changeRate = getRandom(5, 10);
             break;
         case 1:
-            currentTimeSignature = random(3, 6); currentBpm = random(78, 80);
+            currentTimeSignature = getRandom(3, 6); currentBpm = getRandom(78, 80);
             dynamicArpChance = 65; dynamicHatSkip = 3; globalDrumDensity = 30;
-            breakrollBase = random(10, 25); styleExpirationBar = random(300, 400);
-            changeRate = random(10, 20);
+            breakrollBase = getRandom(10, 25); styleExpirationBar = getRandom(300, 400);
+            changeRate = getRandom(10, 20);
             break;
         case 2:
-            currentTimeSignature = random(3, 6); currentBpm = random(80, 100);
+            currentTimeSignature = getRandom(3, 6); currentBpm = getRandom(80, 100);
             dynamicArpChance = 55; dynamicHatSkip = 2; globalDrumDensity = 35;
-            breakrollBase = random(10, 25); styleExpirationBar = random(300, 400);
-            changeRate = random(5, 10);
+            breakrollBase = getRandom(10, 25); styleExpirationBar = getRandom(300, 400);
+            changeRate = getRandom(5, 10);
             break;
         case 3:
-            currentTimeSignature = random(3, 6); currentBpm = random(80, 90);
+            currentTimeSignature = getRandom(3, 6); currentBpm = getRandom(80, 90);
             dynamicArpChance = 35; dynamicHatSkip = 8; globalDrumDensity = 15;
-            breakrollBase = random(20, 30); styleExpirationBar = random(300, 400);
-            changeRate = random(10, 20);
+            breakrollBase = getRandom(20, 30); styleExpirationBar = getRandom(300, 400);
+            changeRate = getRandom(10, 20);
             break;
         default:
         case 4:
-            currentTimeSignature = 5; currentBpm = random(60, 68);
+            currentTimeSignature = 5; currentBpm = getRandom(60, 68);
             dynamicArpChance = 20; dynamicHatSkip = 8; globalDrumDensity = 0;
-            breakrollBase = 0; styleExpirationBar = random(300, 400);
+            breakrollBase = 0; styleExpirationBar = getRandom(300, 400);
             changeRate = 4; changeMarkovMatrix(5);
             break;
     }
@@ -293,13 +294,13 @@ void processMicroEvolution() {
         return;
     }
 
-    if (random(0, 100) < changeRate) { randomSynthChannel(); return; }
-    if (random(0, 100) < changeRate) { randomHatChannel(); return; }
-    if (random(0, 100) < changeRate) { randomBassChannel(); return; }
-    if (random(0, 100) < changeRate) { randomDrumChannel(); return; }
+    if (getRandom(0, 100) < changeRate) { randomSynthChannel(); return; }
+    if (getRandom(0, 100) < changeRate) { randomHatChannel(); return; }
+    if (getRandom(0, 100) < changeRate) { randomBassChannel(); return; }
+    if (getRandom(0, 100) < changeRate) { randomDrumChannel(); return; }
 
     if (longBarCounter % 4 == 0) {
-        uint8_t breakRoll = random(0, 100);
+        uint8_t breakRoll = getRandom(0, 100);
 
         if (breakRoll < breakrollBase) {
             systemMuteArray[activeDrumChannel] = true;
@@ -327,21 +328,21 @@ ALWAYS INLINE void processPercussionEngine(uint8_t stepBase, uint8_t beatsPerBar
             midiMsg(0xB0 | (activeDrumChannel - 1), 10, 64);
             midiMsg(0x90 | (activeDrumChannel - 1), 36, 105);
 	} else if (stepBase == (beatsPerBar >> 1) && currentTimeSignature > 3) {
-            if (random(0, 100) < 50) {
+            if (getRandom(0, 100) < 50) {
                 midiMsg(0xB0 | (activeDrumChannel - 1), 10, 64);
                 midiMsg(0x90 | (activeDrumChannel - 1), 36, 105);
             }
-        } else if (stepBase == (beatsPerBar - 1) && (random(0, 100) < ghostKickChance)) {
+        } else if (stepBase == (beatsPerBar - 1) && (getRandom(0, 100) < ghostKickChance)) {
             midiMsg(0xB0 | (activeDrumChannel - 1), 10, 64);
-            midiMsg(0x90 | (activeDrumChannel - 1), 36, random(45, 65));
+            midiMsg(0x90 | (activeDrumChannel - 1), 36, getRandom(45, 65));
         }
-        if (stepBase == (beatsPerBar - 1) && random(0, 100) < globalDrumDensity) {
+        if (stepBase == (beatsPerBar - 1) && getRandom(0, 100) < globalDrumDensity) {
             midiMsg(0xB0 | (activeDrumChannel - 1), 10, 64);
-            midiMsg(0x90 | (activeDrumChannel - 1), 41, random(45, 68));
+            midiMsg(0x90 | (activeDrumChannel - 1), 41, getRandom(45, 68));
         }
     }
     if (!systemMuteArray[activeHatChannel]) {
-        uint8_t hatRoll = random(0, 100);
+        uint8_t hatRoll = getRandom(0, 100);
         uint8_t targetTriggerThreshold = 30;
         if (stepBase == 0) {
             targetTriggerThreshold = 15;
@@ -354,16 +355,16 @@ ALWAYS INLINE void processPercussionEngine(uint8_t stepBase, uint8_t beatsPerBar
             targetTriggerThreshold = targetTriggerThreshold >> 1;
         }
         if (hatRoll < targetTriggerThreshold) {
-            uint8_t softVelocity = 28 + random(0, 20) + (stepBase * 2);
+            uint8_t softVelocity = 28 + getRandom(0, 20) + (stepBase * 2);
             uint8_t targetHatNote = 42;
             if (softVelocity < 38) {
                 targetHatNote = 44;
             } else if (currentArtistStyle == 2 && hatRoll < 5) {
                 targetHatNote = 46;
             }
-            uint8_t hatPan = 64 + random(-(activePanIntensity / 2), (activePanIntensity / 2) + 1);
+            uint8_t hatPan = 64 + getRandom(-(activePanIntensity / 2), (activePanIntensity / 2) + 1);
             midiMsg(0xB0 | (activeHatChannel - 1), 10, CLAMP(hatPan, 20, 108));
-            uint8_t dynamicDecayValue = 20 + (softVelocity / 2) + random(0, 10);
+            uint8_t dynamicDecayValue = 20 + (softVelocity / 2) + getRandom(0, 10);
             midiMsg(0xB0 | (activeHatChannel - 1), 72, CLAMP(dynamicDecayValue, 15, 80));
             midiMsg(0x90 | (activeHatChannel - 1), targetHatNote, softVelocity);
         }
@@ -388,17 +389,17 @@ ALWAYS INLINE void processBassEngine(uint8_t stepBase) {
     }
 
     bool dynamicBassTrigger = false;
-    if (stepBase == 0)                                            dynamicBassTrigger = (random(0, 100) < 85);
-    else if (currentTimeSignature == 3 && stepBase == 1)          dynamicBassTrigger = (random(0, 100) < 40);
-    else if (currentTimeSignature == 5 && (stepBase == 2 || stepBase == 3)) dynamicBassTrigger = (random(0, 100) < 50);
-    else if (currentTimeSignature == 4 && stepBase == 2) dynamicBassTrigger = (random(0, 100) < 30);
+    if (stepBase == 0)                                            dynamicBassTrigger = (getRandom(0, 100) < 85);
+    else if (currentTimeSignature == 3 && stepBase == 1)          dynamicBassTrigger = (getRandom(0, 100) < 40);
+    else if (currentTimeSignature == 5 && (stepBase == 2 || stepBase == 3)) dynamicBassTrigger = (getRandom(0, 100) < 50);
+    else if (currentTimeSignature == 4 && stepBase == 2) dynamicBassTrigger = (getRandom(0, 100) < 30);
     if (dynamicBassTrigger) {
         if (lastDroneNotes[matrixIdx] > 0) {
             midiMsg(0x80 | (activeBassChannel - 1), lastDroneNotes[matrixIdx], 0);
         }
         uint8_t targetBassNote = 0;
         if (bassMelodyInherit && activeMelodyBaseNote > 0) {
-            uint8_t voiceLeadRoll = random(0, 100);
+            uint8_t voiceLeadRoll = getRandom(0, 100);
             if (voiceLeadRoll < 60) targetBassNote = activeMelodyBaseNote - 24;
             else if (voiceLeadRoll < 85) targetBassNote = activeMelodyBaseNote - 17;
             else targetBassNote = activeMelodyBaseNote - 12;
@@ -408,17 +409,17 @@ ALWAYS INLINE void processBassEngine(uint8_t stepBase) {
             else if (currentArtistStyle == 2) rawNote = scaleMajor[currentChordIndex][0];
             else if (currentArtistStyle == 3) rawNote = scaleAbstract[currentChordIndex][0];
             else if (currentArtistStyle == 4) rawNote = scaleAeolian[currentChordIndex][0];
-            if (random(0, 100) < 25) rawNote = scaleMinor[currentChordIndex][1];
+            if (getRandom(0, 100) < 25) rawNote = scaleMinor[currentChordIndex][1];
             targetBassNote = CLAMP(rawNote + globalKeyTransposition - 36, 12, 90);
         }
-        if (longBarCounter % 2 == 0 && stepBase > 0 && random(0, 100) < 35) {
+        if (longBarCounter % 2 == 0 && stepBase > 0 && getRandom(0, 100) < 35) {
             targetBassNote += 12;
         }
         uint8_t bassVelocity = (bassMelodyInherit) ? 58 : 42;
-        if (stepBase == 0) bassVelocity += random(5, 12);
+        if (stepBase == 0) bassVelocity += getRandom(5, 12);
         lastDroneNotes[matrixIdx] = targetBassNote;
         midiMsg(0x90 | (activeBassChannel - 1), lastDroneNotes[matrixIdx], bassVelocity);
-        uint8_t bassFilterAccent = 40 + (stepBase * 10) + random(0, 15);
+        uint8_t bassFilterAccent = 40 + (stepBase * 10) + getRandom(0, 15);
         midiMsg(0xB0 | (activeBassChannel - 1), 83, CLAMP(bassFilterAccent, 20, 110));
     }
 }
@@ -434,7 +435,7 @@ ALWAYS INLINE void processMelodicEngine(uint8_t stepBase, uint8_t stepQuad, uint
         else if (goaMotiveChance == 3) actualGoaPercent = 50;
         else if (goaMotiveChance == 4) actualGoaPercent = 85;
 
-        bool triggerGoaMotive = (random(0, 100) < actualGoaPercent);
+        bool triggerGoaMotive = (getRandom(0, 100) < actualGoaPercent);
         uint8_t dynamicTriggerChance = dynamicArpChance;
 
         if (currentMelodyStyle == 2)      dynamicTriggerChance = dynamicArpChance + 15;
@@ -448,7 +449,7 @@ ALWAYS INLINE void processMelodicEngine(uint8_t stepBase, uint8_t stepQuad, uint
             dynamicTriggerChance = (stepBase != 0) ? 0 : 95;
         }
 
-        if (random(0, 100) < dynamicTriggerChance) {
+        if (getRandom(0, 100) < dynamicTriggerChance) {
             if (lastArpNotes[synthIdx] > 0) {
                 midiMsg(0x80 | (activeSynthChannel - 1), lastArpNotes[synthIdx], 0);
                 lastArpNotes[synthIdx] = 0;
@@ -456,22 +457,22 @@ ALWAYS INLINE void processMelodicEngine(uint8_t stepBase, uint8_t stepQuad, uint
             }
 
             if (triggerGoaMotive) {
-                lastScalePositionIndex = (stepBase % 2 == 0) ? 0 : random(0, 7);
+                lastScalePositionIndex = (stepBase % 2 == 0) ? 0 : getRandom(0, 7);
             } else {
                 bool phraseTailResolution = (stepQuad >= (quadBar - beatsPerBar));
-                if (phraseTailResolution && random(0, 100) < 75) {
+                if (phraseTailResolution && getRandom(0, 100) < 75) {
                     uint8_t stableNotes[3] = {0, 2, 4};
-                    lastScalePositionIndex = stableNotes[random(0, 3)];
+                    lastScalePositionIndex = stableNotes[getRandom(0, 3)];
                 } else {
                     if (currentMelodyStyle == 0) {
-                        if (random(0, 100) < 20) melodyDirection *= -1;
+                        if (getRandom(0, 100) < 20) melodyDirection *= -1;
                         int8_t proposedIndex = lastScalePositionIndex + melodyDirection;
                         if (proposedIndex < 0) { proposedIndex = 1; melodyDirection = 1; }
                         if (proposedIndex > 6) { proposedIndex = 5; melodyDirection = -1; }
                         lastScalePositionIndex = (uint8_t)proposedIndex;
                     }
                     else if (currentMelodyStyle == 1) {
-                        lastScalePositionIndex = (lastScalePositionIndex <= 2) ? random(4, 7) : random(0, 3);
+                        lastScalePositionIndex = (lastScalePositionIndex <= 2) ? getRandom(4, 7) : getRandom(0, 3);
                     }
                     else if (currentMelodyStyle == 2) {
                         lastScalePositionIndex = (tickCount % 2 == 0) ? 2 : 4;
@@ -505,17 +506,17 @@ ALWAYS INLINE void processMelodicEngine(uint8_t stepBase, uint8_t stepQuad, uint
             }
 
             uint8_t targetMidiNote = CLAMP(baseNote + octaveShift, 24, 127);
-            uint8_t expressiveVelocity = 55 + (stepBase * 3) + random(0, 12);
+            uint8_t expressiveVelocity = 55 + (stepBase * 3) + getRandom(0, 12);
             if (triggerGoaMotive)        expressiveVelocity += 25;
             if (currentMelodyStyle == 3) expressiveVelocity = 45;
 
             if (currentMelodyStyle == 3) {
-                midiMsg(0xB0 | (activeSynthChannel - 1), 72, random(80, 115));
+                midiMsg(0xB0 | (activeSynthChannel - 1), 72, getRandom(80, 115));
             } else if (stepBase == 0) {
                 midiMsg(0xB0 | (activeSynthChannel - 1), 72, 55);
             }
 
-            uint8_t synthPan = 64 + random(-activePanIntensity, activePanIntensity + 1);
+            uint8_t synthPan = 64 + getRandom(-activePanIntensity, activePanIntensity + 1);
             midiMsg(0xB0 | (activeSynthChannel - 1), 10, CLAMP(synthPan, 10, 118));
 
             midiMsg(0x90 | (activeSynthChannel - 1), targetMidiNote, expressiveVelocity);
@@ -563,12 +564,12 @@ ALWAYS INLINE void runPsybientEngine() {
         processMicroEvolution();
 
         if (longBarCounter % 16 == 0) {
-            bassMelodyInherit = (random(0, 100) < 30);
-            currentMelodyStyle = random(0, 4);
+            bassMelodyInherit = (getRandom(0, 100) < 30);
+            currentMelodyStyle = getRandom(0, 4);
         }
 
         if (longBarCounter % 32 == 0) {
-            uint8_t keyRoll = random(0, 100);
+            uint8_t keyRoll = getRandom(0, 100);
             if (keyRoll < 50)       globalKeyTransposition = 0;
             else if (keyRoll < 75)  globalKeyTransposition = 5;
             else                    globalKeyTransposition = 7;
@@ -577,7 +578,7 @@ ALWAYS INLINE void runPsybientEngine() {
 
     // --- MARKOV GENERATOR STEP ---
     if (stepQuad == 0) {
-        uint8_t roll = random(0, 100); uint8_t sum = 0;
+        uint8_t roll = getRandom(0, 100); uint8_t sum = 0;
         for (uint8_t target = 0; target < currentTimeSignature; target++) {
             sum += markovMatrix[currentChordIndex][target];
             if (roll <= sum) { currentChordIndex = target; break; }
@@ -612,24 +613,24 @@ int _start(int argc, char** argv, MicroDosAPI* api) {
         lastDroneNotes[i] = 0;
     }
 
-    api->serialOpen(31250, -1, -1);;
-    api->clear();
-    api->color(MAGENTA);
-    api->printAt(5, 1, STRING("bpm"));
-    api->printAt(5, 2, STRING("pattern"));
-    api->printAt(5, 3, STRING("style"));
-    api->printAt(5, 4, STRING("synth"));
-    api->printAt(5, 5, STRING("bass"));
-    api->printAt(5, 6, STRING("drum"));
-    api->printAt(5, 7, STRING("hats"));
-    api->printAt(5, 8, STRING("bar"));
+    serialOpen(31250, -1, -1);;
+    termClear();
+    setColor(MAGENTA);
+    termPrintAt(5, 1, STRING("bpm"));
+    termPrintAt(5, 2, STRING("pattern"));
+    termPrintAt(5, 3, STRING("style"));
+    termPrintAt(5, 4, STRING("synth"));
+    termPrintAt(5, 5, STRING("bass"));
+    termPrintAt(5, 6, STRING("drum"));
+    termPrintAt(5, 7, STRING("hats"));
+    termPrintAt(5, 8, STRING("bar"));
     transitionToNextArtist();
-    while (api->inkey() != '\x13') {
+    while (getKey() != '\x13') {
         runPsybientEngine();
-        api->delay(stepIntervalMs);
+        delayMs(stepIntervalMs);
     }
     silenceAllChannels();
-    api->clear();
+    termClear();
     return 0;
 }
 
