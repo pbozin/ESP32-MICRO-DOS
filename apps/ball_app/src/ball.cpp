@@ -77,12 +77,13 @@ ALWAYS INLINE void generateProceduralSphere(float radius) {
 
 extern "C" int _start(int argc, char** argv, MicroDosAPI* api) {
     _global_api_ptr = api;
-    if (!api || !api->initGameMatrix()) return -1;
+    if (!api) return -1;
+    if (!initGameMatrix()) return -1;
 
-    api->setFKeys(STRING(" ZOOM-"), STRING(" ZOOM+"), STRING("      "), STRING("      "), STRING(" QUIT "));
+    setFKeys(STRING(" ZOOM-"), STRING(" ZOOM+"), STRING("      "), STRING("      "), STRING(" QUIT "));
 
-    float screenWidth  = (float)api->termWidth;
-    float screenHeight = (float)api->termHeight;
+    float screenWidth  = (float)getTermWidth();
+    float screenHeight = (float)getTermHeight();
 
     float radiusLimit  = screenWidth * 0.25f;
 
@@ -103,7 +104,7 @@ extern "C" int _start(int argc, char** argv, MicroDosAPI* api) {
     bool running = true;
 
     while (running) {
-        int key = api->inkey();
+        int key = getKey();
         if (key == '\x15' || key == 'Q' || key == 'q') break;
 
         if (key == '\x11') {
@@ -147,7 +148,7 @@ extern "C" int _start(int argc, char** argv, MicroDosAPI* api) {
             screenWidth, screenHeight
         );
 
-        api->rect(0, 0, api->termWidth, api->termHeight, BLACK);
+        drawRect(0, 0, getTermWidth(), getTermHeight(), BLACK);
 
         int offsetX = (int)ballX - (int)(screenWidth * 0.5f);
         int offsetY = (int)ballY - (int)(screenHeight * 0.5f);
@@ -157,16 +158,16 @@ extern "C" int _start(int argc, char** argv, MicroDosAPI* api) {
             uint16_t p2 = db.sphereEdges[i].p2;
             int strokeColor = (p1 % 2 == 0) ? RED : WHITE;
 
-            api->line(db.projectedPoints[p1].x + offsetX, db.projectedPoints[p1].y + offsetY,
+            drawLine(db.projectedPoints[p1].x + offsetX, db.projectedPoints[p1].y + offsetY,
                       db.projectedPoints[p2].x + offsetX, db.projectedPoints[p2].y + offsetY,
                       strokeColor);
         }
 
-        api->flushGameMatrix();
-        api->delay(16);
+        flushGameMatrix();
+        delayMs(16);
     }
 
-    api->clearFKeys();
-    api->closeGameMatrix();
+    clearFKeys();
+    closeGameMatrix();
     return 0;
 }

@@ -1,4 +1,5 @@
 #include "microdos_api.h"
+#include "microdos_util.h"
 
 NEW_STRING(ollama_server, "192.168.0.131");
 NEW_STRING(ollama_model,  "qwen2.5-theory-24k:3b");
@@ -9,33 +10,33 @@ int _start(int argc, char** argv, MicroDosAPI* api) {
     static char promptBuffer[128];
 
     delayMs(100);
-    println(STRING("CONNECTING..."));
+    termPrintln(STRING("CONNECTING..."));
 
-    if (api->wifiUp(STRING("SSID"), STRING("PASS")) != 0) {
+    if (wifiUp(STRING("SSID"), STRING("PASS")) != 0) {
         setColor(RED);
-        println(STRING("ERR: WI-FI PROVISIONING FAILED."));
+        termPrintln(STRING("ERR: WI-FI PROVISIONING FAILED."));
         setColor(GREEN);
         return -1;
     }
 
     delayMs(500);
     int chatting = 1;
-    clearScreen();
+    termClear();
 
     setColor(YELLOW);
-    print(STRING("  --[ "));
-    if (api->termWidth < 320) {
-        print(ollama_model);
+    termPrint(STRING("  --[ "));
+    if (getTermWidth() < 320) {
+        termPrint(ollama_model);
     } else {
-        print(ollama_model);
-        print(STRING(" ]--[ "));
-        print(ollama_server);
+        termPrint(ollama_model);
+        termPrint(STRING(" ]--[ "));
+        termPrint(ollama_server);
     }
-    println(STRING(" ]--"));
+    termPrintln(STRING(" ]--"));
 
     while (chatting) {
         setColor(GREEN);
-        api->inputStr(STRING("YOU> "), promptBuffer, sizeof(promptBuffer));
+        inputStr(STRING("YOU> "), promptBuffer, sizeof(promptBuffer));
 
         if (strcmp(promptBuffer, STRING("QUIT")) == 0 || strcmp(promptBuffer, STRING("BYE")) == 0) {
             chatting = 0;
@@ -47,9 +48,9 @@ int _start(int argc, char** argv, MicroDosAPI* api) {
         if (len == 0) continue;
 
         setColor(CYAN);
-        print(STRING("AI> "));
+        termPrint(STRING("AI> "));
 
-        int status = api->ollamaStream(
+        int status = ollamaStream(
             promptBuffer,
             ollama_server,
             ollama_model,
@@ -59,12 +60,12 @@ int _start(int argc, char** argv, MicroDosAPI* api) {
 
         if (status != 0) {
             setColor(RED);
-            println(STRING("ERR: SERVER OFFLINE"));
+            termPrintln(STRING("ERR: SERVER OFFLINE"));
         }
-        println(STRING(""));
+        termPrintln(STRING(""));
     }
 
-    api->wifiDown();
+    wifiDown();
     setColor(GREEN);
     return 0;
 }

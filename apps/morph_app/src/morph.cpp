@@ -39,17 +39,18 @@ static const Edge3D wireframeTopology[12] = {
 
 int _start(int argc, char** argv, MicroDosAPI* api) {
     _global_api_ptr = api;
-    if (!api || !api->initGameMatrix()) return -1;
+    if (!api) return -1;
+    if (!initGameMatrix()) return -1;
 
-    api->clear();
-    api->setFKeys(STRING("ZOOM-"), STRING("ZOOM+"), STRING("      "), STRING("      "), STRING(" QUIT "));
+    termClear();
+    setFKeys(STRING("ZOOM-"), STRING("ZOOM+"), STRING("      "), STRING("      "), STRING(" QUIT "));
 
     float angleX = 0.0f, angleY = 0.0f, angleZ = 0.0f;
     float currentGlobalState = 0.0f;
     bool cyclingForward = true;
 
-    float screenWidth = (float)api->termWidth;
-    float screenHeight = (float)api->termHeight;
+    float screenWidth = (float)getTermWidth();
+    float screenHeight = (float)getTermHeight();
     float minDimension = (screenWidth < screenHeight) ? screenWidth : screenHeight;
     
     float scaleFactor = minDimension * 0.25f;
@@ -59,7 +60,7 @@ int _start(int argc, char** argv, MicroDosAPI* api) {
     bool running = true;
 
     while (running) {
-        int key = api->inkey();
+        int key = getKey();
         if (key == '\x15' || key == 'Q' || key == 'q') break;
         
         if (key == '\x11') scaleFactor -= 10.0f;
@@ -68,12 +69,12 @@ int _start(int argc, char** argv, MicroDosAPI* api) {
         if (cyclingForward) {
             currentGlobalState += 0.01f;
             if (currentGlobalState >= 2.0f) {
-                currentGlobalState = 2.0f; cyclingForward = false; api->delay(800);
+                currentGlobalState = 2.0f; cyclingForward = false; delayMs(800);
             }
         } else {
             currentGlobalState -= 0.01f;
             if (currentGlobalState <= 0.0f) {
-                currentGlobalState = 0.0f; cyclingForward = true; api->delay(800);
+                currentGlobalState = 0.0f; cyclingForward = true; delayMs(800);
             }
         }
 
@@ -86,7 +87,7 @@ int _start(int argc, char** argv, MicroDosAPI* api) {
             screenWidth, screenHeight
         );
 
-        api->rect(0, 0, api->termWidth, api->termHeight, BLACK);
+        drawRect(0, 0, getTermWidth(), getTermHeight(), BLACK);
 
         int strokeColor = CYAN;
         if (currentGlobalState > 1.0f)     strokeColor = GREEN;
@@ -95,21 +96,21 @@ int _start(int argc, char** argv, MicroDosAPI* api) {
         for (int i = 0; i < 12; i++) {
             uint8_t a = wireframeTopology[i].p1;
             uint8_t b = wireframeTopology[i].p2;
-            api->line(displayCoordinates[a].x, displayCoordinates[a].y,
+            drawLine(displayCoordinates[a].x, displayCoordinates[a].y,
                       displayCoordinates[b].x, displayCoordinates[b].y,
                       strokeColor);
         }
 
-        api->flushGameMatrix();
+        flushGameMatrix();
         
         angleX += 0.02f;
         angleY += 0.03f;
         angleZ += 0.01f;
         
-        api->delay(20);
+        delayMs(20);
     }
 
-    api->clearFKeys();
-    api->closeGameMatrix();
+    clearFKeys();
+    closeGameMatrix();
     return 0;
 }

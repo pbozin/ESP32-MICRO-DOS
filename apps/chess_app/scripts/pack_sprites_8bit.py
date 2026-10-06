@@ -1,1 +1,0 @@
-../../../api/pack_sprites_8bit.py
