@@ -5,36 +5,37 @@
 #include <HTTPClient.h>
 #include <FS.h>
 #include <TJpg_Decoder.h>
-#include <string.h>
+//#include <string.h>
 
 #define KEY_REPEAT_DELAY 300
+#define KEY_FRAME_TIME 33
 
 #define COLOR_DEPTH 4
 #define COMPRESSED_4BIT_SIZE 400
 
-#define MAX_LINE_LEN 80
+#define SYSTEM_RAM_SIZE 256
+#define CONTEXT_BUF_SIZE 2048
 
 #define MAX_VAR_NAME_LEN 12
-#define MAX_STR_LEN  50
+#define MAX_STR_LEN 50
 
 #define MAX_STACK_DEPTH 12
 #define MAX_FOR_NEST 4
 
-#define SYSTEM_RAM_SIZE 256
-#define CONTEXT_BUF_SIZE 2048
-
-#define CURSOR_SIZE 2
 #define FILENAME_SIZE 20
-#define PROMPT_SIZE 40
+#define PROMPT_SIZE 50
+#define CURSOR_SIZE 2
 
-#define KEY_ROWS   4
-#define KEY_COLS   10
+#define KEY_ROWS 4
+#define KEY_COLS 10
 
-#define CHAR_WIDTH  6
+#define CHAR_WIDTH 6
 #define CHAR_HEIGHT 16
 
-#define F_KEY_LABEL_SIZE 7
+#define MAX_LINE_LEN 100
 
+
+#define F_KEY_LABEL_SIZE 7
 #define TKN_F1 '\x11'
 #define TKN_F2 '\x12'
 #define TKN_F3 '\x13'
@@ -1136,7 +1137,7 @@ char getKeyPress(bool blocking) {
   unsigned long startTime = millis();
   uint16_t touchX = 0, touchY = 0;
   char pressedKey = 0;
-  int maxDelay = 50;
+  int maxDelay = KEY_FRAME_TIME;
 
   if (tft.getTouch(&touchX, &touchY)) {
 
