@@ -65,80 +65,6 @@ WEAK void reverse_str(char* str, int len) {
     }
 }
 
-WEAK void ftoa(float value, char* buffer, int buf_size, int precision) {
-    if (buf_size <= 0 || !buffer) return;
-
-    int idx = 0;
-
-    uint32_t u;
-    memcpy(&u, &value, 4);
-    if ((u & 0x7F800000) == 0x7F800000) {
-        const char* special ALIGNED = (u & 0x007FFFFF) ? "NaN" : "Inf";
-        if ((u & 0x80000000) && !(u & 0x007FFFFF)) {
-            if (idx < buf_size - 1) buffer[idx++] = '-';
-        }
-        while (*special && idx < buf_size - 1) {
-            buffer[idx++] = *special++;
-        }
-        buffer[idx] = '\0';
-        return;
-    }
-
-    if (value < 0.0f) {
-        if (idx < buf_size - 1) buffer[idx++] = '-';
-        value = -value;
-    }
-
-    uint32_t int_part = (uint32_t)value;
-
-    float diff = value - (float)int_part;
-    uint64_t frac_part = 0;
-
-    if (precision > 0) {
-        float scale = 1.0f;
-        for (int i = 0; i < precision; i++) scale *= 10.0f;
-
-        frac_part = (uint64_t)(diff * scale + 0.5f);
-
-        if (frac_part >= (uint64_t)scale) {
-            frac_part = 0;
-            int_part++;
-        }
-    }
-
-    int int_start = idx;
-    if (int_part == 0) {
-        if (idx < buf_size - 1) buffer[idx++] = '0';
-    } else {
-        while (int_part > 0 && idx < buf_size - 1) {
-            buffer[idx++] = (char)('0' + (int_part % 10));
-            int_part /= 10;
-        }
-    }
-    reverse_str(&buffer[int_start], idx - int_start);
-
-    if (precision > 0 && idx < buf_size - 1) {
-        buffer[idx++] = '.';
-
-        int frac_start = idx;
-        for (int i = 0; i < precision && idx < buf_size - 1; i++) {
-            buffer[idx++] = (char)('0' + (frac_part % 10));
-            frac_part /= 10;
-        }
-        reverse_str(&buffer[frac_start], idx - frac_start);
-    }
-
-    buffer[idx < buf_size ? idx : buf_size - 1] = '\0';
-
-    while ((idx % 4) != 0) {
-        if (idx < buf_size) {
-            buffer[idx++] = '\0';
-        } else {
-            break; 
-        }
-    }
-}
-
 WEAK void itoa(uint32_t val, char* buf) {
     int i = 0;
     if (val == 0) { buf[i++] = '0'; buf[i] = '\0'; return; }
@@ -151,12 +77,14 @@ WEAK void itoa(uint32_t val, char* buf) {
     buf[i] = '\0';
 }
 
-WEAK int strcmp(const char* s1, const char* s2) {
-    while (*s1 && (*s1 == *s2)) {
-        s1++;
-        s2++;
+WEAK unsigned int strlen(const char* str) {
+    if (str[0] == '\0') return 0;
+
+    const char* s = str;
+    while (*s) {
+        s++;
     }
-    return *(const unsigned char*)s1 - *(const unsigned char*)s2;
+    return (unsigned int)(s - str);
 }
 
 WEAK void* memset(void* dest, int value, unsigned int count) {
@@ -178,6 +106,14 @@ WEAK void* memset(void* dest, int value, unsigned int count) {
     return dest;
 }
 
+WEAK int strcmp(const char* s1, const char* s2) {
+    while (*s1 && (*s1 == *s2)) {
+        s1++;
+        s2++;
+    }
+    return *(const unsigned char*)s1 - *(const unsigned char*)s2;
+}
+
 WEAK void* malloc(unsigned int size) {
   if (_global_api_ptr && _global_api_ptr->malloc) {
     return _global_api_ptr->malloc(size);
@@ -189,6 +125,53 @@ WEAK void free(void* ptr) {
   if (ptr && _global_api_ptr && _global_api_ptr->free) {
     _global_api_ptr->free(ptr);
   }
+}
+
+ALWAYS INLINE void ftoa(float in, char* out, int outLen, int precision) {
+    if (in < 0.0f) {
+        out[0] = '-';
+        ftoa(-in, out + 1, outLen - 1, precision);
+        return;
+    }
+
+    char left[8];
+    char right[8];
+    char temp[16];
+
+    int lRes = (int)in;
+    itoa(lRes, left);
+
+    if (precision <= 0) {
+        memcpy(out, left, strlen(left) + 1);
+        return;
+    }
+
+    int power = 1;
+    for (int i = 0; i < precision; ++i) power *= 10;
+
+    float rTemp = (in - (float)lRes) * (float)power;
+    int rRes = (int)(rTemp + 0.5f);
+
+    if (rRes >= power) {
+        rRes = 0;
+        lRes += 1;
+        itoa(lRes, left);
+    }
+
+    itoa(rRes, right);
+
+    char padded_right[8];
+    int right_len = strlen(right);
+    int missing_zeros = precision - right_len;
+
+    int p_idx = 0;
+    while (missing_zeros > 0 && p_idx < missing_zeros) {
+        padded_right[p_idx++] = '0';
+    }
+    memcpy(padded_right + p_idx, right, right_len + 1);
+
+    concat(left, (char*)STRING("."), temp);
+    concat(temp, padded_right, out);
 }
 
 #ifdef __cplusplus

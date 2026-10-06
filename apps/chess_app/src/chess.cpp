@@ -4,17 +4,17 @@
 #define UNDO_DEPTH 6
 #define ABS(x) ((x) < 0 ? -(x) : (x))
 
-static uint32_t whiteCastleKingsSide  __attribute__((aligned(4))) = 1;
-static uint32_t whiteCastleQueensSide __attribute__((aligned(4))) = 1;
-static uint32_t blackCastleKingsSide  __attribute__((aligned(4))) = 1;
-static uint32_t blackCastleQueensSide __attribute__((aligned(4))) = 1;
-static int32_t bufLen __attribute__((aligned(4))) = 6;
-static int32_t undoHead __attribute__((aligned(4))) = 0;
-static int32_t undoCount __attribute__((aligned(4))) = 0;
-static uint32_t humanIsWhite __attribute__((aligned(4))) = 1;
+static uint32_t whiteCastleKingsSide  = 1;
+static uint32_t whiteCastleQueensSide = 1;
+static uint32_t blackCastleKingsSide  = 1;
+static uint32_t blackCastleQueensSide = 1;
+static int32_t bufLen = 6;
+static int32_t undoHead = 0;
+static int32_t undoCount = 0;
+static uint32_t humanIsWhite = 1;
 
-static int32_t b[68] __attribute__((aligned(4)));
-static int32_t undoHistory[UNDO_DEPTH][68] __attribute__((aligned(4)));
+static int32_t b[68] ALIGNED;
+static int32_t undoHistory[UNDO_DEPTH][68] ALIGNED;
 
 static bool isKingUnderAttack(bool isWhiteKing);
 
@@ -267,7 +267,7 @@ INLINE ALWAYS bool executeToledoMove(const char* moveStr) {
     return true;
 }
 
-static const int32_t pieceWeights[] __attribute__((aligned(4))) = {
+static const int32_t pieceWeights[] ALIGNED = {
     0, 100, 100, 100, 100, 100, 100, 100, 100,
     300, 300, 300, 300, 500, 500, 900, 9999
 };
@@ -333,7 +333,7 @@ INLINE ALWAYS bool isSquareDefendedByEnemy(int32_t targetIdx, bool aiIsWhite) {
     return false;
 }
 
-INLINE ALWAYS void aiThinkAndRespond(MicroDosAPI* api) {
+INLINE ALWAYS void aiThinkAndRespond() {
     int32_t bestMoveFrom = 0;
     int32_t bestMoveTo   = 0;
     bool aiIsWhite   = (humanIsWhite == 0);
@@ -395,7 +395,7 @@ INLINE ALWAYS void aiThinkAndRespond(MicroDosAPI* api) {
         int32_t tRow = (bestMoveTo - 1) / 8;
         int32_t tCol = (bestMoveTo - 1) % 8;
 
-	char cpuMove[8] __attribute__((aligned(4)));
+	char cpuMove[8];
         cpuMove[0] = (char)('A' + fCol);
         cpuMove[1] = (char)('8' - fRow);
         cpuMove[2] = (char)('A' + tCol);
@@ -420,10 +420,10 @@ INLINE void handlePawnPromotion() {
     }
 }
 
-static uint32_t pieceSprites[36] __attribute__((aligned(4)));
+static uint32_t pieceSprites[36] ALIGNED;
 
-INLINE ALWAYS void refreshBoard(MicroDosAPI* api) {
-    int fSize = api->termWidth / 8;
+INLINE ALWAYS void refreshBoard() {
+    int fSize = getTermWidth() / 8;
     for (int32_t r = 0; r < 8; r++) {
         for (int32_t c = 0; c < 8; c++) {
             int32_t boardIdx = (r * 8) + c + 1;
@@ -433,39 +433,39 @@ INLINE ALWAYS void refreshBoard(MicroDosAPI* api) {
                   int32_t spriteIdx = (pieceVal > 0) ? pieceVal : (-pieceVal + 16);
                   uint32_t handle = pieceSprites[spriteIdx];
                   if (handle != 0) {
-                    api->drawSprite(handle, c * fSize, r * fSize);
+                    drawSprite(handle, c * fSize, r * fSize);
                   }
             }
         }
     }
 }
 
-INLINE ALWAYS void executeMove(const char* moveStr, MicroDosAPI* api) {
+INLINE ALWAYS void executeMove(const char* moveStr) {
     if (executeToledoMove(moveStr)) {
       handlePawnPromotion();
-      refreshBoard(api);
+      refreshBoard();
       delayMs(200);
 
       if (countLegalMoves(humanIsWhite == 0) == 0) {
         if (isKingUnderAttack(humanIsWhite == 0)) {
-          api->setFKeys(STRING(" NEW  "), STRING(" UNDO "), STRING(" FLIP "), STRING("YOUWIN"), STRING(" QUIT "));
+          setFKeys(STRING(" NEW  "), STRING(" UNDO "), STRING(" FLIP "), STRING("YOUWIN"), STRING(" QUIT "));
         } else {
-          api->setFKeys(STRING(" NEW  "), STRING(" UNDO "), STRING(" FLIP "), STRING("DRAW!!"), STRING(" QUIT "));
+          setFKeys(STRING(" NEW  "), STRING(" UNDO "), STRING(" FLIP "), STRING("DRAW!!"), STRING(" QUIT "));
         }
         delayMs(2000);
         return;
       }
 
-      aiThinkAndRespond(api);
+      aiThinkAndRespond();
       handlePawnPromotion();
-      refreshBoard(api);
+      refreshBoard();
       delayMs(200);
 
       if (countLegalMoves(humanIsWhite != 0) == 0) {
         if (isKingUnderAttack(humanIsWhite != 0)) {
-          api->setFKeys(STRING(" NEW  "), STRING(" UNDO "), STRING(" FLIP "), STRING("DEFEAT"), STRING(" QUIT "));
+          setFKeys(STRING(" NEW  "), STRING(" UNDO "), STRING(" FLIP "), STRING("DEFEAT"), STRING(" QUIT "));
         } else {
-          api->setFKeys(STRING(" NEW  "), STRING(" UNDO "), STRING(" FLIP "), STRING("DRAW!!"), STRING(" QUIT "));
+          setFKeys(STRING(" NEW  "), STRING(" UNDO "), STRING(" FLIP "), STRING("DRAW!!"), STRING(" QUIT "));
         }
         delayMs(2000);
         return;
@@ -473,27 +473,27 @@ INLINE ALWAYS void executeMove(const char* moveStr, MicroDosAPI* api) {
     } else {
       undoHead = (undoHead - 1 + UNDO_DEPTH) % UNDO_DEPTH;
       if (undoCount > 0) undoCount--;
-      refreshBoard(api);
+      refreshBoard();
     }
 
-    api->setFKeys(STRING(" NEW  "), STRING(" UNDO "), STRING(" FLIP "), STRING("      "), STRING(" QUIT "));
+    setFKeys(STRING(" NEW  "), STRING(" UNDO "), STRING(" FLIP "), STRING("      "), STRING(" QUIT "));
 }
 
-INLINE ALWAYS void drawBoard(MicroDosAPI* api) {
-    int fSize = api->termWidth / 8;
+INLINE ALWAYS void drawBoard() {
+    int fSize = getTermWidth() / 8;
     for (int32_t r = 0; r < 8; r++) {
         for (int32_t c = 0; c < 8; c++) {
             int32_t colorId = -1;
             colorId = ((r + c) % 2 == 0) ? 15 : 2;
-            api->rect(c * fSize, r * fSize, fSize, fSize, colorId);
+            drawRect(c * fSize, r * fSize, fSize, fSize, colorId);
         }
     }
-    api->flushGameMatrix();
+    flushGameMatrix();
 }
 
 INLINE ALWAYS void initToledoBoard() {
-    static const int32_t initialLayout[] __attribute__((aligned(4))) = {13, 9, 11, 15, 16, 12, 10, 14};
-    static const int32_t initialLayoutF[] __attribute__((aligned(4))) = {13, 9, 11, 16, 15, 12, 10, 14};
+    static const int32_t initialLayout[] ALIGNED = {13, 9, 11, 15, 16, 12, 10, 14};
+    static const int32_t initialLayoutF[] ALIGNED = {13, 9, 11, 16, 15, 12, 10, 14};
 
     for (int32_t i = 0; i < 68; i++) b[i] = 0;
 
@@ -536,8 +536,8 @@ INLINE ALWAYS void clearUndoHistory() {
     undoCount = 0;
 }
 
-INLINE ALWAYS void cacheAllChessSprites(MicroDosAPI* api) {
-    int fSize = api->termWidth/8;
+INLINE ALWAYS void cacheAllChessSprites() {
+    int fSize = getTermWidth() / 8;
 
     const char* chessSpriteFiles[12] = {
         STRING("Chess_plt"), // 0: Pawn
@@ -588,7 +588,7 @@ INLINE ALWAYS void cacheAllChessSprites(MicroDosAPI* api) {
             concat(tempPath, numBuf, sFilename);                       // "CHESS.DAT/Chess_xxx64"
             concat(sFilename, ".spr", tempPath);                       // "CHESS.DAT/Chess_xxx64.spr"
 
-            pieceSprites[i] = api->createSprite(tempPath, fSize);
+            pieceSprites[i] = createSprite(tempPath, fSize);
         }
     }
 }
@@ -596,26 +596,27 @@ INLINE ALWAYS void cacheAllChessSprites(MicroDosAPI* api) {
 extern "C" int _start(int argc, char** argv, MicroDosAPI* api) {
     _global_api_ptr = api;
     if (!api) return -1;
-    if (!api->initGameMatrix()) return -1;
-    int fSize = api->termWidth / 8;
+    if (!initGameMatrix()) return -1;
 
-    api->clear();
-    api->setFKeys(STRING(" NEW  "), STRING(" UNDO "), STRING(" FLIP "), STRING("      "), STRING(" QUIT "));
-    cacheAllChessSprites(api);
+    int fSize = getTermWidth() / 8;
+
+    termClear();
+    setFKeys(STRING(" NEW  "), STRING(" UNDO "), STRING(" FLIP "), STRING("      "), STRING(" QUIT "));
+    cacheAllChessSprites();
     initToledoBoard();
-    drawBoard(api);
-    refreshBoard(api);
+    drawBoard();
+    refreshBoard();
 
     int32_t selectX = -1, selectY = -1;
     bool running = true;
     bool playerTurn = true;
 
-    static char moveStr[8] __attribute__((aligned(4))) = "";
-    static char textBuf[8] __attribute__((aligned(4))) = "      ";
-    static char blankBuf[8] __attribute__((aligned(4))) = "      ";
+    static char moveStr[8] ALIGNED = "";
+    static char textBuf[8] ALIGNED = "      ";
+    static char blankBuf[8] ALIGNED = "      ";
 
     while (running) {
-        int32_t key = api->inkey();
+        int32_t key = getKey();
         // QUIT
         if (key == '\x15' || key == 'Q' || key == 'q') {
             running = false;
@@ -625,7 +626,7 @@ extern "C" int _start(int argc, char** argv, MicroDosAPI* api) {
         if (key == '\x12' || key == 'U' || key == 'u') {
             if (executeUndo()) {
                 selectX = -1; selectY = -1;
-                refreshBoard(api);
+                refreshBoard();
                 delayMs(300);
             }
             continue;
@@ -639,12 +640,12 @@ extern "C" int _start(int argc, char** argv, MicroDosAPI* api) {
             clearUndoHistory();
             memcpy(textBuf, blankBuf, sizeof(blankBuf));
             bufLen = 6;
-            api->setFKeys(STRING(" NEW  "), STRING(" UNDO "), STRING(" FLIP "), STRING("      "), STRING(" QUIT "));
-            drawBoard(api);
+            setFKeys(STRING(" NEW  "), STRING(" UNDO "), STRING(" FLIP "), STRING("      "), STRING(" QUIT "));
+            drawBoard();
             for (int32_t i = 1; i <= 32; i++) {
               if (pieceSprites[i] != 0) { *(bool*)pieceSprites[i] = false; }
             }
-            refreshBoard(api);
+            refreshBoard();
             delayMs(300);
             continue;
         }
@@ -659,18 +660,18 @@ extern "C" int _start(int argc, char** argv, MicroDosAPI* api) {
             initToledoBoard();
             clearUndoHistory();
             playerTurn = true;
-            drawBoard(api);
-            refreshBoard(api);
+            drawBoard();
+            refreshBoard();
 
             memcpy(textBuf, blankBuf, sizeof(blankBuf));
             bufLen = 6;
-            api->setFKeys(STRING(" NEW  "), STRING(" UNDO "), STRING(" FLIP "), textBuf, STRING(" QUIT "));
+            setFKeys(STRING(" NEW  "), STRING(" UNDO "), STRING(" FLIP "), textBuf, STRING(" QUIT "));
 
             if (humanIsWhite == 0) {
                 saveUndoState();
                 playerTurn = false;
-                aiThinkAndRespond(api);
-                refreshBoard(api);
+                aiThinkAndRespond();
+                refreshBoard();
                 playerTurn = true;
             }
 
@@ -685,7 +686,7 @@ extern "C" int _start(int argc, char** argv, MicroDosAPI* api) {
                     memcpy(textBuf, blankBuf, sizeof(blankBuf));
                     bufLen = 6;
                 }
-                api->setFKeys(STRING(" NEW  "), STRING(" UNDO "), STRING(" FLIP "), textBuf, STRING(" QUIT "));
+                setFKeys(STRING(" NEW  "), STRING(" UNDO "), STRING(" FLIP "), textBuf, STRING(" QUIT "));
             }
             delayMs(200);
             continue;
@@ -702,7 +703,7 @@ extern "C" int _start(int argc, char** argv, MicroDosAPI* api) {
                 saveUndoState();
                 memcpy(textBuf, blankBuf, sizeof(blankBuf));
                 bufLen = 6;
-                executeMove(moveStr, api);
+                executeMove(moveStr);
                 memset(moveStr, 0, sizeof(moveStr));
                 selectX = -1;
                 selectY = -1;
@@ -720,16 +721,16 @@ extern "C" int _start(int argc, char** argv, MicroDosAPI* api) {
             if (bufLen < 4) {
                 textBuf[bufLen++] = (char)key;
                 textBuf[bufLen] = '\0';
-                api->setFKeys(STRING(" NEW  "), STRING(" UNDO "), STRING(" FLIP "), textBuf, STRING(" QUIT "));
+                setFKeys(STRING(" NEW  "), STRING(" UNDO "), STRING(" FLIP "), textBuf, STRING(" QUIT "));
             }
             delayMs(200);
             continue;
         }
 
         TouchState touch;
-        api->getTouch(&touch);
+        getTouch(&touch);
 
-        if (touch.isPressed && touch.y >= 0 && touch.y < api->termHeight && touch.x >= 0 && touch.x < api->termWidth) {
+        if (touch.isPressed && touch.y >= 0 && touch.y < getTermHeight() && touch.x >= 0 && touch.x < getTermWidth()) {
             int32_t gridX = touch.x / fSize;
             int32_t gridY = touch.y / fSize;
 
@@ -753,7 +754,7 @@ extern "C" int _start(int argc, char** argv, MicroDosAPI* api) {
                 saveUndoState();
                 memcpy(textBuf, blankBuf, sizeof(blankBuf));
                 bufLen = 6;
-                executeMove(moveStr, api);
+                executeMove(moveStr);
                 memset(moveStr, 0, sizeof(moveStr));
                 selectX = -1;
                 selectY = -1;
@@ -765,7 +766,7 @@ extern "C" int _start(int argc, char** argv, MicroDosAPI* api) {
 
     clearFKeys();
     for (int32_t i = 1; i <= 32; i++) {
-        if (pieceSprites[i] != 0) api->freeSprite(pieceSprites[i]);
+        if (pieceSprites[i] != 0) freeSprite(pieceSprites[i]);
     }
     closeGameMatrix();
     delayMs(100);

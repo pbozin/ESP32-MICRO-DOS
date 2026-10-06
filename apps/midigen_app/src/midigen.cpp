@@ -106,8 +106,6 @@ static uint8_t lastDroneNotes[4] ALIGNED;
 static bool systemMuteArray[17] ALIGNED  = {false};
 static bool bassMelodyInherit ALIGNED    = false;
 
-static uint8_t mdb_alignment_shield[4] ALIGNED = {0, 0, 0, 0};
-
 static const uint8_t signature_multipliers[4] ALIGNED = {85, 0, 51, 0};
 
 ALWAYS INLINE void midiMsg(uint8_t cmd, uint8_t d1, uint8_t d2) {

@@ -1,12 +1,11 @@
 #include "microdos_api.h"
 #include "microdos_util.h"
-#include "microdos_math.h"
 
 // I2C Pins
 #define SDA_PIN 32 
 #define SCL_PIN 25
 
-// Bosch BME680 / BME688 Registers & Configuration
+// BME680 / BME688 Registers & Configuration
 #define SENSOR_ADDR       0x77
 #define REG_CHIP_ID       0xD0
 #define REG_CTRL_HUM      0x72
@@ -14,43 +13,47 @@
 #define REG_CTRL_GAS_1    0x71
 #define REG_DATA_START    0x1D
 
-// Global State
-static uint16_t ALIGNED dig_T1;
-static int16_t  ALIGNED dig_T2;
-static int16_t  ALIGNED dig_T3;
-static uint16_t ALIGNED dig_P1;
-static int16_t  ALIGNED dig_P2;
-static int16_t  ALIGNED dig_P3;
-static int16_t  ALIGNED dig_P4;
-static int16_t  ALIGNED dig_P5;
-static int16_t  ALIGNED dig_P6;
-static int16_t  ALIGNED dig_P7;
-static int16_t  ALIGNED dig_P8;
-static int16_t  ALIGNED dig_P9;
-static int      accent_color ALIGNED = CYAN;
-static int32_t  ALIGNED t_fine = 0;
+static int      accent_color = CYAN;
+static int32_t  t_fine = 0;
+
+static uint16_t dig_regU[2] ALIGNED = {0, 0};
+#define dig_T1 dig_regU[0]
+#define dig_P1 dig_regU[1]
+
+static int16_t  dig_regS[11] ALIGNED = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+#define dig_T2 dig_regS[0]
+#define dig_T3 dig_regS[1]
+#define dig_P2 dig_regS[2]
+#define dig_P3 dig_regS[3]
+#define dig_P4 dig_regS[4]
+#define dig_P5 dig_regS[5]
+#define dig_P6 dig_regS[6]
+#define dig_P7 dig_regS[7]
+#define dig_P8 dig_regS[8]
+#define dig_P9 dig_regS[9]
+#define dig_P10 dig_regS[10]
 
 // ============================================================================
 //   BIT-BANGED I2C PROTOCOL DRIVER
 // ============================================================================
 
-WEAK void i2c_delay() {
+ALWAYS INLINE void i2c_delay() {
     volatile int count = 80;
     while(count--) { __asm__("nop"); }
 }
 
-WEAK void i2c_sda_high() {
+INLINE void i2c_sda_high() {
     pinMode(SDA_PIN, INPUT_PULLUP);
     i2c_delay();
 }
 
-WEAK void i2c_sda_low() {
+INLINE void i2c_sda_low() {
     pinMode(SDA_PIN, OUTPUT);
     digitalWrite(SDA_PIN, 0);
     i2c_delay();
 }
 
-WEAK void i2c_scl_high() {
+INLINE void i2c_scl_high() {
     pinMode(SCL_PIN, INPUT_PULLUP);
     i2c_delay();
 
@@ -61,7 +64,7 @@ WEAK void i2c_scl_high() {
     }
 }
 
-WEAK void i2c_scl_low() {
+INLINE void i2c_scl_low() {
     pinMode(SCL_PIN, OUTPUT);
     digitalWrite(SCL_PIN, 0);
     i2c_delay();
@@ -71,25 +74,25 @@ WEAK void i2c_scl_low() {
 //   PROTOCOL SIGNALS
 // ============================================================================
 
-WEAK void i2c_init_bus() {
+ALWAYS INLINE void i2c_init_bus() {
     i2c_sda_high();
     i2c_scl_high();
 }
 
-WEAK void i2c_start() {
+ALWAYS INLINE void i2c_start() {
     i2c_sda_high();
     i2c_scl_high();
     i2c_sda_low();
     i2c_scl_low();
 }
 
-WEAK void i2c_stop() {
+ALWAYS INLINE void i2c_stop() {
     i2c_sda_low();
     i2c_scl_high();
     i2c_sda_high();
 }
 
-WEAK bool i2c_write_byte(uint8_t byte) {
+ALWAYS INLINE bool i2c_write_byte(uint8_t byte) {
     for (int i = 0; i < 8; i++) {
         if (byte & 0x80) i2c_sda_high();
         else i2c_sda_low();
@@ -107,7 +110,7 @@ WEAK bool i2c_write_byte(uint8_t byte) {
     return ack;
 }
 
-WEAK uint8_t i2c_read_byte(bool send_ack) {
+ALWAYS INLINE uint8_t i2c_read_byte(bool send_ack) {
     uint8_t byte ALIGNED = 0;
 
     i2c_sda_high();
@@ -159,59 +162,75 @@ ALWAYS INLINE bool sensor_read_bytes(uint8_t reg, uint8_t* buffer, size_t length
 //   BOSCH MATH COMPENSATION CONVERTERS
 // ============================================================================
 
-WEAK float compensate_temp(int32_t adc_T) {
-    int32_t var1 = ((((adc_T >> 3) - ((int32_t)dig_T1 << 1))) * ((int32_t)dig_T2)) >> 11;
-    int32_t var2 = ((((adc_T >> 4) - ((int32_t)dig_T1)) * ((adc_T >> 4) - ((int32_t)dig_T1))) >> 12) * ((int32_t)dig_T3) >> 14;
-    t_fine = var1 + var2;
-    float T = (t_fine * 5 + 128) >> 8;
-    return T / 100.0f;
+ALWAYS INLINE float compensate_temp(int32_t adc_T) {
+    int32_t var1 = ((adc_T >> 3) - ((int32_t)dig_T1 << 1));
+    int32_t var2 = (var1 * (int32_t)dig_T2) >> 11;
+    int32_t var3 = ((var1 >> 1) * (var1 >> 1)) >> 12;
+    var3 = (var3 * ((int32_t)dig_T3 << 4)) >> 14; 
+    
+    t_fine = var2 + var3;
+    
+    int32_t T = (t_fine * 5 + 128) >> 8;
+    return (float)T * 0.01f;
 }
 
-WEAK float compensate_press(int32_t adc_P) {
-    int64_t var1 = ((int64_t)t_fine) - 128000;
-    int64_t var2 = var1 * var1 * (int64_t)dig_P6;
-    var2 = var2 + ((var1 * (int64_t)dig_P5) << 17);
-    var2 = var2 + (((int64_t)dig_P4) << 35);
-    var1 = ((var1 * var1 * (int64_t)dig_P3) >> 8) + ((var1 * (int64_t)dig_P2) << 12);
-    var1 = (((((int64_t)1) << 47) + var1)) * ((int64_t)dig_P1) >> 33;
+ALWAYS INLINE float compensate_press(int32_t adc_P) {
+    int32_t var1, var2, var3;
+    int32_t pressure_comp;
+
+    var1 = (((int32_t)t_fine) >> 1) - 64000;
+    var2 = ((((var1 >> 2) * (var1 >> 2)) >> 11) * (int32_t)dig_P6) >> 2;
+    var2 = var2 + ((var1 * (int32_t)dig_P5) << 1);
+    var2 = (var2 >> 2) + ((int32_t)dig_P4 << 16);
     
+    var1 = (((((var1 >> 2) * (var1 >> 2)) >> 13) * ((int32_t)dig_P3 << 5)) >> 3) + 
+           (((int32_t)dig_P2 * var1) >> 1);
+    var1 = var1 >> 18;
+    var1 = ((32768 + var1) * (int32_t)dig_P1) >> 15;
+
     if (var1 == 0) return 0.0f;
+
+    pressure_comp = 1048576 - adc_P;
+    pressure_comp = (int32_t)((pressure_comp - (var2 >> 12)) * ((uint32_t)3125));
+
+    if (pressure_comp >= 0x40000000L) {
+        pressure_comp = ((pressure_comp / var1) << 1);
+    } else {
+        pressure_comp = ((pressure_comp << 1) / var1);
+    }
+
+    var1 = ((int32_t)dig_P9 * (int32_t)(((pressure_comp >> 3) * (pressure_comp >> 3)) >> 13)) >> 12;
+    var2 = ((int32_t)dig_P8 * (int32_t)(pressure_comp >> 2)) >> 13;
+    var3 = ((int32_t)dig_P10 * (int32_t)(pressure_comp >> 8)) >> 12;
     
-    int64_t p = 1048576 - adc_P;
-    p = (((p << 31) - var2) * 3125) / var1;
-    var1 = (((int64_t)dig_P9) * (p >> 13) * (p >> 13)) >> 25;
-    var2 = (((int64_t)dig_P8) * p) >> 19;
-    p = ((p + var1 + var2) >> 8) + (((int64_t)dig_P7) << 4);
-    return (float)p / 256.0f / 100.0f;
+    int32_t p = (int32_t)((int32_t)pressure_comp + ((var1 + var2 + var3 + ((int32_t)dig_P7 << 7)) >> 4));
+    
+    return (float)p * 0.01f;
 }
 
 // ============================================================================
 //   UI ENGINE & VISUAL DRAWING
 // ============================================================================
 
-WEAK void draw_dashboard(float temp, float press, bool sensor_found) {
+ALWAYS INLINE void draw_dashboard(float temp, float press, bool sensor_found) {
     static char str_buf[16] ALIGNED;
     termPrintAt(6, 3, STRING("-- BME68X METRICS LAB --"));
 
-    if (sensor_found) {
-        termPrintAt(6, 8, STRING("STATUS: SENSOR NOT FOUND"));
-        termPrintAt(6, 10, STRING("Please check SDA and SCL"));
+    if (!sensor_found) {
+        termPrintAt(6, 5, STRING("STATUS: SENSOR NOT FOUND"));
+        termPrintAt(6, 6, STRING("Please check SDA and SCL"));
         return;
     }
 
     termPrintAt(1,  8, STRING("TEMPERATURE (C):"));
-    itoa(123, str_buf);
+    ftoa(temp, str_buf, 16, 3);
     termPrintAt(18, 8, str_buf);
     
-    termPrintAt(1, 10, STRING("PRESSURE  (hPa):"));
-    itoa(456, str_buf);
+    termPrintAt(1, 10, STRING("PRESSURE (mmHg):"));
+    ftoa(press, str_buf, 16, 3);
     termPrintAt(18, 10, str_buf);
 
 }
-
-// ============================================================================
-//   APPLICATION MAIN ENTRYPOINT
-// ============================================================================
 
 int _start(int argc, char** argv, MicroDosAPI* api) {
     _global_api_ptr = api;
@@ -226,11 +245,9 @@ int _start(int argc, char** argv, MicroDosAPI* api) {
     bool connected = sensor_read_bytes(REG_CHIP_ID, &chip_id, 1);
 
     if (connected && chip_id == 0x61) {
-        termPrintln(STRING("[Found] BME68x Chip Found\n"));
-        
-        // --------------------------------------------------------------------
+        // --------------------------------------------------------
         // Read Calibration Parameters (Bosch BME68x Memory Layout)
-        // --------------------------------------------------------------------
+        // --------------------------------------------------------
         uint8_t calib_1[25] ALIGNED;
         uint8_t calib_2[16] ALIGNED;
         
@@ -241,22 +258,22 @@ int _start(int argc, char** argv, MicroDosAPI* api) {
         // Map Temperature calibration factors
         dig_T1 = (calib_2[2] << 8) | calib_2[1];
         dig_T2 = (calib_1[2] << 8) | calib_1[1];
-        dig_T3 = calib_1[3]; 
+        dig_T3 = (int8_t)calib_1[3]; 
 
-        // Map Pressure calibration factors
-        dig_P1 = (calib_1[6] << 8) | calib_1[5];
-        dig_P2 = (calib_1[8] << 8) | calib_1[7];
-        dig_P3 = calib_1[9];
-        dig_P4 = (calib_1[12] << 8) | calib_1[11];
-        dig_P5 = (calib_1[14] << 8) | calib_1[13];
-        dig_P6 = calib_1[15];
-        dig_P7 = calib_1[16];
-        dig_P8 = (calib_1[19] << 8) | calib_1[18];
-        dig_P9 = (calib_1[21] << 8) | calib_1[20];
+        dig_P1  = (calib_1[6] << 8) | calib_1[5];
+        dig_P2  = (calib_1[8] << 8) | calib_1[7];
+        dig_P3  = (int8_t)calib_1[9];  
+        dig_P4  = (calib_1[12] << 8) | calib_1[11];
+        dig_P5  = (calib_1[14] << 8) | calib_1[13];
+        dig_P6  = (int8_t)calib_1[15]; 
+        dig_P7  = (int8_t)calib_1[16]; 
+        dig_P8  = (calib_1[19] << 8) | calib_1[18];
+        dig_P9  = (calib_1[21] << 8) | calib_1[20];
+        dig_P10 = (int8_t)calib_2[8]; 
 
-        // --------------------------------------------------------------------
+        // --------------------------------------------------------
         // Configure Sensor Settings & Mode (Forcing Forced Mode)
-        // --------------------------------------------------------------------
+        // --------------------------------------------------------
 
         // Set Humidity Oversampling to x1 (Register 0x72)
         sensor_write_reg(REG_CTRL_HUM, 0x01);
@@ -268,6 +285,7 @@ int _start(int argc, char** argv, MicroDosAPI* api) {
         // Binary: 001 001 01 = 0x25
         sensor_write_reg(REG_CTRL_MEAS, 0x25);
 
+        termPrintln(STRING("[Found] BME68x Chip Found\n"));
     } else {
         termPrintln(STRING("[Error] No BME68x module detected"));
     }
@@ -281,6 +299,8 @@ int _start(int argc, char** argv, MicroDosAPI* api) {
 
     while (1) {
         if (loop_counter % 50 == 0 && connected) {
+            sensor_write_reg(REG_CTRL_MEAS, 0x25);
+	    delayMs(20);
             uint8_t raw_data[6];
             if (sensor_read_bytes(REG_DATA_START, raw_data, 6)) {
                 int32_t adc_P = ((int32_t)raw_data[0] << 12) | ((int32_t)raw_data[1] << 4) | (raw_data[2] >> 4);
@@ -293,28 +313,12 @@ int _start(int argc, char** argv, MicroDosAPI* api) {
 
         draw_dashboard(current_t, current_p, connected);
 
-        getTouch(&touch);
-        if (touch.isPressed) {
-            if (TOUCH_IN_BOUNDS(touch, 20, api->termHeight - 35, 80, 25)) {
-                accent_color = GREEN;
-                playSound(880, 50);
-            }
-            else if (TOUCH_IN_BOUNDS(touch, 120, api->termHeight - 35, 80, 25)) {
-                accent_color = CYAN;
-                playSound(1000, 50);
-            }
-            else if (TOUCH_IN_BOUNDS(touch, 220, api->termHeight - 35, 80, 25)) {
-                accent_color = ORANGE;
-                playSound(1200, 50);
-            }
-        }
-
         int key = getKey();
         if (key == '\x13' || key == 'Q') {
             break;
         }
-        delayMs(20);
         loop_counter++;
+        delayMs(20);
     }
     termClear();
     return 0;

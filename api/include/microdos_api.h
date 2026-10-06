@@ -87,10 +87,10 @@ struct MicroDosAPI {
 
   // --- Extended Visual Add-ons ---
   void (*drawJpeg)(const char* filename, int x, int y);
-  void (*setFKeys)(const char* l1, 
-		   const char* l2, 
-		   const char* l3, 
-		   const char* l4, 
+  void (*setFKeys)(const char* l1,
+		   const char* l2,
+		   const char* l3,
+		   const char* l4,
 		   const char* l5);
   void (*clearFKeys)();
 
@@ -108,8 +108,8 @@ struct MicroDosAPI {
 
   // --- Serial Debugger ---
   void  (*sysDebugDump)(const char* label,
-		        const void* memoryAddress, 
-			unsigned int byteCount, 
+		        const void* memoryAddress,
+			unsigned int byteCount,
 			uint32_t virtualAddr);
 
   // --- Misc ---
@@ -164,16 +164,16 @@ INLINE MicroDosAPI* kernel() {
 }
 
 // --- CONSOLE & TERMINAL WRAPPERS ---
-ALWAYS INLINE void setFKeys(const char* l1, 
-		            const char* l2, 
-			    const char* l3, 
-			    const char* l4, 
+ALWAYS INLINE void setFKeys(const char* l1,
+		            const char* l2,
+			    const char* l3,
+			    const char* l4,
 			    const char* l5)      { kernel()->setFKeys(l1, l2, l3, l4, l5); }
 ALWAYS INLINE void termPrintAt(int x,
-		               int y, 
+		               int y,
 			       const char* text) { kernel()->printAt(x, y, text); }
-ALWAYS INLINE void inputStr(const char* prompt, 
-		            char* destBuffer, 
+ALWAYS INLINE void inputStr(const char* prompt,
+		            char* destBuffer,
 			    int maxLen)          { kernel()->inputStr(prompt, destBuffer, maxLen); }
 ALWAYS INLINE void termPrint(const char* text)   { kernel()->print(text); }
 ALWAYS INLINE void termPrintln(const char* text) { kernel()->println(text); }
@@ -187,7 +187,7 @@ ALWAYS INLINE int  getCharWidth()                { return kernel()->charWidth; }
 ALWAYS INLINE int  getCharHeight()               { return kernel()->charHeight; }
 
 // --- HARDWARE INTERFACES ---
-ALWAYS INLINE int  wifiUp(const char* ssid, 
+ALWAYS INLINE int  wifiUp(const char* ssid,
 		          const char* pass)      { return kernel()->wifiUp(ssid, pass); }
 ALWAYS INLINE void wifiDown()                    { kernel()->wifiDown(); }
 ALWAYS INLINE int  getRamSize()                  { return kernel()->getRamSize(); }
@@ -208,10 +208,10 @@ ALWAYS INLINE void drawCircle(int x, int y, int r, int c)          { kernel()->c
 ALWAYS INLINE void drawJpeg(const char* filename, int x, int y)    { kernel()->drawJpeg(filename, x, y); }
 
 // --- AUTONOMOUS SPRITE ENGINE WRAPPERS ---
-ALWAYS INLINE void drawSprite(uint32_t spr, 
-		              int x, 
+ALWAYS INLINE void drawSprite(uint32_t spr,
+		              int x,
 			      int y)            { kernel()->drawSprite(spr, x, y); }
-ALWAYS INLINE uint32_t createSprite(const char* file, 
+ALWAYS INLINE uint32_t createSprite(const char* file,
 		                    int size)   { return kernel()->createSprite(file, size); }
 ALWAYS INLINE void freeSprite(uint32_t spr)     { kernel()->freeSprite(spr); }
 ALWAYS INLINE bool initGameMatrix()             { return kernel()->initGameMatrix(); }
@@ -219,32 +219,32 @@ ALWAYS INLINE void flushGameMatrix()            { kernel()->flushGameMatrix(); }
 ALWAYS INLINE void closeGameMatrix()            { kernel()->closeGameMatrix(); }
 
 // --- SERIAL WRAPPERS ---
-ALWAYS INLINE int  serialOpen(uint32_t baud, 
-		              int txPin, 
+ALWAYS INLINE int  serialOpen(uint32_t baud,
+		              int txPin,
 			      int rxPin)              { return kernel()->serialOpen(baud, txPin, rxPin); }
-ALWAYS INLINE void serialWrite(const uint8_t* buffer, 
+ALWAYS INLINE void serialWrite(const uint8_t* buffer,
 		               unsigned int length)   { kernel()->serialWrite(buffer, length); }
-ALWAYS INLINE int  serialRead(uint8_t* buffer, 
+ALWAYS INLINE int  serialRead(uint8_t* buffer,
 		              unsigned int maxLength) { return kernel()->serialRead(buffer, maxLength); }
 ALWAYS INLINE void serialClose()                      { kernel()->serialClose(); }
 
 // --- MISC WRAPPERS ---
 ALWAYS INLINE int getRandom(int min, int max)   { return kernel()->random(min, max); }
 
-ALWAYS INLINE int ollamaStream(const char* prompt, 
-		               const char* serverIp, 
-			       const char* modelName, 
-			       const char* sysPrompt, 
+ALWAYS INLINE int ollamaStream(const char* prompt,
+		               const char* serverIp,
+			       const char* modelName,
+			       const char* sysPrompt,
 			       int streamToConsole) {
-	                           return kernel()->ollamaStream(prompt, 
+	                           return kernel()->ollamaStream(prompt,
 				                                 serverIp,
 								 modelName,
-								 sysPrompt, 
+								 sysPrompt,
 								 streamToConsole);
                                }
-ALWAYS INLINE void kernelDebug(const char* lbl, 
-		               const void* ptr, 
-			       unsigned int len, 
+ALWAYS INLINE void kernelDebug(const char* lbl,
+		               const void* ptr,
+			       unsigned int len,
 			       uint32_t vAddr) {
                                    if (kernel()->sysDebugDump) {
                                         kernel()->sysDebugDump(lbl, ptr, len, vAddr);
