@@ -59,58 +59,22 @@ Run these commands directly inside the interactive touch console interface:
 
 ## 🛠️ App Ecosystem & Compiling Native Binaries
 
-You can develop high-performance native plugins for MicroDOS inside standard IDEs (like VS Code) using the provided PlatformIO SDK layout structure.
+You can develop high-performance native apps for MicroDOS inside standard IDEs (like VS Code) using the provided PlatformIO SDK layout structure.
 
-### 1. App SDK Framework (`api/microdos_api.h`)
-Native applications interface with the operating system through a unified BIOS jump table vector map. It features `__attribute__((weak))` overrides to ensure you can use standard memory structures safely without bloating the plugin size:
+### 1. App SDK Framework (`api/inlude/microdos_api.h`)
+Native applications interface with the operating system through a unified BIOS jump table vector map. It features all needed overrides to ensure you can use standard memory structures safely without bloating the heap or running into alignment erorrs:
 
-```c
-#include "microdos_api.h"
+### 2. 3D Drawing Helpers (`api/include/microdos_3d.h`)
+Helpers for rendering, scaling and morphing or wireframe objects.
 
-// Entrypoint signature requested by the MicroDOS Dynamic Relocation Loader
-int _start(int argc, char** argv, MicroDosAPI* api) {
-    _global_api_ptr = api; // Bind memory allocation hooks back to OS core
+### 3. Integer Math Helpers (`api/include/microdos_math.h`)
+Integer math functions, replacement for missing standard library functions.
 
-    api->clear();
-    api->println(STRING("--- Dynamic C Guest Application Live ---"));
-    api->beep(440, 250);
-    api->delay(2000);
+### 4. Floating Point Math Helpers (`api/include/microdos_fmath.h`)
+Floating point math functions, replacement for missing standard library functions.
 
-    // Launch dynamic 4-bit graphical loop matrix
-    api->initGameMatrix();
-    api->rect(10, 10, 100, 50, GREEN);
-    api->flushGameMatrix();
-
-    api->delay(2000);
-    api->closeGameMatrix();
-    return 0; // Returns exit status codes back up safely to Host Core tasks
-}
-```
-
-### 2. Toolchain Compilation Directives (`api/platformio.ini`)
-To build plugins that can survive runtime relative offset assignments, use these exact compilation flags:
-
-```ini
-[env:esp32dev]
-platform = espressif32
-board = esp32dev
-build_flags =
-    -Os
-    -fPIC                               ; Position Independent Code flag
-    -mlongcalls                         ; Issue far assembly call strings
-    -fno-jump-tables                    ; Suppress absolute optimization lookups
-    -nostartfiles                       ; Strip standard boot architecture
-    -nodefaultlibs                      ; Strip default system library footprint
-    -Wl,-e,_start                       ; Map entry target strictly to start pointer
-    -Wl,-T,mdb.ld                       ; Enforce custom layout linker map script
-    -mtext-section-literals             ; Interleave literals to maintain L32R safety limits
-    -fno-tree-loop-distribute-patterns
-    -fno-tree-switch-conversion
-    -fno-toplevel-reorder
-    -mtarget-align
-    -fno-merge-constants
-extra_scripts = post:extract_bin.py     ; Extract packaged segment tracks automatically
-```
+### 5. String Utilities (`api/include/microdos_util.h`)
+String tilities, replacement for missing standard library functions.
 
 ---
 
