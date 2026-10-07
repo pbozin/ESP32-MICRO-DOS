@@ -62,33 +62,52 @@ INLINE ALWAYS bool checkKingMove(int32_t fromIdx, int32_t p, int32_t dc, int32_t
 
     if (dr == 0 && absDc == 2) {
         bool isWhiteKing = (p > 0);
-
         if (isKingUnderAttack(isWhiteKing)) return false;
+
+        int32_t rowStart = ((fromIdx - 1) / 8) * 8;
 
         if (dc == 2) {
             uint32_t rights = isWhiteKing ? whiteCastleKingsSide : blackCastleKingsSide;
             if (rights == 0) return false;
-            if (b[fromIdx + 1] != 0 || b[fromIdx + 2] != 0) return false;
 
-            int32_t backup = b[fromIdx + 1];
-            b[fromIdx + 1] = p; b[fromIdx] = 0;
-            bool passThroughCheck = isKingUnderAttack(isWhiteKing);
-            b[fromIdx] = p; b[fromIdx + 1] = backup;
+	    if (humanIsWhite) {
+              if (b[rowStart + 6] != 0 || b[rowStart + 7] != 0) return false;
+              int32_t backup = b[rowStart + 6];
+              b[rowStart + 6] = p; b[fromIdx] = 0;
+              bool passThroughCheck = isKingUnderAttack(isWhiteKing);
+              b[fromIdx] = p; b[rowStart + 6] = backup;
+              return !passThroughCheck;
+	    } else {
+              if (b[rowStart + 5] != 0 || b[rowStart + 6] != 0 || b[rowStart + 7] != 0) return false;
+              int32_t backup = b[rowStart + 5];
+              b[rowStart + 5] = p; b[fromIdx] = 0;
+              bool passThroughCheck = isKingUnderAttack(isWhiteKing);
+              b[fromIdx] = p; b[rowStart + 5] = backup;
+              return !passThroughCheck;
+	    }
 
-            return !passThroughCheck;
         }
 
         if (dc == -2) {
             uint32_t rights = isWhiteKing ? whiteCastleQueensSide : blackCastleQueensSide;
             if (rights == 0) return false;
-            if (b[fromIdx - 1] != 0 || b[fromIdx - 2] != 0 || b[fromIdx - 3] != 0) return false;
 
-            int32_t backup = b[fromIdx - 1];
-            b[fromIdx - 1] = p; b[fromIdx] = 0;
-            bool passThroughCheck = isKingUnderAttack(isWhiteKing);
-            b[fromIdx] = p; b[fromIdx - 1] = backup;
+	    if (humanIsWhite) {
+              if (b[rowStart + 2] != 0 || b[rowStart + 3] != 0 || b[rowStart + 4] != 0) return false;
 
-            return !passThroughCheck;
+              int32_t backup = b[rowStart + 4];
+              b[rowStart + 4] = p; b[fromIdx] = 0;
+              bool passThroughCheck = isKingUnderAttack(isWhiteKing);
+              b[fromIdx] = p; b[rowStart + 4] = backup;
+              return !passThroughCheck;
+	    } else {
+              if (b[rowStart + 2] != 0 || b[rowStart + 3] != 0) return false;
+              int32_t backup = b[rowStart + 3];
+              b[rowStart + 3] = p; b[fromIdx] = 0;
+              bool passThroughCheck = isKingUnderAttack(isWhiteKing);
+              b[fromIdx] = p; b[rowStart + 3] = backup;
+              return !passThroughCheck;
+	    }
         }
     }
     return false;
@@ -133,7 +152,7 @@ static bool isMoveValid(int32_t fromIdx, int32_t toIdx) {
         if (dc != 0 && dr != 0) return false;
         return checkSlidingMove(fCol, fRow, tCol, tRow, sCol, sRow);
     }
-    if (pieceType == 15) { // Queen
+    if (pieceType == 15 or pieceType == 17) { // Queen
         if (absDc != absDr && dc != 0 && dr != 0) return false;
         return checkSlidingMove(fCol, fRow, tCol, tRow, sCol, sRow);
     }
@@ -153,6 +172,16 @@ static bool isKingUnderAttack(bool isWhiteKing) {
         if (p == 0) continue;
 
         if ((isWhiteKing && p < 0) || (!isWhiteKing && p > 0)) {
+            if (ABS(p) == 16) {
+                int32_t aCol = (attackerIdx - 1) % 8;
+                int32_t aRow = (attackerIdx - 1) / 8;
+                int32_t kCol = (kingIdx - 1) % 8;
+                int32_t kRow = (kingIdx - 1) / 8;
+                if (ABS(aCol - kCol) <= 1 && ABS(aRow - kRow) <= 1) {
+                    return true;
+                }
+                continue;
+            }
             if (isMoveValid(attackerIdx, kingIdx)) {
                 return true;
             }
@@ -227,23 +256,15 @@ INLINE ALWAYS bool executeToledoMove(const char* moveStr) {
 
     if (leavesKingInCheck) return false;
 
-    if (pieceType == 16 && ABS(toCol - fromCol) == 2) {
-        if (toCol - fromCol == 2) {
-            int32_t rookFrom = toIdx + 1;
-            int32_t rookTo = toIdx - 1;
-            b[rookTo] = b[rookFrom];
-            b[rookFrom] = 0;
-        }
-        else if (toCol - fromCol == -2) {
-            int32_t rookFrom = toIdx - 2;
-            int32_t rookTo = toIdx + 1;
-            b[rookTo] = b[rookFrom];
-            b[rookFrom] = 0;
-        }
-    }
-
     b[toIdx] = b[fromIdx];
     b[fromIdx] = 0;
+
+    if (pieceType == 16 && ABS(toCol - fromCol) == 2) {
+        int32_t rStart = ((fromIdx - 1) / 8) * 8;
+        int32_t rFrom = (toCol > fromCol) ? (rStart + 8) : (rStart + 1);
+        int32_t rTo   = (toCol > fromCol) ? (toIdx - 1)   : (toIdx + 1);
+        b[rTo] = b[rFrom]; b[rFrom] = 0;
+    }
 
     if (pieceType == 16) {
         if (isWhiteMove) { whiteCastleKingsSide = 0; whiteCastleQueensSide = 0; }
@@ -269,7 +290,7 @@ INLINE ALWAYS bool executeToledoMove(const char* moveStr) {
 
 static const int32_t pieceWeights[] ALIGNED = {
     0, 100, 100, 100, 100, 100, 100, 100, 100,
-    300, 300, 300, 300, 500, 500, 900, 9999
+    300, 300, 300, 300, 500, 500, 900, 9999, 900
 };
 
 INLINE ALWAYS int32_t calculateTotalHangingPenalty(bool aiIsWhite) {
@@ -289,7 +310,7 @@ INLINE ALWAYS int32_t calculateTotalHangingPenalty(bool aiIsWhite) {
             bool isEnemy = aiIsWhite ? (enemyPiece < 0) : (enemyPiece > 0);
             if (isEnemy && isMoveValid(attackerIdx, targetIdx)) {
                 int32_t pId = ABS(pieceVal);
-                if (pId > 16) pId = 16;
+                if (pId > 17) pId = 17;
                 totalPenalty += pieceWeights[pId];
                 break;
             }
@@ -406,21 +427,35 @@ INLINE ALWAYS void aiThinkAndRespond() {
     }
 }
 
+static uint32_t pieceSprites[36] ALIGNED;
+
 INLINE void handlePawnPromotion() {
     for (int32_t col = 0; col < 8; col++) {
         int32_t idx = col + 1;
-        if (b[idx] >= 1 && b[idx] <= 8)   b[idx] = 15;
-        if (b[idx] <= -1 && b[idx] >= -8) b[idx] = -15;
+        int32_t spriteIdx = (b[idx] > 0) ? b[idx] : (-b[idx] + 16);
+        if (b[idx] >= 1 && b[idx] <= 8) {
+	    clearSprite(pieceSprites[spriteIdx]);
+	    b[idx] = 17;
+	}
+        if (b[idx] <= -1 && b[idx] >= -8) {
+	    clearSprite(pieceSprites[spriteIdx]);
+	    b[idx] = -17;
+	}
     }
 
     for (int32_t col = 0; col < 8; col++) {
         int32_t idx = 56 + col + 1;
-        if (b[idx] >= 1 && b[idx] <= 8)   b[idx] = 15;
-        if (b[idx] <= -1 && b[idx] >= -8) b[idx] = -15;
+        int32_t spriteIdx = (b[idx] > 0) ? b[idx] : (-b[idx] + 16);
+        if (b[idx] >= 1 && b[idx] <= 8) {
+	    clearSprite(pieceSprites[spriteIdx]);
+	    b[idx] = 17;
+	}
+        if (b[idx] <= -1 && b[idx] >= -8) {
+	    clearSprite(pieceSprites[spriteIdx]);
+	    b[idx] = -17;
+	}
     }
 }
-
-static uint32_t pieceSprites[36] ALIGNED;
 
 INLINE ALWAYS void refreshBoard() {
     int fSize = getTermWidth() / 8;
@@ -431,6 +466,12 @@ INLINE ALWAYS void refreshBoard() {
 
             if (pieceVal != 0) {
                   int32_t spriteIdx = (pieceVal > 0) ? pieceVal : (-pieceVal + 16);
+
+		  if (pieceVal == 17)
+		      spriteIdx = 34; // Replacement White Queen
+		  if (pieceVal == -17)
+		      spriteIdx = 33; // Replacement Black Queen
+
                   uint32_t handle = pieceSprites[spriteIdx];
                   if (handle != 0) {
                     drawSprite(handle, c * fSize, r * fSize);
@@ -554,7 +595,7 @@ INLINE ALWAYS void cacheAllChessSprites() {
         STRING("Chess_kdt")  // 11: Dark King
     };
 
-    for (int32_t i = 1; i <= 32; i++) {
+    for (int32_t i = 1; i <= 34; i++) {
         int32_t fileIdx = -1;
 
         if (i >= 1 && i <= 8)        fileIdx = 0;  // White Pawns
@@ -569,6 +610,9 @@ INLINE ALWAYS void cacheAllChessSprites() {
         else if (i == 29 || i == 30) fileIdx = 9;  // Black Rooks
         else if (i == 31)            fileIdx = 10; // Black Queen
         else if (i == 32)            fileIdx = 11; // Black King
+
+        else if (i == 33)            fileIdx = 10; // Black Queen (replacement)
+        else if (i == 34)            fileIdx = 4;  // White Queen (replacement)
 
         if (fileIdx != -1) {
             char sFilename[64];
@@ -643,7 +687,7 @@ extern "C" int _start(int argc, char** argv, MicroDosAPI* api) {
             setFKeys(STRING(" NEW  "), STRING(" UNDO "), STRING(" FLIP "), STRING("      "), STRING(" QUIT "));
             drawBoard();
             for (int32_t i = 1; i <= 32; i++) {
-              if (pieceSprites[i] != 0) { *(bool*)pieceSprites[i] = false; }
+              if (pieceSprites[i] != 0) { clearSprite(pieceSprites[i]); }
             }
             refreshBoard();
             delayMs(300);
@@ -654,7 +698,7 @@ extern "C" int _start(int argc, char** argv, MicroDosAPI* api) {
             humanIsWhite = (humanIsWhite == 0) ? 1 : 0;
             selectX = -1; selectY = -1;
             for (int32_t i = 1; i <= 32; i++) {
-                if (pieceSprites[i] != 0) *(bool*)pieceSprites[i] = false;
+                if (pieceSprites[i] != 0) clearSprite(pieceSprites[i]);
             }
 
             initToledoBoard();
