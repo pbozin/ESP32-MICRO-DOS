@@ -74,7 +74,7 @@ Integer math functions, replacement for missing standard library functions.
 Floating point math functions, replacement for missing standard library functions.
 
 ### 5. String Utilities (`api/include/microdos_util.h`)
-String tilities, replacement for missing standard library functions.
+String utilities, replacement for missing standard library functions.
 
 ---
 
