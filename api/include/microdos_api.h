@@ -101,6 +101,7 @@ struct MicroDosAPI {
   // --- Sprite Engine ---
   uint32_t (*createSprite)(const char* filename, int spriteSize);
   void  (*drawSprite)(uint32_t spriteHandle, int x, int y);
+  void  (*clearSprite)(uint32_t spriteHandle);
   void  (*freeSprite)(uint32_t spriteHandle);
   bool  (*initGameMatrix)();
   void  (*flushGameMatrix)();
@@ -213,6 +214,7 @@ ALWAYS INLINE void drawSprite(uint32_t spr,
 			      int y)            { kernel()->drawSprite(spr, x, y); }
 ALWAYS INLINE uint32_t createSprite(const char* file,
 		                    int size)   { return kernel()->createSprite(file, size); }
+ALWAYS INLINE void clearSprite(uint32_t spr)    { kernel()->clearSprite(spr); }
 ALWAYS INLINE void freeSprite(uint32_t spr)     { kernel()->freeSprite(spr); }
 ALWAYS INLINE bool initGameMatrix()             { return kernel()->initGameMatrix(); }
 ALWAYS INLINE void flushGameMatrix()            { kernel()->flushGameMatrix(); }

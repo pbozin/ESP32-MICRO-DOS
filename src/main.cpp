@@ -11,7 +11,6 @@
 #define KEY_FRAME_TIME 33
 
 #define COLOR_DEPTH 4
-#define COMPRESSED_4BIT_SIZE 400
 
 #define SYSTEM_RAM_SIZE 256
 #define CONTEXT_BUF_SIZE 2048
@@ -608,14 +607,43 @@ static TFT_eSprite renderSprite = TFT_eSprite(&tft);
 static TFT_eSprite tempSprite = TFT_eSprite(&tft);
 
 struct OSSprite_t {
-    bool isOnScreen;
-    uint8_t rawSprite[COMPRESSED_4BIT_SIZE];
-    size_t rawSize;
-    uint8_t backupSprite[COMPRESSED_4BIT_SIZE];
-    size_t backupSize;
-    size_t spriteSize;
-    int lastX, lastY;
+    bool isOnScreen = false;
+    uint8_t* rawSprite = NULL;
+    size_t rawSize = 0;
+    uint8_t* backupSprite = NULL;
+    size_t backupSize = 0;
+    size_t spriteSize = 0;
+    int lastX = 0;
+    int lastY = 0;
 };
+
+int getCompressedSize4BitRLE(const uint8_t* source, size_t spriteSize) {
+    int srcIdx = 0;
+    int destIdx = 0;
+    int totalPixels = spriteSize * spriteSize;
+
+    while (srcIdx < totalPixels) {
+        uint8_t currentColor = (srcIdx % 2 == 0) ? (source[srcIdx / 2] >> 4) : (source[srcIdx / 2] & 0x0F);
+        uint8_t runLength = 1;
+        srcIdx++;
+
+        while (srcIdx < totalPixels && runLength < 15) {
+            uint8_t nextColor = (srcIdx % 2 == 0) ? (source[srcIdx / 2] >> 4) : (source[srcIdx / 2] & 0x0F);
+            if (nextColor == currentColor) {
+                runLength++;
+                srcIdx++;
+            } else {
+                break;
+            }
+        }
+        destIdx++;
+    }
+    while (destIdx % 4 != 0)
+	destIdx++;
+
+    return destIdx;
+}
+
 
 int compress4BitRLE(const uint8_t* source, uint8_t* destination, size_t spriteSize) {
     int srcIdx = 0;
@@ -713,6 +741,7 @@ struct MicroDosAPI {
   void (*free)(void* ptr);
   uint32_t (*createSprite)(const char* filename, int spriteSize);
   void (*drawSprite)(uint32_t spriteHandle, int x, int y);
+  void (*clearSprite)(uint32_t spriteHandle);
   void (*freeSprite)(uint32_t spriteHandle);
   bool (*initGameMatrix)();
   void (*flushGameMatrix)();
@@ -4467,7 +4496,12 @@ void api_setup() {
     f.read((uint8_t*)tempSprite.frameBuffer(0), ((spriteSize * spriteSize) / (8 / COLOR_DEPTH)));
     f.close();
 
+    spr->backupSize = (spriteSize * spriteSize) / (8 / COLOR_DEPTH) / 2;
+    spr->backupSprite = (uint8_t*)malloc(spr->backupSize);
+
     spr->spriteSize = spriteSize;
+    size_t exactSize = getCompressedSize4BitRLE((uint8_t*)tempSprite.frameBuffer(0), spr->spriteSize);
+    spr->rawSprite = (uint8_t*)malloc(exactSize);
     spr->rawSize = compress4BitRLE((uint8_t*)tempSprite.frameBuffer(0), (uint8_t*)spr->rawSprite, spr->spriteSize);
     spr->lastX = 0; spr->lastY = 0;
     spr->isOnScreen = false;
@@ -4522,6 +4556,14 @@ void api_setup() {
       }
     }
 
+    size_t exactSize = getCompressedSize4BitRLE((uint8_t*)tempSprite.frameBuffer(0), spr->spriteSize);
+    if (exactSize > 0 and spr->backupSize < exactSize) {
+      if (spr->backupSprite != NULL) {
+        spr->backupSprite = (uint8_t*)realloc((uint8_t*)spr->backupSprite, exactSize);
+      } else {
+        spr->backupSprite = (uint8_t*)malloc(exactSize);
+      }
+    }
     spr->backupSize = compress4BitRLE((uint8_t*)tempSprite.frameBuffer(0), (uint8_t*)spr->backupSprite, spr->spriteSize);
 
     decompressRLEToCanvas(&tempSprite, 0, 0, (uint8_t*)spr->rawSprite, spr->rawSize, spr->spriteSize);
@@ -4553,6 +4595,21 @@ void api_setup() {
     renderSprite.pushSprite(x, y);
   };
 
+  kernelAPI.clearSprite = [](uint32_t spriteHandle) {
+    OSSprite_t* spr = (OSSprite_t*)spriteHandle;
+    if (!spr) return;
+    if (!spr->isOnScreen) return;
+    spr->isOnScreen = false;
+    if (!MATRIX_ACTIVE) return;
+
+    tempSprite.deleteSprite();
+    tempSprite.setColorDepth(COLOR_DEPTH);
+    tempSprite.createSprite(spr->spriteSize, spr->spriteSize);
+    tempSprite.createPalette((uint16_t*)ramOSPalette);
+    decompressRLEToCanvas(&tempSprite, 0, 0, (uint8_t*)spr->backupSprite, spr->backupSize, spr->spriteSize);
+    tempSprite.pushSprite(spr->lastX, spr->lastY);
+  };
+
   kernelAPI.freeSprite = [](uint32_t spriteHandle) {
     OSSprite_t* spr = (OSSprite_t*)spriteHandle;
     if (spr) {
@@ -4561,6 +4618,8 @@ void api_setup() {
         tempSprite.pushSprite(spr->lastX, spr->lastY);
         spr->isOnScreen = false;
       }
+      if (spr->rawSprite != NULL) {free(spr->rawSprite); spr->rawSprite = NULL; }
+      if (spr->backupSprite != NULL) {free(spr->backupSprite); spr->backupSprite = NULL; }
       free(spr);
     }
   };
