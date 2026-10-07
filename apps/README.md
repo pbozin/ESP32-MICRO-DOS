@@ -1,15 +1,15 @@
 # MicroDOS Native Application Registry
 
-This directory houses the standalone, native C production components compiled via the **MicroDOS App SDK** (`microdos_api.h`). These programs showcase how to use the dynamic memory sandbox, vector graphics engine, and streaming LLM token processors.
+This directory houses the standalone, native C production components compiled via the **MicroDOS App SDK** (`api/include/microdos_*.h`). These programs showcase how to use the dynamic memory sandbox, vector graphics engine, and streaming LLM token processors.
 
 ---
 
 ## 🎮 1. Arcade Brick Breaker (`bricks.bin`)
-A high-frame-rate breakout simulator showcasing hardware vector graphics, real-time keyboard polling sweeps, and system RAM sandboxing.
+A high-frame-rate breakout simulator showcasing graphics, real-time keyboard polling sweeps, and system RAM sandboxing.
 
 ### Architectural Blueprint
 * **Integrated Memory Mapping (`api->poke` / `api->peek`):** The program maps the block grid by using indices `0` to `49` inside the parent operating system's `systemRAM` array vector. This eliminates local memory tracking variables.
-* **Non-Blocking Key Captures (`api->inkey()`):** Samples user clicks during instruction frames. It listens for specific ASCII decimal values (KEY_O = `79` for Left, KEY_P = `80` for Right, KEY_Q = `113` to exit) to move the paddle without blocking execution tracking loops.
+* **Non-Blocking Key Captures (`api->inkey()`):** Samples user clicks during instruction frames. It listens for specific ASCII decimal values to move the paddle without blocking execution tracking loops.
 * **Shatter-Block Erasure Loop:** When a collision is identified (`api->peek(n) == 1`), the code marks the coordinates as broken (`api->poke(n, 0)`), issues an inline sound pulse (`api->beep()`), and targets an isolated overwrite box (`api->rect()`) to clear *only* that block, leaving the remaining bricks untouched.
 
 ---
@@ -34,7 +34,7 @@ A development pipeline that prompts a remote AI Coder model to write, compile, a
 ---
 
 ## 🎮 4. Retro Chess Engine (`chess.bin`)
-A compact, highly optimized chess simulator featuring a dual-input control layout, dynamic function key overrides, and an internal Toledo-style look-ahead heuristic evaluator.
+A compact, highly optimized chess simulator featuring multi-sprite graphics engine, a dual-input control layout, dynamic function key overrides, and an internal Toledo-style look-ahead heuristic evaluator.
 
 ### Architectural Blueprint
 * **Hybrid Touch & Alphanumeric Input:** Leverages a dual-mode event listener stack. Users can input standard algebraic coordinate strings (e.g., e2e4) over serial/keyboard polling buffers (`api->inkey()`) or click squares directly on the panel utilizing localized display coordinate division math (`touch.x / 40`, `touch.y / 40`).
@@ -47,19 +47,19 @@ A compact, highly optimized chess simulator featuring a dual-input control layou
 A high-frame-rate physics and graphics demonstration showcasing real-time 3D projection mechanics, localized vertex transformations, and kinetic vector line rendering.
 
 ### Architectural Blueprint
-* **Procedural Vertex Topology Generation:** Dynamically calculates an interconnected latitude-and-longitude map of points using memory-aligned buffers (`__attribute__((aligned(4)))`). It stores geometric structures across unified edge arrays to bypass high SD card texture read latency.
+* **Procedural Vertex Topology Generation:** Dynamically calculates an interconnected latitude-and-longitude map of points using memory-aligned buffers. It stores geometric structures across unified edge arrays and applies transformations.
 * **CPU-Driven 3D Projection Pipeline:** Processes raw trigonometric calculations in software via an isolated mathematical transform stack (`m3d_transform_and_project`). It rotates, projects, and scales local tracking spaces directly onto custom screen layouts relative to dynamic angle changes.
-* **Kinetic Vector Line Interceptor:** Calculates real-time 2D coordinate offsets based on basic gravity and bounce algorithms. It feeds dynamic positions directly into the line rasterizer loop (`drawLine`), mapping multi-colored edge strokes into frame arrays to simulate wireframe objects bouncing smoothly in real-time.
+* **Kinetic Vector Line Interceptor:** Calculates real-time 2D coordinate offsets based on basic gravity and bounce algorithms. It feeds dynamic positions directly into the line rasterizer loop, mapping multi-colored edge strokes into frame arrays to simulate wireframe objects bouncing smoothly in real-time.
 
 ---
 
 ## 🌦️ 6. Atmospheric Environmental Dashboard (`sensor.bin`)
-A low-level telemetry terminal that executes a custom bit-banged I2C hardware driver protocol stack to extract, compensate, and render real-time climate data streams from a Bosch BME68x sensor cluster.
+A low-level telemetry terminal that executes a custom bit-banged I2C hardware driver protocol stack to extract, compensate, and render real-time climate data streams from a Bosch BME68x sensor.
 
 ### Architectural Blueprint
-* **Bit-Banged Protocol Layer:** Manages timing-critical register communication loops via inline assembly (`__asm__("nop")`) and software-driven digital pin polling (`digitalRead` / `digitalWrite`). It manually drives clock (`SCL_PIN`) and data (`SDA_PIN`) lines to implement standard START, STOP, and ACK I2C bus signals completely in software outside the hardware peripheral stack.
-* **Dual-Region Memory Calibration Unpacker:** Maps factory-fused compensation coefficients by parsing distinct physical sensor registers (`0x89` and `0xE1`) directly into memory-aligned runtime arrays (`ALIGNED`). This layout prevents multi-byte structures from throwing memory management tracking errors inside the Xtensa core layout.
-* **Bosch Fixed-Point Compensation Evaluator:** Decodes multi-byte raw data frames using structural coordinate bitwise shifts (`>>`) and algebraic multiplier formulas. It balances volatile integer values dynamically via internal memory references (`t_fine`) to convert analog physics registers into human-readable text buffers.
+* **Bit-Banged Protocol Layer:** Manages timing-critical register communication loops via inline assemby and software-driven digital pin polling (`digitalRead` / `digitalWrite`). It manually drives clock (`SCL_PIN`) and data (`SDA_PIN`) lines to implement standard START, STOP, and ACK I2C bus signals completely in software outside the hardware peripheral stack.
+* **Dual-Region Memory Calibration Unpacker:** Maps factory-fused compensation coefficients by parsing distinct physical sensor registers directly into memory-aligned runtime arrays. This layout prevents multi-byte structures from throwing memory management tracking errors inside the Xtensa core layout.
+* **Bosch Fixed-Point Compensation Evaluator:** Decodes multi-byte raw data frames using structural coordinate bitwise shifts and algebraic multiplier formulas. It balances volatile integer values dynamically via internal memory references to convert analog physics registers into human-readable text buffers.
 
 ---
 
@@ -67,9 +67,9 @@ A low-level telemetry terminal that executes a custom bit-banged I2C hardware dr
 A software-driven 3D vector engine displaying mathematical shape interpolation, dynamic color phase mapping, and automatic topological translation states.
 
 ### Architectural Blueprint
-* **Multi-State Coordinate Array Interleaving:** Allocates memory-aligned, fixed-point array structures (`__attribute__((aligned(4)))`) containing unique 3D vertex configurations (Cube, Octahedron, and Tetrahedron). The topologies use identical vector node indices (`wireframeTopology`) to allow structural transitions without reallocating active runtime objects.
-* **Dynamic State Linear Interpolation:** Uses a state tracker variable (`currentGlobalState`) driven by an inversion loop to sweep back and forth between positions. It streams secondary and tertiary matrix data arrays (`octaLayout`, `tetraLayout`) into the software projection engine core (`m3d_transform_and_project`) to calculate intermediate coordinates on the fly.
-* **Phase-Mapped Vector Rasterizer:** Monitors real-time state tracking thresholds to inject adaptive color definitions (`CYAN`, `MAGENTA`, `GREEN`) across changing coordinate maps. It passes transformed 2D points into an optimized drawing routine (`drawLine`), keeping the line animations crisp and tear-free.
+* **Multi-State Coordinate Array Interleaving:** Allocates memory-aligned, fixed-point array structures containing unique 3D vertex configurations (Cube, Octahedron, and Tetrahedron). The topologies use identical vector node indices (`wireframeTopology`) to allow structural transitions without reallocating active runtime objects.
+* **Dynamic State Linear Interpolation:** Uses a state tracker variable driven by an inversion loop to sweep back and forth between positions. It streams secondary and tertiary matrix data arrays into the software projection engine core (`m3d_transform_and_project`) to calculate intermediate coordinates on the fly.
+* **Phase-Mapped Vector Rasterizer:** Monitors real-time state tracking thresholds to inject adaptive color definitions across changing coordinate maps. It passes transformed 2D points into an optimized drawing routine, keeping the line animations crisp and tear-free.
 
 ---
 
@@ -77,9 +77,9 @@ A software-driven 3D vector engine displaying mathematical shape interpolation, 
 A live music composition engine that processes dynamic Markov chains and geometric probability distributions entirely in software to stream real-time multi-channel MIDI note data down the system serial bus.
 
 ### Architectural Blueprint
-* **Dynamic Software Markov Probability Calculator:** Implements an on-the-fly mathematical matrix engine (`markovMatrix`) utilizing custom fixed-point reciprocal operations (`65536U / total`). This creates balanced weight distributions for generative scale progressions without relying on hardware floating-point acceleration.
-* **Algorithmic Musical Topology Scales:** Allocates memory-aligned, multi-byte velocity arrays (`ALIGNED`) hosting specialized microtonal musical scales (Minor, Dorian, Abstract, Goa, Aeolian). These structures serve as safe algorithmic look-up tables that translate state adjustments directly into valid pitch outputs.
-* **Multi-Voice Serial Streaming Dispatcher:** Evaluates active beat metrics (`tickCount`, `stepIntervalMs`) completely in software, generating targeted three-byte serial packets (`midiMsg`). It automatically cycles voice routing through dynamic channel arrays to manage multi-instrument synthesis configurations.
+* **Dynamic Software Markov Probability Calculator:** Implements an on-the-fly mathematical matrix engine utilizing custom fixed-point reciprocal operations. This creates balanced weight distributions for generative scale progressions without relying on hardware floating-point acceleration.
+* **Algorithmic Musical Topology Scales:** Allocates memory-aligned, multi-byte velocity arrays hosting specialized microtonal musical scales (Minor, Dorian, Abstract, Goa, Aeolian). These structures serve as safe algorithmic look-up tables that translate state adjustments directly into valid pitch outputs.
+* **Multi-Voice Serial Streaming Dispatcher:** Evaluates active beat metrics, generating targeted three-byte serial packets. It automatically cycles voice routing through dynamic channel arrays to manage multi-instrument synthesis configurations.
 
 ---
 
@@ -89,16 +89,15 @@ Applications are compiled outside the core kernel image using **PlatformIO**:
 
 ### 1. Build Compilation Pipeline
 1. Verify that your target application source code leverages the 4-byte structural memory alignment helpers (`STRING("...")`) required by the Xtensa layout specifications.
-2. Select your display framework environment configuration definitions inside `platformio.ini` (`BOARD_CYD` or `BOARD_JC3248`).
-3. Run the compiler toolchain inside your IDE terminals:
+2. Run the compiler toolchain inside your IDE terminals:
    ```bash
    pio run
    ```
-4. The integrated post-action python build script (`extract_bin.py`) parses the output `.elf` binaries to generate a clean, header-packed binary file layout (e.g., `bricks_mdos.bin`).
+3. The integrated post-action python build script (`extract_bin.py`) parses the output `.elf` binaries to generate a clean, header-packed binary file layout (e.g., `bricks_mdos.bin`).
 
 ### 2. SD Mounting & Shell Launch Execution
-1. Copy your compiled binary file onto a FAT32-formatted Micro SD card.
-2. In the case of `chat.bin` and `code.bin`, ensure a `/WIFI.CFG` file exists on the SD root directory with your access credentials:
+1. Copy your compiled binary file onto a FAT32-formatted Micro SD card, renaming it properly (eg. CHESS.BIN or BRICKS.BIN).
+2. In the case of `CHAT.BIN` and `CODE.BIN`, ensure a `/WIFI.CFG` file exists on the SD root directory with your access credentials:
    ```text
    Your_WiFi_SSID
    Your_WiFi_Password
@@ -107,6 +106,11 @@ Applications are compiled outside the core kernel image using **PlatformIO**:
 4. Launch your application from the interactive command-line interface using the native file loader command:
    ```bash
    > EXEC BRICKS.BIN
+   ```
+
+   Alternatively:
+   ```bash
+   > BRICKS
    ```
 
 <img width="300" alt="bricks" src="https://github.com/user-attachments/assets/e8cf1f2c-280f-4051-b826-3669cdfcb3c0" />
