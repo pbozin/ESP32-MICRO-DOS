@@ -5,7 +5,6 @@
 #include <HTTPClient.h>
 #include <FS.h>
 #include <TJpg_Decoder.h>
-//#include <string.h>
 
 #define KEY_REPEAT_DELAY 300
 #define KEY_FRAME_TIME 33
@@ -1013,10 +1012,6 @@ void loadJpegToScreen(const char* filename, int16_t xOut, int16_t yOut) {
   uint32_t startTime = millis();
   TJpgDec.drawSdJpg(xOut, yOut, fixedFilename);
   uint32_t duration = millis() - startTime;
-
-#ifdef SERIAL_DEBUG
-  Serial.printf("[JPEG DECODER] Rendered %s in %d ms.\n\r", fixedFilename, duration);
-#endif
 }
 
 void trimCString(char* str) {
@@ -1124,12 +1119,6 @@ void clearConversationContext() {
     } else {
         memset(chatContext, 0, CONTEXT_BUF_SIZE);
     }
-
-#ifdef SERIAL_DEBUG
-    if (Serial) {
-        Serial.println(F("[SYSTEM: Targeted context bank cleared cleanly]"));
-    }
-#endif
 }
 
 void kernel_getTouchState(TouchState* state) {
@@ -2813,9 +2802,6 @@ void processCommand(const char* rawCmd) {
 
       if (localDramBuffer == NULL || localIramBuffer == NULL || iramStagingArea == NULL) {
           terminalPrintln("ERR: OUT OF RAM");
-#ifdef SERIAL_DEBUG
-	  Serial.println("ERR: OUT OF RAM");
-#endif
           if (localDramBuffer) free(localDramBuffer);
           if (localIramBuffer) heap_caps_free(localIramBuffer);
           if (iramStagingArea) free(iramStagingArea);
@@ -2861,10 +2847,6 @@ void processCommand(const char* rawCmd) {
       const uint32_t iramEnd   = iramStart + alignedIramSize;
       const uint32_t dramStart = iramEnd;
       const uint32_t dramEnd   = dramStart + header.dramSize;
-
-#ifdef SERIAL_DEBUG
-      Serial.printf("[MDB LOADER] Scanning IRAM literals up to size: %d bytes...\n\r", alignedIramSize);
-#endif
 
       // --- PHASE 1: SCAN AND PATCH FULL IRAM LITERAL POOL ---
       uint32_t* literalPool = (uint32_t*)iramStagingArea;
@@ -2918,9 +2900,6 @@ void processCommand(const char* rawCmd) {
       free(iramStagingArea);
 
       // --- PHASE 2: SCAN AND PATCH GLOBAL OFFSET TABLE (GOT) ---
-#ifdef SERIAL_DEBUG
-      Serial.println("\nScanning Global Offset Table (GOT) Entries...");
-#endif
       uint32_t gotDramOffset = header.gotFileOffset - iramEnd;
 
       if (gotDramOffset < header.dramSize && header.gotFileOffset < actualFileSize) {
@@ -2929,11 +2908,7 @@ void processCommand(const char* rawCmd) {
           size_t remainingDramBytes = header.dramSize - gotDramOffset;
           size_t gotWordCount = remainingDramBytes / 4;
 
-          if (gotWordCount > 256) gotWordCount = 256;
-
-#ifdef SERIAL_DEBUG
-          Serial.printf("  [MDB LOADER] Processing %d GOT entries safely...\n\r", gotWordCount);
-#endif
+         // if (gotWordCount > 256) gotWordCount = 256;
 
           for (size_t i = 0; i < gotWordCount; i++) {
               uint32_t rawGot = realGotTable[i];
@@ -2950,10 +2925,6 @@ void processCommand(const char* rawCmd) {
 #endif
               }
           }
-      } else {
-#ifdef SERIAL_DEBUG
-          Serial.println("  [MDB WARN] gotDramOffset out of bounds, skipping GOT patch phase.");
-#endif
       }
 
 #ifdef SERIAL_DEBUG
@@ -4189,9 +4160,6 @@ void api_setup() {
     }
 
     if (useFallback) {
-#ifdef SERIAL_DEBUG
-      Serial.println("[SYS] Blank or placeholder credentials. Accessing SD fallback...");
-#endif
       File wifiFile = SD.open("/WIFI.CFG", FILE_READ);
       if (wifiFile) {
         int len = wifiFile.readBytesUntil('\n', localSSID, sizeof(localSSID) - 1);
@@ -4202,9 +4170,6 @@ void api_setup() {
 
         wifiFile.close();
       } else {
-#ifdef SERIAL_DEBUG
-        Serial.println("[ERR] /WIFI.CFG not found!");
-#endif
         return -1;
       }
     } else {
@@ -4220,10 +4185,6 @@ void api_setup() {
 
     if (strlen(localSSID) == 0) return -1;
 
-#ifdef SERIAL_DEBUG
-    Serial.printf("[SYS] Initiating Wi-Fi connection target: [%s]\n\r", localSSID);
-#endif
-
     WiFi.mode(WIFI_STA);
     WiFi.begin(localSSID, localPASS);
 
@@ -4234,9 +4195,6 @@ void api_setup() {
     }
 
     if (WiFi.status() == WL_CONNECTED) {
-#ifdef SERIAL_DEBUG
-      Serial.printf("[SYS] Wi-Fi connected! Station IP address: %s\n\r", WiFi.localIP().toString().c_str());
-#endif
       return 0;
     } else {
       WiFi.disconnect(true);

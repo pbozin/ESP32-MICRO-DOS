@@ -4,6 +4,7 @@
 
 #include <stdint.h>
 #include <stddef.h>
+#include <stdbool.h>
 
 #define ALIGNED __attribute__((aligned(4)))
 #define WEAK __attribute__((weak))
@@ -32,13 +33,13 @@
 extern "C" {
 #endif
 
-struct TouchState {
+typedef struct TouchState_t {
   bool isPressed;
   int x;
   int y;
-};
+} TouchState;
 
-struct MicroDosAPI {
+typedef struct MicroDosAPI_t {
   // --- Console Printing Vectors ---
   void (*print)(const char* text);
   void (*println)(const char* text);
@@ -122,7 +123,7 @@ struct MicroDosAPI {
   void (*serialWrite)(const uint8_t* buffer, unsigned int length);
   int  (*serialRead)(uint8_t* buffer, unsigned int maxLength);
   void (*serialClose)();
-};
+} MicroDosAPI;
 
 // Tracking pointer instance to link standard malloc lodops cleanly
 WEAK MicroDosAPI* _global_api_ptr = 0;
