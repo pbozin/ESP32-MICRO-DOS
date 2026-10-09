@@ -13,7 +13,9 @@ void IncludeInit(Picoc *pc)
     IncludeRegister(pc, "graphics.h", &GraphicsSetupFunc, &GraphicsFunctions[0], NULL);
     IncludeRegister(pc, "stdio.h", &StdioSetupFunc, &StdioFunctions[0], StdioDefs);
     IncludeRegister(pc, "stdlib.h", &StdlibSetupFunc, &StdlibFunctions[0], NULL);
+#ifdef ENABLE_PICOC_STRING
     IncludeRegister(pc, "string.h", &StringSetupFunc, &StringFunctions[0], NULL);
+#  endif
 #ifdef ENABLE_PICOC_MATH
     IncludeRegister(pc, "math.h", &MathSetupFunc, &MathFunctions[0], NULL);
 #  endif
