@@ -10,7 +10,7 @@ An advanced, retro-style retro-operating system and interactive environment desi
 * 240x320 E32R32P [https://www.lcdwiki.com/3.2inch_ESP32-32E_Display] 
 * 320x480 JC3248W535C [https://www.aliexpress.com/item/1005007566332450.html]
 
-Unlike typical monolithic microcontroller firmware, **MicroDOS** behaves like a classic 1980s disk operating system with modern AI features. It features a custom multi-statement **BASIC interpreter**, a **Universal Dynamic Linker/Loader** capable of running precompiled native C binaries from an SD card, an indexed **4-bit Sprite Game Engine**, and a memory-efficient **Ollama LLM live-streaming engine** that can generate BASIC programs and store them in the host system on the fly.
+Unlike typical monolithic microcontroller firmware, **MicroDOS** behaves like a classic 1980s disk operating system with modern AI features. It features a custom multi-statement **BASIC interpreter**, **PicoC interpreter** with MicroDos-specific libraries, **Universal Dynamic Linker/Loader** capable of running precompiled native C binaries from an SD card, an indexed **4-bit Sprite Game Engine**, and a memory-efficient **Ollama LLM live-streaming engine** that can generate BASIC programs and store them in the host system on the fly.
 
 ---
 
