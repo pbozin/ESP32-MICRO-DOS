@@ -65,6 +65,30 @@ WEAK void reverse_str(char* str, int len) {
     }
 }
 
+WEAK int atoi(const char* str) {
+    int res = 0;
+    int sign = 1;
+
+    while (*str == ' ' || *str == '\t' || *str == '\n' ||
+           *str == '\r' || *str == '\v' || *str == '\f') {
+        str++;
+    }
+
+    if (*str == '-') {
+        sign = -1;
+        str++;
+    } else if (*str == '+') {
+        str++;
+    }
+
+    while (*str >= '0' && *str <= '9') {
+        res = (res * 10) + (*str - '0');
+        str++;
+    }
+
+    return sign * res;
+}
+
 WEAK void itoa(uint32_t val, char* buf) {
     int i = 0;
     if (val == 0) { buf[i++] = '0'; buf[i] = '\0'; return; }
@@ -103,6 +127,35 @@ WEAK void* memset(void* dest, int value, unsigned int count) {
             *d++ = (char)value;
         }
     }
+    return dest;
+}
+
+WEAK int strncmp(const char* s1, const char* s2, size_t n) {
+    while (n > 0) {
+        if (*s1 != *s2) {
+            return *(const unsigned char*)s1 - *(const unsigned char*)s2;
+        }
+        if (*s1 == '\0') {
+            return 0;
+        }
+        s1++;
+        s2++;
+        n--;
+    }
+    return 0;
+}
+
+WEAK char* strncpy(char* dest, const char* src, size_t n) {
+    size_t i;
+
+    for (i = 0; i < n && src[i] != '\0'; i++) {
+        dest[i] = src[i];
+    }
+
+    for (; i < n; i++) {
+        dest[i] = '\0';
+    }
+
     return dest;
 }
 
