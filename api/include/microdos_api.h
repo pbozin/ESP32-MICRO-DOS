@@ -123,6 +123,10 @@ typedef struct MicroDosAPI_t {
   void (*serialWrite)(const uint8_t* buffer, unsigned int length);
   int  (*serialRead)(uint8_t* buffer, unsigned int maxLength);
   void (*serialClose)();
+  void* (*sdOpen)(const char* filename, const char* mode);
+  uint32_t (*sdRead)(void* fileHandle, void* buffer, uint32_t size, uint32_t count);
+  uint32_t (*sdWrite)(void* fileHandle, const void* buffer, uint32_t size, uint32_t count);
+  void (*sdClose)(void* filehandle);
 } MicroDosAPI;
 
 // Tracking pointer instance to link standard malloc lodops cleanly
@@ -200,6 +204,17 @@ ALWAYS INLINE void delayMs(int ms)               { kernel()->delay(ms); }
 ALWAYS INLINE void pinMode(int pin, int m)       { kernel()->pinMode(pin, m); }
 ALWAYS INLINE void digitalWrite(int p, int v)    { kernel()->digitalWrite(p, v); }
 ALWAYS INLINE int  digitalRead(int pin)          { return kernel()->digitalRead(pin); }
+ALWAYS INLINE void *sdOpen(const char* filename,
+	                   const char* mode)     { return kernel()->sdOpen(filename, mode); };
+ALWAYS INLINE uint32_t *sdRead(void* fileHandle,
+	                       void* buffer,
+			       uint32_t size,
+			       uint32_t count)   { return kernel()->sdRead(fileHandle, buffer, size, count); };
+ALWAYS INLINE uint32_t *sdWrite(void* fileHandle,
+                                const void* buffer,
+                                uint32_t size,
+                                uint32_t count)  { return kernel()->sdWrite(fileHandle, buffer, size, count); };
+ALWAYS INLINE void sdClose(void* filehandle)     { kernel()->sdClose(filehandle); };
 
 // --- LOW-LEVEL GRAPHICS ENGINE WRAPPERS ---
 ALWAYS INLINE void setColor(int colorId)                           { kernel()->color(colorId); }

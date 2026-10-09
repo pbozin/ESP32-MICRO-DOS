@@ -3,8 +3,21 @@
 #include <WiFi.h>
 #include <WiFiClient.h>
 #include <HTTPClient.h>
-#include <FS.h>
+
+#ifdef ENABLE_JPEG
 #include <TJpg_Decoder.h>
+#endif
+
+#ifdef ENABLE_PICOC
+extern "C" {
+#include "picoc.h"
+extern jmp_buf HostExitBuf;
+}
+#endif
+
+#ifdef ENABLE_OLLAMA
+#define CONTEXT_BUF_SIZE 2048
+#endif
 
 #define KEY_REPEAT_DELAY 300
 #define KEY_FRAME_TIME 33
@@ -12,7 +25,6 @@
 #define COLOR_DEPTH 4
 
 #define SYSTEM_RAM_SIZE 256
-#define CONTEXT_BUF_SIZE 2048
 
 #define MAX_VAR_NAME_LEN 12
 #define MAX_STR_LEN 50
@@ -31,7 +43,6 @@
 #define CHAR_HEIGHT 16
 
 #define MAX_LINE_LEN 100
-
 
 #define F_KEY_LABEL_SIZE 7
 #define TKN_F1 '\x11'
@@ -468,6 +479,10 @@ const uint16_t ramOSPalette[16] = {
 
 #endif
 
+#ifndef ENABLE_PICOC
+struct TouchState { bool isPressed; int x; int y; };
+#endif
+
 bool matchFuncBounds(const char* str, const char* prefix, int prefixLen, int &innerLen);
 bool runMultiStatementLine(const char* fullLine, int &nextIdx);
 bool runSingleLine(const char* rawLine, int &currentLineIdx);
@@ -490,7 +505,9 @@ void listProgram();
 void listProgramRange(int start, int end);
 void loadBuffer(const char* filename);
 void loadFile(const char* filename);
+#ifdef ENABLE_JPEG
 void loadJpegToScreen(const char* filename, int16_t xOut, int16_t yOut);
+#endif
 void loop();
 void nativeBinaryTaskWorker(void* pvParameters);
 void playBeep(int frequency, int durationMs);
@@ -514,7 +531,6 @@ void terminalPrintln(const char* text);
 void terminalScrollDaemonTask(void* pvParameters);
 void trimCString(char* str);
 void writeEscapedToStream(WiFiClient* stream, const char* src);
-struct TouchState { bool isPressed; int x; int y; };
 void kernel_getTouchState(TouchState* state);
 void decompressRLEToCanvas(TFT_eSprite* canvas, int startX, int startY, const uint8_t* rleData, int rleSize);
 int compress4BitRLE(const uint8_t* source, uint8_t* destination);
@@ -570,8 +586,10 @@ uint16_t getPaletteColor(int cId) {
 
 int systemRAM[SYSTEM_RAM_SIZE];
 
+#ifdef ENABLE_OLLAMA
 static char chatContext[CONTEXT_BUF_SIZE] = "";
 static char* activeContext = NULL;
+#endif
 
 static char terminalBuffer[TOTAL_ROWS][TERM_COLS + 1];
 static uint8_t colorBuffer[TOTAL_ROWS][TERM_COLS];
@@ -595,6 +613,8 @@ static const char fKeyLabelsDefault[5][F_KEY_LABEL_SIZE] = { "  <-  ", "  ->  ",
 static char fKeyLabels[5][F_KEY_LABEL_SIZE] = { "  <-  ", "  ->  ", "  ESC ", "  DEL ", "  <X  " };
 
 static bool fKeysOverlayActive = false;
+
+static bool shiftPressed = true;
 
 static int scrollOffset = 0;
 static int activeRowIndex = 0;
@@ -706,6 +726,7 @@ void decompressRLEToCanvas(TFT_eSprite* canvas, int startX, int startY, const ui
 static int cursorX = 0;
 static int cursorY = 0;
 
+#ifndef ENABLE_PICOC
 struct MicroDosAPI {
   void (*print)(const char* text);
   void (*println)(const char* text);
@@ -752,9 +773,14 @@ struct MicroDosAPI {
   void (*serialWrite)(const uint8_t* buffer, unsigned int length);
   int  (*serialRead)(uint8_t* buffer, unsigned int maxLength);
   void (*serialClose)();
+  void* (*sdOpen)(const char* filename, const char* mode);
+  uint32_t (*sdRead)(void* fileHandle, void* buffer, uint32_t size, uint32_t count);
+  uint32_t (*sdWrite)(void* fileHandle, const void* buffer, uint32_t size, uint32_t count);
+  void (*sdClose)(void* filehandle);
 };
+#endif
 
-static MicroDosAPI kernelAPI;
+MicroDosAPI kernelAPI;
 
 bool sdAvailable = false;
 
@@ -817,16 +843,22 @@ static int lastTouchY = 0;
 static bool touchHeld = false;
 
 void setup() {
+#ifdef SERIAL_DEBUG
   Serial.begin(115200);
   unsigned long startWait = millis();
   while (!Serial && (millis() - startWait < 1000)) { delay(10); }
   Serial.println(F("\nStarting ESP32 MicroDOS"));
+#endif
 
   WiFi.mode(WIFI_STA);
   if (WiFi.mode(WIFI_OFF)) {
+#ifdef SERIAL_DEBUG
     Serial.println(F("- Init WiFi    OK"));
+#endif
   } else {
+#ifdef SERIAL_DEBUG
     Serial.println(F("- Init WiFi    FAIL"));
+#endif
   }
 
   tft.init();
@@ -837,24 +869,32 @@ void setup() {
   pinMode(TFT_BL, OUTPUT);
   digitalWrite(TFT_BL, HIGH);
 
+#ifdef SERIAL_DEBUG
   Serial.println(F("- Init TFT     OK"));
 
   Serial.println(F("\n\rTouch the screen!\n\r"));
+#endif
   uint16_t cD[] = { 0, 0, 0, 0, 0 };
   tft.calibrateTouch(cD, TFT_RED, TFT_BLUE, TFT_WIDTH/20);
+#ifdef SERIAL_DEBUG
   Serial.print("[ ");
   for (int i=0; i<5; i++) {
     Serial.print(cD[i]);
     Serial.print(" ");
   }
   Serial.println(F("]\n\r\n\r- Calibration  OK"));
+#endif
   tft.setTouch(cD);
 
   initSD();
   if (sdAvailable) {
+#ifdef SERIAL_DEBUG
     Serial.println(F("- Init SD Card OK"));
+#endif
   } else {
+#ifdef SERIAL_DEBUG
     Serial.println(F("- Init SD Card FAIL"));
+#endif
   }
 
   randomSeed(analogRead(RND_SEED_PIN));
@@ -864,7 +904,9 @@ void setup() {
   pinMode(AUDIO_DATA_PIN, OUTPUT);
 
   api_setup();
+#ifdef SERIAL_DEBUG
   Serial.println(F("- Init API     OK"));
+#endif
 
   drawKeyboard();
   drawStatusBar();
@@ -872,7 +914,9 @@ void setup() {
   kernelAPI.clear();
   clearProgram();
   printLogo();
+#ifdef SERIAL_DEBUG
   Serial.println(F("OK\n"));
+#endif
 
   if (sdAvailable && SD.exists("/AUTOEXEC.BAS")) {
     terminalPrintln("EXECUTING AUTOEXEC.BAS...");
@@ -975,6 +1019,7 @@ void drawStatusBar() {
 #endif
 }
 
+#ifdef ENABLE_JPEG
 bool tft_output(int16_t x, int16_t y, uint16_t w, uint16_t h, uint16_t* bitmap) {
   if (y >= tft.width()) return false;
 
@@ -1013,6 +1058,7 @@ void loadJpegToScreen(const char* filename, int16_t xOut, int16_t yOut) {
   TJpgDec.drawSdJpg(xOut, yOut, fixedFilename);
   uint32_t duration = millis() - startTime;
 }
+#endif
 
 void trimCString(char* str) {
   int l = strlen(str);
@@ -1113,6 +1159,7 @@ const char* getStringVariable(const char* name) {
     return "";
 }
 
+#ifdef ENABLE_OLLAMA
 void clearConversationContext() {
     if (activeContext != NULL) {
         activeContext[0] = '\0';
@@ -1120,6 +1167,7 @@ void clearConversationContext() {
         memset(chatContext, 0, CONTEXT_BUF_SIZE);
     }
 }
+#endif
 
 void kernel_getTouchState(TouchState* state) {
   if (state == NULL) return;
@@ -1183,6 +1231,12 @@ char getKeyPress(bool blocking) {
 
       if (row >= 0 && row < KEY_ROWS && col >= 0 && col < KEY_COLS) {
         pressedKey = symbolModeActive ? symbolLayout[row][col] : alphaLayout[row][col];
+	if (!shiftPressed) {
+	    char temp[2] = { pressedKey, '\0' };
+	    String lKey = String(temp);
+	    lKey.toLowerCase();
+	    pressedKey = lKey.c_str()[0];
+	}
         if (blocking) delay(KEY_REPEAT_DELAY);
         if (pressedKey == '\r') {
           pressedKey = 0;
@@ -1598,7 +1652,7 @@ void terminalPrint(const char* text) {
   int textLen = strlen(text);
   for (int i = 0; i < textLen; i++) {
     int currentLen = strlen(terminalBuffer[activeRowIndex]);
-    if (currentLen >= TERM_COLS) {
+    if (currentLen >= TERM_COLS or text[i] == '\n') {
       activeRowIndex++;
 
       if (activeRowIndex >= TOTAL_ROWS) {
@@ -1613,10 +1667,12 @@ void terminalPrint(const char* text) {
       currentLen = 0;
     }
 
-    terminalBuffer[activeRowIndex][currentLen] = text[i];
-    terminalBuffer[activeRowIndex][currentLen + 1] = '\0';
+    if (text[i] != '\n') {
+      terminalBuffer[activeRowIndex][currentLen] = text[i];
+      terminalBuffer[activeRowIndex][currentLen + 1] = '\0';
 
-    colorBuffer[activeRowIndex][currentLen] = (uint8_t)currentActivePaletteId;
+      colorBuffer[activeRowIndex][currentLen] = (uint8_t)currentActivePaletteId;
+    }
   }
 
   if (activeRowIndex >= TERM_ROWS) {
@@ -1688,19 +1744,25 @@ void drawKeyboard() {
       tft.fillRect(x + 1, y + 1, KEY_WIDTH - 2, KEY_HEIGHT - 2, TFT_BLUE);
       char key = symbolModeActive ? symbolLayout[r][c] : alphaLayout[r][c];
       if (key == '\n') {
-        tft.drawString("RT", x + KEY_X_OFFSET, y + KEY_Y_OFFSET);
+        tft.drawString("RET", x + (KEY_X_OFFSET/2), y + KEY_Y_OFFSET);
       } else if (key == '\t') {
-        tft.drawString("<X", x + KEY_X_OFFSET, y + KEY_Y_OFFSET);
+        tft.drawString("SHF", x + (KEY_X_OFFSET/2), y + KEY_Y_OFFSET);
       } else if (key == '\r') {
-        if (symbolModeActive) tft.drawString("AL", x + KEY_X_OFFSET, y + KEY_Y_OFFSET);
-        else tft.drawString("SY", x + KEY_X_OFFSET, y + KEY_Y_OFFSET);
+        if (symbolModeActive) tft.drawString("ALP", x + (KEY_X_OFFSET/2), y + KEY_Y_OFFSET);
+        else tft.drawString("SYM", x + (KEY_X_OFFSET/2), y + KEY_Y_OFFSET);
       } else if (key == ' ') {
         if (!symbolModeActive && c == 7) tft.drawString("SPC", x + (KEY_X_OFFSET/2), y + KEY_Y_OFFSET);
       } else {
 	char temp[2];
 	temp[0] = key;
 	temp[1] = '\0';
-        tft.drawString((char*)temp, x + KEY_X_OFFSET, y + KEY_Y_OFFSET);
+	if (!shiftPressed) {
+	    String lKey = String(temp);
+	    lKey.toLowerCase();
+            tft.drawString((char*)lKey.c_str(), x + KEY_X_OFFSET, y + KEY_Y_OFFSET);
+	} else {
+            tft.drawString((char*)temp, x + KEY_X_OFFSET, y + KEY_Y_OFFSET);
+	}
       }
     }
   }
@@ -1832,13 +1894,21 @@ void handleKeyPress(char key) {
     }
 
     // Backspace
-    else if (key == TKN_F5 || key == '\t') {
+    else if (key == TKN_F5) {
         if (inputCursorPos > 0) {
             int elementsToShift = inputLen - inputCursorPos + 1;
             memmove(&inputBuffer[inputCursorPos - 1], &inputBuffer[inputCursorPos], elementsToShift);
             inputCursorPos--;
             renderFullWrappedInputLine();
         }
+        return;
+    }
+
+    // Shift
+    else if (key == '\t') {
+	shiftPressed = !shiftPressed;
+	drawKeyboard();
+	delay(300);
         return;
     }
 
@@ -2170,6 +2240,81 @@ void printMemoryMap(bool showVars) {
   terminalPrintln("=======================================");
 }
 
+#ifdef ENABLE_PICOC
+void executeCProgram(const char* filename) {
+    if (filename[0] == '\0') {
+        Picoc* pc = (Picoc*)malloc(sizeof(Picoc));
+        if (pc == NULL) {
+            terminalPrintln("ERR: OUT OF RAM (ENGINE)");
+            return;
+        }
+        PicocInitialize(pc, 16 * 1024);
+        PicocIncludeAllSystemHeaders(pc);
+	if (setjmp(pc->HostExitBuf) == 0) {
+            PicocParseInteractive(pc);
+	}
+        PicocCleanup(pc);
+        free(pc);
+        return;
+    }
+
+    if (!sdAvailable) {
+        terminalPrintln("ERR: NO DISK");
+        return;
+    }
+
+    char pathBuf[FILENAME_SIZE];
+    if (filename[0] != '/') {
+        snprintf(pathBuf, FILENAME_SIZE, "/%s", filename);
+    } else {
+        strncpy(pathBuf, filename, FILENAME_SIZE);
+        pathBuf[FILENAME_SIZE - 1] = '\0';
+    }
+
+    if (!SD.exists(pathBuf)) {
+        terminalPrintln("ERR: FILE NOT FOUND");
+        return;
+    }
+
+    File f = SD.open(pathBuf, FILE_READ);
+    if (!f) {
+        terminalPrintln("ERR: OPEN FAILED");
+        return;
+    }
+
+    size_t fileSize = f.size();
+    char* srcCode = (char*)malloc(fileSize + 1);
+    if (srcCode == NULL) {
+        f.close();
+        terminalPrintln("ERR: OUT OF RAM (CODE)");
+        return;
+    }
+
+    f.readBytes(srcCode, fileSize);
+    srcCode[fileSize] = '\0';
+    f.close();
+
+    Picoc* pc = (Picoc*)malloc(sizeof(Picoc));
+    if (pc == NULL) {
+        free(srcCode);
+        terminalPrintln("ERR: OUT OF RAM (ENGINE)");
+        return;
+    }
+
+    PicocInitialize(pc, 16 * 1024);
+    PicocIncludeAllSystemHeaders(pc);
+
+    PicocParse(pc, pathBuf, srcCode, fileSize, 1, 1, 1, 0);
+    PicocCallMain(pc, 0, NULL);
+
+    delay(100);
+
+    PicocCleanup(pc);
+    free(pc);
+    free(srcCode);
+}
+#endif
+
 void processCommand(const char* rawCmd) {
  char cmd[MAX_LINE_LEN];
  strncpy(cmd, rawCmd, MAX_LINE_LEN);
@@ -2210,7 +2355,7 @@ void processCommand(const char* rawCmd) {
     return;
   }
 
-  if (strcmp(firstToken, "DIR") == 0 || strcmp(firstToken, "CAT") == 0) {
+  if (strcmp(firstToken, "DIR") == 0) {
     if (!sdAvailable) { terminalPrintln("ERR: NO DISK"); return; }
 
     File root = SD.open("/");
@@ -2347,6 +2492,25 @@ void processCommand(const char* rawCmd) {
     executeProgram();
     return;
   }
+#ifdef ENABLE_PICOC
+  else if (strcmp(firstToken, "CRUN") == 0) {
+    if (firstSpace != NULL) {
+      memset(baseFilename, 0, FILENAME_SIZE);
+      strncpy(baseFilename, firstSpace + 1, FILENAME_SIZE);
+      baseFilename[FILENAME_SIZE - 1] = '\0';
+      stripQuotes(baseFilename);
+      trimCString(baseFilename);
+      executeCProgram(baseFilename);
+    } else {
+      shiftPressed = false;
+      drawKeyboard();
+      executeCProgram("\0");
+      shiftPressed = true;
+      drawKeyboard();
+    }
+    return;
+  }
+#endif
   else if (strcmp(firstToken, "DUMP") == 0) {
     if (firstSpace != NULL) {
       memset(baseFilename, 0, FILENAME_SIZE);
@@ -2456,6 +2620,7 @@ void processCommand(const char* rawCmd) {
     }
     return;
   }
+#ifdef ENABLE_JPEG
   else if (strcmp(firstToken, "IMVIEW") == 0) {
     if (firstSpace != NULL) {
       memset(baseFilename, 0, FILENAME_SIZE);
@@ -2474,6 +2639,7 @@ void processCommand(const char* rawCmd) {
     }
     return;
   }
+#endif
   else if (strcmp(firstToken, "EDIT") == 0) {
     strncpy(previousPrompt, currentPrompt, PROMPT_SIZE - 1);
     previousPrompt[PROMPT_SIZE - 1] = '\0';
@@ -3059,13 +3225,21 @@ void processCommand(const char* rawCmd) {
     terminalPrintln("DOS:  DIR, LOAD, LOAD$, SAVE, SAVE$,");
     terminalPrintln("      DELETE");
     terminalPrintln("CODE: BEEP, CIRCLE, CLEAR, COLOR, COS(,");
-    terminalPrintln("      DELAY, DUMP, DUMPS, EDIT, EXEC,");
-    terminalPrintln("      FALSE, GOSUB, GOTO, HIGH, IF,");
+#ifdef ENABLE_PICOC
+    terminalPrintln("      CRUN, DELAY, DUMP, DUMPS, EDIT,");
+#else
+    terminalPrintln("      DELAY, DUMP, DUMPS, EDIT,");
+#endif
+    terminalPrintln("      EXEC, FALSE, GOSUB, GOTO, HIGH, IF,");
+#ifdef ENABLE_JPEG
     terminalPrintln("      IMVIEW, INKEY, INPUT, INREAD, INT(");
-    terminalPrintln("      IOSET, KEY, LINE, LN(, LOW, MEMMAP,");
-    terminalPrintln("      PEEK, PLOT, POKE, PRINT, RECT,");
-    terminalPrintln("      RETURN, RND, RND(, SIN(, SQR(,");
-    terminalPrintln("      TERMHEIGHT, TERMWIDTH, TOUCH,");
+#else
+    terminalPrintln("      INKEY, INPUT, INREAD, INT(");
+#endif
+    terminalPrintln("      IOSET, KEY, LET, LINE, LN(, LOW,");
+    terminalPrintln("      MEMMAP, PEEK, PLOT, POKE, PRINT,");
+    terminalPrintln("      RECT, RETURN, RND, RND(, SIN(,");
+    terminalPrintln("      SQR(, TERMHEIGHT, TERMWIDTH, TOUCH,");
     terminalPrintln("      TRUE, VAL(, WIFIUP, WIFIDOWN");
     return;
   }
@@ -3804,6 +3978,7 @@ bool runSingleLine(const char* rawLine, int &currentLineIdx) {
   return false;
 }
 
+#ifdef ENABLE_OLLAMA
 void writeEscapedToStream(WiFiClient* stream, const char* src) {
   if (!src) return;
   while (*src) {
@@ -3933,6 +4108,7 @@ void processIncomingToken(const char* token, const char* m, bool &isRecordingCod
         else                     terminalPrint(cleanToken);
     }
 }
+#endif
 
 bool isPinProtected(int pin) {
     if (pin < 0 || pin > 49) return false;
@@ -4210,6 +4386,7 @@ void api_setup() {
 
 
   kernelAPI.ollamaStream = [] (const char* p, const char* s, const char* m, const char* sysPrompt, int streamToConsole) -> int {
+#ifdef ENABLE_OLLAMA
     if (WiFi.status() != WL_CONNECTED || !p || strlen(p) == 0 || !m) return -1;
 
     String inputStr = String(p);
@@ -4393,6 +4570,7 @@ void api_setup() {
     }
 
     http.end();
+#endif
     return -1;
   };
 
@@ -4405,6 +4583,12 @@ void api_setup() {
   kernelAPI.charWidth   = CHAR_WIDTH;
 
   kernelAPI.charHeight  = CHAR_HEIGHT;
+
+  kernelAPI.drawJpeg    = [] (const char* filename, int x, int y) -> void {
+#ifdef ENABLE_JPEG
+    loadJpegToScreen(filename, x, y);
+#endif
+  };
 
   kernelAPI.setFKeys = [] (const char* l1, const char* l2, const char* l3, const char* l4, const char* l5) {
     strlcpy(fKeyLabels[0], l1 ? l1 : "F1", F_KEY_LABEL_SIZE);
@@ -4622,4 +4806,41 @@ void api_setup() {
   kernelAPI.serialWrite = host_serialWrite;
   kernelAPI.serialRead  = host_serialRead;
   kernelAPI.serialClose = host_serialClose;
+
+  kernelAPI.sdOpen = [](const char* filename, const char* mode) -> void* {
+    char fullPath[64];
+    snprintf(fullPath, sizeof(fullPath), "/sd%s", filename[0] == '/' ? filename : (std::string("/") + filename).c_str());
+
+    FILE* f = fopen(fullPath, mode);
+
+    return (void*)f;
+  };
+
+  kernelAPI.sdWrite = [](void* fileHandle, const void* buffer, uint32_t size, uint32_t count) -> uint32_t {
+    if (!fileHandle || !buffer) return 0;
+    fs::File* filePtr = (fs::File*)fileHandle;
+
+    size_t bytesToWrite = size * count;
+    size_t bytesWritten = filePtr->write((const uint8_t*)buffer, bytesToWrite);
+
+    return bytesWritten / size;
+  };
+
+  kernelAPI.sdRead = [](void* fileHandle, void* buffer, uint32_t size, uint32_t count) -> uint32_t {
+    if (!fileHandle || !buffer) return 0;
+    fs::File* filePtr = (fs::File*)fileHandle;
+
+    size_t bytesToRead = size * count;
+    size_t bytesRead = filePtr->read((uint8_t*)buffer, bytesToRead);
+
+    return bytesRead / size;
+  };
+
+  kernelAPI.sdClose = [](void* fileHandle) {
+    if (fileHandle != nullptr) {
+      FILE* f = (FILE*)fileHandle;
+      fclose(f);
+    }
+  };
+
 }
