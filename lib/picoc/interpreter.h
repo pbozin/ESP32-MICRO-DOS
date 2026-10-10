@@ -743,11 +743,6 @@ extern struct LibraryFunction StdCtypeFunctions[];
 extern const char StdboolDefs[];
 extern void StdboolSetupFunc(Picoc *pc);
 
-/* unistd.c */
-extern const char UnistdDefs[];
-extern struct LibraryFunction UnistdFunctions[];
-extern void UnistdSetupFunc(Picoc *pc);
-
 /* sys/stat.c */
 extern struct LibraryFunction StatFunctions[];
 extern const char StatDefs[];
