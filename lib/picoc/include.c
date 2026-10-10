@@ -11,7 +11,7 @@ void IncludeInit(Picoc *pc)
     IncludeRegister(pc, "ctype.h", NULL, &StdCtypeFunctions[0], NULL);
     IncludeRegister(pc, "errno.h", &StdErrnoSetupFunc, NULL, NULL);
     IncludeRegister(pc, "fcntl.h", &FcntlSetupFunc, &FcntlFunctions[0], FcntlDefs);
-    IncludeRegister(pc, "graphics.h", &GraphicsSetupFunc, &GraphicsFunctions[0], NULL);
+    IncludeRegister(pc, "graphics.h", &GraphicsSetupFunc, &GraphicsFunctions[0], GraphicsDefs);
     IncludeRegister(pc, "stdbool.h", &StdboolSetupFunc, NULL, StdboolDefs);
     IncludeRegister(pc, "stdio.h", &StdioSetupFunc, &StdioFunctions[0], StdioDefs);
     IncludeRegister(pc, "stdlib.h", &StdlibSetupFunc, &StdlibFunctions[0], NULL);
