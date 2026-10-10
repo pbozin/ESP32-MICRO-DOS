@@ -3,6 +3,24 @@
 
 #ifndef BUILTIN_MINI_STDLIB
 
+const char GraphicsDefs[] =
+"#define BLACK      0\n"
+"#define WHITE      1\n"
+"#define LIGHTGREY  2\n"
+"#define RED        3\n"
+"#define ORANGE     4\n"
+"#define YELLOW     5\n"
+"#define GREEN      6\n"
+"#define CYAN       7\n"
+"#define BLUE       8\n"
+"#define MAGENTA    9\n"
+"#define MAROON     10\n"
+"#define DARKGREEN  11\n"
+"#define DARKCYAN   12\n"
+"#define NAVY       13\n"
+"#define PINK       14\n"
+"#define DARKGREY   15\n";
+
 static int Graphics_ZeroValue = 0;
 
 void GraphicsGetTermWidth(struct ParseState *Parser, struct Value *ReturnValue, struct Value **Param, int NumArgs)

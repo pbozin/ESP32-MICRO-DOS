@@ -1,5 +1,6 @@
 #include "../picoc.h"
 #include "../interpreter.h"
+#include <sys/stat.h>
 
 jmp_buf PicocExitBuf;
 jmp_buf HostExitBuf;
@@ -28,12 +29,18 @@ char *PlatformGetLine(char *Buf, int MaxLen, const char *Prompt)
 
 int PlatformGetCharacter()
 {
-    return kernelAPI.inkey();
+    int ch = kernelAPI.inkey();
+    // Return standard C EOF if no character is currently waiting in the buffer
+    if (ch <= 0) {
+        return -1;
+    }
+    return ch;
 }
 
 void PlatformPutc(unsigned char OutCh, union OutputStreamInfo *Stream)
 {
-    char buf[2] = { OutCh, '\0' };
+    (void)Stream;
+    char buf[2] = { (char)OutCh, '\0' };
     kernelAPI.print(buf);
 }
 
@@ -45,17 +52,13 @@ char *PlatformReadFile(Picoc *pc, const char *FileName)
     int BytesRead;
     char *p;
 
-    char fileName[32];
+    char *fileName = (char *)malloc(32);
 
-    char* concat(const char* first, const char* second, char* result) {
-        char* ptr = result;
-        while (*first)  *ptr++ = *first++;
-        while (*second) *ptr++ = *second++;
-        *ptr = '\0';
-        return result;
+    if (FileName[0] == '/') {
+        snprintf(fileName, 32, "/sd%s", FileName);
+    } else {
+        snprintf(fileName, 32, "/sd/%s", FileName);
     }
-
-    concat("/", FileName, fileName);
 
     if (stat(fileName, &FileInfo))
         ProgramFailNoParser(pc, "can't read file %s\n", fileName);
@@ -65,16 +68,23 @@ char *PlatformReadFile(Picoc *pc, const char *FileName)
         ProgramFailNoParser(pc, "out of memory\n");
 
     InFile = fopen(fileName, "r");
-    if (InFile == NULL)
-        ProgramFailNoParser(pc, "can't read file %s\n", fileName);
+    if (InFile == NULL) {
+        free(ReadText);
+        ProgramFailNoParser(pc, "can't read file\n", fileName);
+    }
 
     BytesRead = fread(ReadText, 1, FileInfo.st_size, InFile);
-    if (BytesRead == 0)
-        ProgramFailNoParser(pc, "can't read file %s\n", fileName);
+    fclose(InFile);
+    free(fileName);
+
+    if (BytesRead <= 0) {
+        free(ReadText);
+        ProgramFailNoParser(pc, "error reading file\n");
+    }
 
     ReadText[BytesRead] = '\0';
-    fclose(InFile);
 
+    // Shebang line handling (e.g. #!/usr/bin/picoc) -> Convert to white spaces
     if ((ReadText[0] == '#') && (ReadText[1] == '!')) {
         for (p = ReadText; (*p != '\0') && (*p != '\r') && (*p != '\n'); ++p) {
             *p = ' ';
@@ -87,24 +97,23 @@ char *PlatformReadFile(Picoc *pc, const char *FileName)
 void PicocPlatformScanFile(Picoc *pc, const char *FileName)
 {
     char *SourceStr = PlatformReadFile(pc, FileName);
-    if (SourceStr != NULL && SourceStr[0] == '#' && SourceStr[1] == '!')
+    if (SourceStr != NULL)
     {
-        SourceStr[0] = '/';
-        SourceStr[1] = '/';
+        PicocParse(pc, FileName, SourceStr, strlen(SourceStr), TRUE, FALSE, TRUE, TRUE);
+        free(SourceStr); // Fix: Essential to free heap string block after PicoC completes parsing it!
     }
-    PicocParse(pc, FileName, SourceStr, strlen(SourceStr), TRUE, FALSE, TRUE, TRUE);
 }
 
 void PlatformExit(Picoc *pc, int RetVal)
 {
     if (!pc)
-	return;
+        return;
 
     pc->PicocExitValue = RetVal;
 
     if (!PlatformRunning) {
         longjmp(pc->HostExitBuf, RetVal);
-    } 
+    }
     else if (*pc->PicocExitBuf) {
         longjmp(pc->PicocExitBuf, RetVal);
     }

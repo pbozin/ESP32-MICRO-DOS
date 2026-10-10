@@ -708,6 +708,7 @@ extern void DebugStep(void)
 #endif
 
 /* graphics.c */
+extern const char GraphicsDefs[];
 extern struct LibraryFunction GraphicsFunctions[];
 extern void GraphicsSetupFunc(Picoc *pc);
 
