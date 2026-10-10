@@ -526,7 +526,7 @@ INLINE ALWAYS void drawBoard() {
         for (int32_t c = 0; c < 8; c++) {
             int32_t colorId = -1;
             colorId = ((r + c) % 2 == 0) ? 15 : 2;
-            drawRect(c * fSize, r * fSize, fSize, fSize, colorId);
+            fillRect(c * fSize, r * fSize, fSize, fSize, colorId);
         }
     }
     flushGameMatrix();

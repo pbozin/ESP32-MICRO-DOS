@@ -87,7 +87,7 @@ int _start(int argc, char** argv, MicroDosAPI* api) {
             screenWidth, screenHeight
         );
 
-        drawRect(0, 0, getTermWidth(), getTermHeight(), BLACK);
+        fillRect(0, 0, getTermWidth(), getTermHeight(), BLACK);
 
         int strokeColor = CYAN;
         if (currentGlobalState > 1.0f)     strokeColor = GREEN;

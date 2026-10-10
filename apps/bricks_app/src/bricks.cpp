@@ -33,7 +33,7 @@ extern "C" int _start(int argc, char** argv, MicroDosAPI* api) {
         int c = i % 10;
         int a = c * bWidth;
         int b = r * bHeight;
-        drawRect(a, b, bWidth - 1, bHeight - 1, r + 3);
+        fillRect(a, b, bWidth - 1, bHeight - 1, r + 3);
     }
 
     delayMs(500);
@@ -43,12 +43,12 @@ extern "C" int _start(int argc, char** argv, MicroDosAPI* api) {
         int k = getKey();
 
         if (k == KEY_LEFT) {
-            drawRect(p, q, pSize, 6, BLACK);
+            fillRect(p, q, pSize, 6, BLACK);
             p -= 12;
             if (p < 0) p = 0;
         }
         else if (k == KEY_RIGHT) {
-            drawRect(p, q, pSize, 6, BLACK);
+            fillRect(p, q, pSize, 6, BLACK);
             p += 12;
             if (p > getTermWidth() - pSize) p = getTermWidth() - pSize;
         }
@@ -57,7 +57,7 @@ extern "C" int _start(int argc, char** argv, MicroDosAPI* api) {
             break;
         }
 
-        drawRect(x - 3, y - 3, 6, 6, BLACK);
+        fillRect(x - 3, y - 3, 6, 6, BLACK);
 
         x += u;
         y += v;
@@ -91,7 +91,7 @@ extern "C" int _start(int argc, char** argv, MicroDosAPI* api) {
 
                     int a = c * bWidth;
                     int b = r * bHeight;
-                    drawRect(a, b, bWidth, bHeight, BLACK);
+                    fillRect(a, b, bWidth, bHeight, BLACK);
                 }
             }
         }
@@ -104,8 +104,8 @@ extern "C" int _start(int argc, char** argv, MicroDosAPI* api) {
             }
         }
 
-        drawRect(p, q, pSize, 6, BLUE);
-        drawRect(x - 3, y - 3, 6, 6, YELLOW);
+        fillRect(p, q, pSize, 6, BLUE);
+        fillRect(x - 3, y - 3, 6, 6, YELLOW);
 
         if (y > getTermHeight() - 10) {
             playSound(150, 600);

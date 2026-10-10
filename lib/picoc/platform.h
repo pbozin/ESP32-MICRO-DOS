@@ -27,9 +27,11 @@ typedef struct MicroDosAPI_t {
   int  (*inkey)();
   void (*color)(int colorId);
   void (*plot)(int x, int y, int colorId);
-  void (*line)(int x1, int y1, int x2, int y2, int colorId);
-  void (*rect)(int x, int y, int w, int h, int colorId);
-  void (*circle)(int x, int y, int r, int colorId);
+  void (*drawLine)(int x1, int y1, int x2, int y2, int colorId);
+  void (*drawRect)(int x, int y, int w, int h, int colorId);
+  void (*fillRect)(int x, int y, int w, int h, int colorId);
+  void (*drawCircle)(int x, int y, int r, int colorId);
+  void (*fillCircle)(int x, int y, int r, int colorId);
   int  (*peek)(int address);
   void (*poke)(int address, int value);
   int  (*getRamSize)();

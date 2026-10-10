@@ -236,6 +236,7 @@ const uint16_t ramOSPalette[16] = {
     void drawLine(int16_t x0, int16_t y0, int16_t x1, int16_t y1, uint16_t c) { tft_driver->drawLine(x0,y0,x1,y1,c);}
     void drawPixel(int16_t x, int16_t y, uint16_t c) { tft_driver->drawPixel(x,y,c); }
     void fillCircle(int16_t x, int16_t y, int16_t r, uint16_t c) { tft_driver->fillCircle(x, y, r, c);}
+    void drawCircle(int16_t x, int16_t y, int16_t r, uint16_t c) { tft_driver->drawCircle(x, y, r, c);}
     void drawChar(char c, int16_t x, int16_t y) { tft_driver->drawChar(x, y, (unsigned char)c, currentActivePaletteId, TFT_BLACK);}
 
     void setTextColor(uint16_t c) { tft_driver->setTextColor(c, TFT_BLACK); }
@@ -736,9 +737,11 @@ typedef struct MicroDosAPI_t {
   int  (*inkey)();
   void (*color)(int colorId);
   void (*plot)(int x, int y, int colorId);
-  void (*line)(int x1, int y1, int x2, int y2, int colorId);
-  void (*rect)(int x, int y, int w, int h, int colorId);
-  void (*circle)(int x, int y, int r, int colorId);
+  void (*drawLine)(int x1, int y1, int x2, int y2, int colorId);
+  void (*drawRect)(int x, int y, int w, int h, int colorId);
+  void (*fillRect)(int x, int y, int w, int h, int colorId);
+  void (*drawCircle)(int x, int y, int r, int colorId);
+  void (*fillCircle)(int x, int y, int r, int colorId);
   int  (*peek)(int address);
   void (*poke)(int address, int value);
   int  (*getRamSize)();
@@ -3230,12 +3233,13 @@ void processCommand(const char* rawCmd) {
 #else
     terminalPrintln("      DELAY, DUMP, DUMPS, EDIT,");
 #endif
-    terminalPrintln("      EXEC, FALSE, GOSUB, GOTO, HIGH, IF,");
+    terminalPrintln("      EXEC, FALSE, FILLCIRCLE, FILLRECT,");
 #ifdef ENABLE_JPEG
-    terminalPrintln("      IMVIEW, INKEY, INPUT, INREAD, INT(");
+    terminalPrintln("      GOSUB, GOTO, HIGH, IF, IMVIEW,");
 #else
-    terminalPrintln("      INKEY, INPUT, INREAD, INT(");
+    terminalPrintln("      GOSUB, GOTO, HIGH, IF,");
 #endif
+    terminalPrintln("      INKEY, INPUT, INREAD, INT(");
     terminalPrintln("      IOSET, KEY, LET, LINE, LN(, LOW,");
     terminalPrintln("      MEMMAP, PEEK, PLOT, POKE, PRINT,");
     terminalPrintln("      RECT, RETURN, RND, RND(, SIN(,");
@@ -3452,6 +3456,23 @@ bool runSingleLine(const char* rawLine, int &currentLineIdx) {
     return true;
   }
 
+  if (strncmp(line, "FILLRECT ", 5) == 0) {
+    char* args = line + 5;
+    char* p1 = strchr(args, ','); if (!p1) { kernelAPI.println("ERR: RECT SYNTAX"); return false; } *p1 = '\0';
+    char* p2 = strchr(p1 + 1, ','); if (!p2) { kernelAPI.println("ERR: RECT SYNTAX"); return false; } *p2 = '\0';
+    char* p3 = strchr(p2 + 1, ','); if (!p3) { kernelAPI.println("ERR: RECT SYNTAX"); return false; } *p3 = '\0';
+    char* p4 = strchr(p3 + 1, ','); if (!p4) { kernelAPI.println("ERR: RECT SYNTAX"); return false; } *p4 = '\0';
+
+    int x       = evaluateExpression(args);
+    int y       = evaluateExpression(p1 + 1);
+    int w       = evaluateExpression(p2 + 1);
+    int h       = evaluateExpression(p3 + 1);
+    int colorId = evaluateExpression(p4 + 1);
+
+    kernelAPI.fillRect(x, y, w, h, colorId);
+    return true;
+  }
+
   if (strncmp(line, "RECT ", 5) == 0) {
     char* args = line + 5;
     char* p1 = strchr(args, ','); if (!p1) { kernelAPI.println("ERR: RECT SYNTAX"); return false; } *p1 = '\0';
@@ -3465,7 +3486,7 @@ bool runSingleLine(const char* rawLine, int &currentLineIdx) {
     int h       = evaluateExpression(p3 + 1);
     int colorId = evaluateExpression(p4 + 1);
 
-    kernelAPI.rect(x, y, w, h, colorId);
+    kernelAPI.drawRect(x, y, w, h, colorId);
     return true;
   }
 
@@ -3480,7 +3501,22 @@ bool runSingleLine(const char* rawLine, int &currentLineIdx) {
     int r       = evaluateExpression(p2 + 1);
     int colorId = evaluateExpression(p3 + 1);
 
-    kernelAPI.circle(x, y, r, colorId);
+    kernelAPI.drawCircle(x, y, r, colorId);
+    return true;
+  }
+
+  if (strncmp(line, "FILLCIRCLE ", 7) == 0) {
+    char* args = line + 7;
+    char* p1 = strchr(args, ','); if (!p1) { kernelAPI.println("ERR: CIRCLE SYNTAX"); return false; } *p1 = '\0';
+    char* p2 = strchr(p1 + 1, ','); if (!p2) { kernelAPI.println("ERR: CIRCLE SYNTAX"); return false; } *p2 = '\0';
+    char* p3 = strchr(p2 + 1, ','); if (!p3) { kernelAPI.println("ERR: CIRCLE SYNTAX"); return false; } *p3 = '\0';
+
+    int x       = evaluateExpression(args);
+    int y       = evaluateExpression(p1 + 1);
+    int r       = evaluateExpression(p2 + 1);
+    int colorId = evaluateExpression(p3 + 1);
+
+    kernelAPI.fillCircle(x, y, r, colorId);
     return true;
   }
 
@@ -3497,7 +3533,7 @@ bool runSingleLine(const char* rawLine, int &currentLineIdx) {
     int y2      = evaluateExpression(p3 + 1);
     int colorId = evaluateExpression(p4 + 1);
 
-    kernelAPI.line(x1, y1, x2, y2, colorId);
+    kernelAPI.drawLine(x1, y1, x2, y2, colorId);
     return true;
   }
 
@@ -4225,7 +4261,7 @@ void api_setup() {
     }
   };
 
-  kernelAPI.line = [] (int x1, int y1, int x2, int y2, int colorId) {
+  kernelAPI.drawLine = [] (int x1, int y1, int x2, int y2, int colorId) {
     if (x1 >= 0 && x1 < TFT_WIDTH_DRAW && y1 >= 0 && y1 < TFT_HEIGHT_DRAW && x2 >= 0 && x2 < TFT_WIDTH_DRAW && y2 >= 0 && y2 < TFT_HEIGHT_DRAW) {
       if (MATRIX_ACTIVE) {
         bgCanvas.drawLine(x1, y1, x2, y2, colorId);
@@ -4235,7 +4271,7 @@ void api_setup() {
     }
   };
 
-  kernelAPI.rect = [] (int x, int y, int w, int h, int colorId) {
+  kernelAPI.fillRect = [] (int x, int y, int w, int h, int colorId) {
      if (MATRIX_ACTIVE) {
       bgCanvas.fillRect(x, y, w, h, colorId);
     } else {
@@ -4243,7 +4279,23 @@ void api_setup() {
     }
   };
 
-  kernelAPI.circle = [] (int x, int y, int r, int colorId) {
+  kernelAPI.drawRect = [] (int x, int y, int w, int h, int colorId) {
+     if (MATRIX_ACTIVE) {
+      bgCanvas.drawRect(x, y, w, h, colorId);
+    } else {
+      tft.drawRect(x, y, w, h, getPaletteColor(colorId));
+    }
+  };
+
+  kernelAPI.drawCircle = [] (int x, int y, int r, int colorId) {
+    if (MATRIX_ACTIVE) {
+      bgCanvas.drawCircle(x, y, r, colorId);
+    } else {
+      tft.drawCircle(x, y, r, getPaletteColor(colorId));
+    }
+  };
+
+  kernelAPI.fillCircle = [] (int x, int y, int r, int colorId) {
     if (MATRIX_ACTIVE) {
       bgCanvas.fillCircle(x, y, r, colorId);
     } else {

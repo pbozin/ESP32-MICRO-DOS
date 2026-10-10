@@ -148,7 +148,7 @@ extern "C" int _start(int argc, char** argv, MicroDosAPI* api) {
             screenWidth, screenHeight
         );
 
-        drawRect(0, 0, getTermWidth(), getTermHeight(), BLACK);
+        fillRect(0, 0, getTermWidth(), getTermHeight(), BLACK);
 
         int offsetX = (int)ballX - (int)(screenWidth * 0.5f);
         int offsetY = (int)ballY - (int)(screenHeight * 0.5f);

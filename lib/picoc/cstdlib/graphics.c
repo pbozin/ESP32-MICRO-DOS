@@ -95,17 +95,27 @@ void GraphicsDrawPoint(struct ParseState *Parser, struct Value *ReturnValue, str
 
 void GraphicsDrawLine(struct ParseState *Parser, struct Value *ReturnValue, struct Value **Param, int NumArgs)
 {
-    kernelAPI.line(Param[0]->Val->Integer, Param[1]->Val->Integer, Param[2]->Val->Integer, Param[3]->Val->Integer, Param[4]->Val->Integer);
+    kernelAPI.drawLine(Param[0]->Val->Integer, Param[1]->Val->Integer, Param[2]->Val->Integer, Param[3]->Val->Integer, Param[4]->Val->Integer);
 }
 
 void GraphicsDrawRect(struct ParseState *Parser, struct Value *ReturnValue, struct Value **Param, int NumArgs)
 {
-    kernelAPI.rect(Param[0]->Val->Integer, Param[1]->Val->Integer, Param[2]->Val->Integer, Param[3]->Val->Integer, Param[4]->Val->Integer);
+    kernelAPI.drawRect(Param[0]->Val->Integer, Param[1]->Val->Integer, Param[2]->Val->Integer, Param[3]->Val->Integer, Param[4]->Val->Integer);
 }
 
 void GraphicsDrawCircle(struct ParseState *Parser, struct Value *ReturnValue, struct Value **Param, int NumArgs)
 {
-    kernelAPI.circle(Param[0]->Val->Integer, Param[1]->Val->Integer, Param[2]->Val->Integer, Param[3]->Val->Integer);
+    kernelAPI.drawCircle(Param[0]->Val->Integer, Param[1]->Val->Integer, Param[2]->Val->Integer, Param[3]->Val->Integer);
+}
+
+void GraphicsFillRect(struct ParseState *Parser, struct Value *ReturnValue, struct Value **Param, int NumArgs)
+{
+    kernelAPI.fillRect(Param[0]->Val->Integer, Param[1]->Val->Integer, Param[2]->Val->Integer, Param[3]->Val->Integer, Param[4]->Val->Integer);
+}
+
+void GraphicsFillCircle(struct ParseState *Parser, struct Value *ReturnValue, struct Value **Param, int NumArgs)
+{
+    kernelAPI.fillCircle(Param[0]->Val->Integer, Param[1]->Val->Integer, Param[2]->Val->Integer, Param[3]->Val->Integer);
 }
 
 void GraphicsDrawJpeg(struct ParseState *Parser, struct Value *ReturnValue, struct Value **Param, int NumArgs)
@@ -137,6 +147,8 @@ struct LibraryFunction GraphicsFunctions[] =
     { GraphicsDrawLine,        "void     drawLine(int x1, int y1, int x2, int y2, int colorId);" },
     { GraphicsDrawRect,        "void     drawRect(int x, int y, int w, int h, int colorId);" },
     { GraphicsDrawCircle,      "void     drawCircle(int x, int y, int r, int colorId);" },
+    { GraphicsFillRect,        "void     fillRect(int x, int y, int w, int h, int colorId);" },
+    { GraphicsFillCircle,      "void     fillCircle(int x, int y, int r, int colorId);" },
     { GraphicsDrawJpeg,        "void     drawJpeg(char* filename, int x, int y);" },
 
     { NULL,             NULL }
