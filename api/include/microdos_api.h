@@ -53,9 +53,11 @@ typedef struct MicroDosAPI_t {
   // --- Low-Level Vector Graphics ---
   void (*color)(int colorId);
   void (*plot)(int x, int y, int colorId);
-  void (*line)(int x1, int y1, int x2, int y2, int colorId);
-  void (*rect)(int x, int y, int w, int h, int colorId);
-  void (*circle)(int x, int y, int r, int colorId);
+  void (*drawLine)(int x1, int y1, int x2, int y2, int colorId);
+  void (*drawRect)(int x, int y, int w, int h, int colorId);
+  void (*fillRect)(int x, int y, int w, int h, int colorId);
+  void (*drawCircle)(int x, int y, int r, int colorId);
+  void (*fillCircle)(int x, int y, int r, int colorId);
 
   // --- Direct Memory Sandboxing ---
   int  (*peek)(int address);
@@ -206,11 +208,11 @@ ALWAYS INLINE void digitalWrite(int p, int v)    { kernel()->digitalWrite(p, v);
 ALWAYS INLINE int  digitalRead(int pin)          { return kernel()->digitalRead(pin); }
 ALWAYS INLINE void *sdOpen(const char* filename,
 	                   const char* mode)     { return kernel()->sdOpen(filename, mode); };
-ALWAYS INLINE uint32_t *sdRead(void* fileHandle,
+ALWAYS INLINE uint32_t sdRead(void* fileHandle,
 	                       void* buffer,
 			       uint32_t size,
 			       uint32_t count)   { return kernel()->sdRead(fileHandle, buffer, size, count); };
-ALWAYS INLINE uint32_t *sdWrite(void* fileHandle,
+ALWAYS INLINE uint32_t sdWrite(void* fileHandle,
                                 const void* buffer,
                                 uint32_t size,
                                 uint32_t count)  { return kernel()->sdWrite(fileHandle, buffer, size, count); };
@@ -219,9 +221,11 @@ ALWAYS INLINE void sdClose(void* filehandle)     { kernel()->sdClose(filehandle)
 // --- LOW-LEVEL GRAPHICS ENGINE WRAPPERS ---
 ALWAYS INLINE void setColor(int colorId)                           { kernel()->color(colorId); }
 ALWAYS INLINE void drawPixel(int x, int y, int c)                  { kernel()->plot(x, y, c); }
-ALWAYS INLINE void drawLine(int x1, int y1, int x2, int y2, int c) { kernel()->line(x1, y1, x2, y2, c); }
-ALWAYS INLINE void drawRect(int x, int y, int w, int h, int c)     { kernel()->rect(x, y, w, h, c); }
-ALWAYS INLINE void drawCircle(int x, int y, int r, int c)          { kernel()->circle(x, y, r, c); }
+ALWAYS INLINE void drawLine(int x1, int y1, int x2, int y2, int c) { kernel()->drawLine(x1, y1, x2, y2, c); }
+ALWAYS INLINE void drawRect(int x, int y, int w, int h, int c)     { kernel()->drawRect(x, y, w, h, c); }
+ALWAYS INLINE void fillRect(int x, int y, int w, int h, int c)     { kernel()->fillRect(x, y, w, h, c); }
+ALWAYS INLINE void drawCircle(int x, int y, int r, int c)          { kernel()->drawCircle(x, y, r, c); }
+ALWAYS INLINE void fillCircle(int x, int y, int r, int c)          { kernel()->fillCircle(x, y, r, c); }
 ALWAYS INLINE void drawJpeg(const char* filename, int x, int y)    { kernel()->drawJpeg(filename, x, y); }
 
 // --- AUTONOMOUS SPRITE ENGINE WRAPPERS ---
