@@ -480,7 +480,7 @@ const uint16_t ramOSPalette[16] = {
 #endif
 
 #ifndef ENABLE_PICOC
-struct TouchState { bool isPressed; int x; int y; };
+typedef struct TouchState_t { bool isPressed; int x; int y; } TouchState;
 #endif
 
 bool matchFuncBounds(const char* str, const char* prefix, int prefixLen, int &innerLen);
@@ -727,7 +727,7 @@ static int cursorX = 0;
 static int cursorY = 0;
 
 #ifndef ENABLE_PICOC
-struct MicroDosAPI {
+typedef struct MicroDosAPI_t {
   void (*print)(const char* text);
   void (*println)(const char* text);
   void (*clear)();
@@ -777,7 +777,7 @@ struct MicroDosAPI {
   uint32_t (*sdRead)(void* fileHandle, void* buffer, uint32_t size, uint32_t count);
   uint32_t (*sdWrite)(void* fileHandle, const void* buffer, uint32_t size, uint32_t count);
   void (*sdClose)(void* filehandle);
-};
+} MicroDosAPI;
 #endif
 
 MicroDosAPI kernelAPI;

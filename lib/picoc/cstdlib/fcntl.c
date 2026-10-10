@@ -5,6 +5,7 @@ const char FcntlDefs[] =
 "#define O_RDONLY   0\n"
 "#define O_WRONLY   1\n"
 "#define O_RDWR     2\n"
+"#define F_SETFL    4\n"
 "#define O_CREAT    0x0040\n"
 "#define O_EXCL     0x0800\n"
 "#define O_TRUNC    0x0200\n"
@@ -12,6 +13,8 @@ const char FcntlDefs[] =
 "#define O_SYNC     0x2000\n"
 "#define O_NONBLOCK 0x4000\n"
 "#define O_NOCTTY   0x8000\n";
+
+bool script_stdin_nonblocking = false;
 
 void CFcntlOpen(struct ParseState *Parser, struct Value *ReturnValue, struct Value **Param, int NumArgs)
 {
@@ -24,9 +27,35 @@ void CFcntlOpen(struct ParseState *Parser, struct Value *ReturnValue, struct Val
     ReturnValue->Val->Integer = open(Path, Flags, Mode);
 }
 
+void CFcntlFcntl(struct ParseState *Parser, struct Value *ReturnValue, struct Value **Param, int NumArgs)
+{
+    (void)Parser;
+
+    int Descriptor = Param[0]->Val->Integer;
+    int Command = Param[1]->Val->Integer;
+    int Flags = (NumArgs > 2) ? Param[2]->Val->Integer : 0;
+
+    if (Descriptor == 0 && Command == 4)
+    {
+        if (Flags & 0x4000)
+        {
+            script_stdin_nonblocking = true;
+        }
+        else
+        {
+            script_stdin_nonblocking = false;
+        }
+        ReturnValue->Val->Integer = 0;
+        return;
+    }
+
+    ReturnValue->Val->Integer = fcntl(Descriptor, Command, Flags);
+}
+
 struct LibraryFunction FcntlFunctions[] =
 {
     { CFcntlOpen, "int open(char *, int, int);" },
+    { CFcntlFcntl, "void fcntl(int, int, int);" },
     { NULL, NULL }
 };
 
