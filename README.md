@@ -21,20 +21,26 @@ MicroDOS supports two highly popular, low-cost smart display paradigms out of th
 * **Classic CYD (`BOARD_CYD`)**: Targeting CYD variants utilizing 320x480 pixel ST7796 (or 240x320 ILI9341 and ST7789) and SPI-based resistive touch and `TFT_eSPI` register calls.
 * **Capacitive High-Res Display (`BOARD_JC3248`)**: Targeting QSPI smart-displays (such as the AXS15231B architecture) over `Arduino_GFX` bound to an I2C capacitive touch grid controller.
 
-### 2. Universal Dual-Segment Relocation Loader (`EXEC`)
+### 2. Basic BASIC interpreter (`RUN`)
+MicroDOS implements a lightweight BASIC interpreter and program editor accompanied with loading from  and saving to micro SD card.
+
+### 3. PicoC C interpreter (`CRUN`)
+MicroDOS implements a lightweight C interpreter (PicoC) with full access to filesystem via stdio.h and fcntl.h, accompanied with graphics.h wrapper for MicroDOS low-level graphics functions. Capable of running non-compiled C files from micro SD card or, if invoked without parameters, as a complex command shell.
+
+### 4. Universal Dual-Segment Relocation Loader (`EXEC`)
 A feature typically reserved for full application-class processors. MicroDOS breaks the flat-memory constraint of microcontrollers by acting as an on-device **Dynamic Linker & Loader** for custom `.BIN` files compiled on a PC:
 * **Phase 1 (Literal Pool Patches):** Scans instruction tracks block-by-word inside isolated IRAM staging spaces, capturing relative file offsets and updating them to absolute physical addresses allocated on the ESP32 instruction bus (`MALLOC_CAP_EXEC`).
-* **Phase 2 (GOT Table Mapping):** Crawls the application's internal Global Offset Table (GOT) lookup grid to update indirect function pointers and global variables before spinning up a standalone, stack-guarded, runtime isolated FreeRTOS thread worker.
+* **Phase 2 (GOT Table Mapping):** Crawls the application's internal Global Offset Table (GOT) lookup grid to update indirect function pointers and global variables before spinning up a standalone, stack-guarded, runtime isolated FreeRTOS thread worker. **update** Since GOT tables are completely empty when using latest versions of linker script, this part is left in the code only in hopes this might help a lost soul looking for clues.
 
-### 3. AI Stream Engine & Autonomous Code Harvesting
+### 5. AI Stream Engine & Autonomous Code Harvesting
 MicroDOS implements a lightweight token streaming state-machine that communicates with localized or remote **Ollama AI Servers**.
 * **JSON Stream Tunneling:** Instead of inflating the memory footprint with heavy JSON string parsers, it parses network socket buffers byte-by-byte, using a sliding memory footprint window (`memmove`) to roll old history lines outward once bounds thresholds fill up.
 * **Code Injection Hook:** When contextually bound to `coder` mode, the terminal monitors incoming markdown tags. Encountering a ````basic```` markdown code block causes the OS to dump active interpretation tracks, capture the coming AI stream verbatim, and automatically inject the code into memory line-by-line via `storeLine()`. **The AI can rewrite the terminal program while it runs.**
 
-### 4. 4-Bit Color Sprite & Game Matrix
+### 6. 4-Bit Color Sprite & Game Matrix
 To maintain fluid, zero-flicker rendering loops under rigorous RAM constraints, MicroDOS includes a specialized graphics compositor:
-* **Indexed Color Compression:** Uses a 16-color global fixed-index palette matrix (`ramOSPalette`), shrinking active image requirements down to 4 bits per pixel.
-* **Dirty-Rect Eraser Engine:** Sprites track their historical coordinate intersections (`isOnScreen`). Rather than wiping the display buffer on ticks, the system automatically uses hardware-accelerated RLE decompression to restore *only* the specific background slices altered by moving graphics before blitting new structures.
+* **Indexed Color Compression:** Uses a 16-color global fixed-index palette matrix, shrinking active image requirements down to 4 bits per pixel.
+* **Dirty-Rect Eraser Engine:** Sprites track their historical coordinate intersections. Rather than wiping the display buffer on ticks, the system automatically uses hardware-accelerated RLE decompression to restore *only* the specific background slices altered by moving graphics before blitting new structures.
 * **Chroma-Key Transparency:** Absolute color block Index 15 (`TFT_DARKGREY`) behaves as a mask bypass. The blitter maps coming pixel indices sequentially, dropping operations on Index 15 coordinates to allow background transparency.
 
 ---
@@ -67,14 +73,14 @@ Native applications interface with the operating system through a unified BIOS j
 ### 2. 3D Drawing Helpers (`api/include/microdos_3d.h`)
 Helpers for rendering, scaling and morphing or wireframe objects.
 
-### 3. Integer Math Helpers (`api/include/microdos_math.h`)
+### 3. String Utilities (`api/include/microdos_util.h`)
+String utilities, replacement for missing standard library functions.
+
+### 4. Integer Math Helpers (`api/include/microdos_math.h`) **deprecated**
 Integer math functions, replacement for missing standard library functions.
 
-### 4. Floating Point Math Helpers (`api/include/microdos_fmath.h`)
+### 5. Floating Point Math Helpers (`api/include/microdos_fmath.h`) **deprecated**
 Floating point math functions, replacement for missing standard library functions.
-
-### 5. String Utilities (`api/include/microdos_util.h`)
-String utilities, replacement for missing standard library functions.
 
 ---
 
