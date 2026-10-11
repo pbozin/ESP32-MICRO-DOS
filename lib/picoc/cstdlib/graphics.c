@@ -21,8 +21,6 @@ const char GraphicsDefs[] =
 "#define PINK       14\n"
 "#define DARKGREY   15\n";
 
-static int Graphics_ZeroValue = 0;
-
 void GraphicsGetTermWidth(struct ParseState *Parser, struct Value *ReturnValue, struct Value **Param, int NumArgs)
 {
     ReturnValue->Val->Integer = kernelAPI.termWidth;
@@ -151,13 +149,11 @@ struct LibraryFunction GraphicsFunctions[] =
     { GraphicsFillCircle,      "void     fillCircle(int x, int y, int r, int colorId);" },
     { GraphicsDrawJpeg,        "void     drawJpeg(char* filename, int x, int y);" },
 
-    { NULL,             NULL }
+    { NULL,                    NULL }
 };
 
 void GraphicsSetupFunc(Picoc *pc)
 {
-    if (!VariableDefined(pc, TableStrRegister(pc, "NULL")))
-        VariableDefinePlatformVar(pc, NULL, "NULL", &pc->IntType, (union AnyValue *)&Graphics_ZeroValue, FALSE);
 }
 
 #endif /* !BUILTIN_MINI_STDLIB */

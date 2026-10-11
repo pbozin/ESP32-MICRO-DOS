@@ -1,9 +1,6 @@
 /* stdio.h library for large systems - small embedded systems use clibrary.c instead */
 #ifndef BUILTIN_MINI_STDLIB
 
-#include <errno.h>
-#include <ctype.h>
-#include <stdlib.h>
 #include "../interpreter.h"
 
 #define MAX_FORMAT 80

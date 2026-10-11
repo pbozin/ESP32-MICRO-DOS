@@ -30,7 +30,6 @@ char *PlatformGetLine(char *Buf, int MaxLen, const char *Prompt)
 int PlatformGetCharacter()
 {
     int ch = kernelAPI.inkey();
-    // Return standard C EOF if no character is currently waiting in the buffer
     if (ch <= 0) {
         return -1;
     }
@@ -100,7 +99,7 @@ void PicocPlatformScanFile(Picoc *pc, const char *FileName)
     if (SourceStr != NULL)
     {
         PicocParse(pc, FileName, SourceStr, strlen(SourceStr), TRUE, FALSE, TRUE, TRUE);
-        free(SourceStr); // Fix: Essential to free heap string block after PicoC completes parsing it!
+        free(SourceStr);
     }
 }
 
