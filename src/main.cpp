@@ -15,19 +15,14 @@ extern jmp_buf HostExitBuf;
 }
 #endif
 
-#ifdef ENABLE_OLLAMA
-#define CONTEXT_BUF_SIZE 2048
-#endif
 
 #define KEY_REPEAT_DELAY 300
 #define KEY_FRAME_TIME 33
 
-#define COLOR_DEPTH 4
-
 #define SYSTEM_RAM_SIZE 256
 
 #define MAX_VAR_NAME_LEN 12
-#define MAX_STR_LEN 50
+#define MAX_STR_LEN 100
 
 #define MAX_STACK_DEPTH 12
 #define MAX_FOR_NEST 4
@@ -35,6 +30,7 @@ extern jmp_buf HostExitBuf;
 #define FILENAME_SIZE 20
 #define PROMPT_SIZE 50
 #define CURSOR_SIZE 2
+#define MAX_LINE_LEN 100
 
 #define KEY_ROWS 4
 #define KEY_COLS 10
@@ -42,7 +38,7 @@ extern jmp_buf HostExitBuf;
 #define CHAR_WIDTH 6
 #define CHAR_HEIGHT 16
 
-#define MAX_LINE_LEN 100
+#define COLOR_DEPTH 4
 
 #define F_KEY_LABEL_SIZE 7
 #define TKN_F1 '\x11'
@@ -50,6 +46,10 @@ extern jmp_buf HostExitBuf;
 #define TKN_F3 '\x13'
 #define TKN_F4 '\x14'
 #define TKN_F5 '\x15'
+
+#ifdef ENABLE_OLLAMA
+#define CONTEXT_BUF_SIZE 2048
+#endif
 
 // =================================
 

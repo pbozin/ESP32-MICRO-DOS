@@ -152,6 +152,7 @@ WEAK MicroDosAPI* _global_api_ptr = 0;
 #define DARKCYAN  12
 #define NAVY      13
 #define PINK      14
+#define DARKGREY  15
 
 // ============================================================================
 //   GUEST-SIDE REUSABLE TOUCH LAYOUT MACROS

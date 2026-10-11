@@ -31,13 +31,13 @@ static const uint8_t scaleGoa[5][8] ALIGNED = {
 static const uint8_t scaleAeolian[5][8] ALIGNED = {
     {36, 38, 39, 41, 43, 44, 46, 0}, {44, 46, 47, 49, 51, 52, 54, 0},
     {41, 43, 44, 46, 48, 49, 51, 0}, {36, 38, 39, 41, 43, 44, 46, 0},
-    {39, 41, 42, 44, 46, 47, 49, 0} 
+    {39, 41, 42, 44, 46, 47, 49, 0}
 };
 
 static uint8_t markovMatrix[5][5] ALIGNED = {
-    {40, 30, 10, 10, 10}, {20, 30, 30, 10, 10}, 
+    {40, 30, 10, 10, 10}, {20, 30, 30, 10, 10},
     {10, 20, 40, 20, 10}, {30, 10, 20, 30, 10},
-    {10, 20, 30, 20, 20} 
+    {10, 20, 30, 20, 20}
 };
 
 #define SYNTH_START 1
@@ -152,28 +152,28 @@ ALWAYS INLINE void changeMarkovMatrix(uint8_t mode) {
     } else {
         uint8_t grid = currentTimeSignature > 5 ? 5 : currentTimeSignature;
         for (int i = 0; i < grid; i++) {
-            uint32_t total = 0; 
+            uint32_t total = 0;
             uint32_t weights[5];
-            
-            for (int j = 0; j < grid; j++) { 
-                weights[j] = getRandom(10, 100); 
-                total += weights[j]; 
+
+            for (int j = 0; j < grid; j++) {
+                weights[j] = getRandom(10, 100);
+                total += weights[j];
             }
-            
+
             if (total == 0) total = 1;
-            
+
             uint32_t reciprocalTotal = 65536U / total;
-            
+
             int sum = 0;
             for (int j = 0; j < grid - 1; j++) {
                 uint32_t scaledValue = (weights[j] * 100 * reciprocalTotal) >> 16;
                 markovMatrix[i][j] = (uint8_t)scaledValue;
                 sum += markovMatrix[i][j];
             }
-            
+
             markovMatrix[i][grid - 1] = 100 - sum;
-        }   
-    }       
+        }
+    }
 }
 
 ALWAYS INLINE void randomSynthChannel() {
@@ -267,12 +267,12 @@ ALWAYS INLINE void transitionToNextArtist() {
 
     displayValue(currentArtistStyle, 3);
     displayValue(currentBpm, 1);
-    
+
     randomDrumChannel(); randomHatChannel(); randomSynthChannel(); randomBassChannel();
     for (int i = 0; i <= 16; i++) systemMuteArray[i] = false;
 
     uint32_t msPerBar = (60000 * 179) >> 14;
-    
+
     if (currentTimeSignature == 3) {
         stepIntervalMs = (msPerBar * signature_multipliers[0]) >> 8;
     } else if (currentTimeSignature == 4) {
@@ -584,7 +584,7 @@ ALWAYS INLINE void runPsybientEngine() {
     }
 
     // --- AUTOMATION TRACK ---
-    if (tickCount % (beatsPerBar == 4 ? 4 : 3) == 0) { 
+    if (tickCount % (beatsPerBar == 4 ? 4 : 3) == 0) {
         uint8_t ccValue = generateFractalNoise();
         uint8_t longWaveDrift = (longBarCounter % 128) / 4;
         midiMsg(0xB0 | (activeSynthChannel - 1), 74, ccValue + 5 + longWaveDrift);
@@ -598,7 +598,7 @@ ALWAYS INLINE void runPsybientEngine() {
 
     tickCount++;
     if (tickCount >= quadBar) {
-        tickCount = 0; 
+        tickCount = 0;
     }
 }
 

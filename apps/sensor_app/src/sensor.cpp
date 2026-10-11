@@ -2,7 +2,7 @@
 #include "microdos_util.h"
 
 // I2C Pins
-#define SDA_PIN 32 
+#define SDA_PIN 32
 #define SCL_PIN 25
 
 // BME680 / BME688 Registers & Configuration
@@ -147,10 +147,10 @@ ALWAYS INLINE bool sensor_read_bytes(uint8_t reg, uint8_t* buffer, size_t length
     i2c_start();
     if (!i2c_write_byte(SENSOR_ADDR << 1)) { i2c_stop(); return false; }
     if (!i2c_write_byte(reg))              { i2c_stop(); return false; }
-    
+
     i2c_start();
     if (!i2c_write_byte((SENSOR_ADDR << 1) | 1)) { i2c_stop(); return false; }
-    
+
     for (size_t i = 0; i < length; i++) {
         buffer[i] = i2c_read_byte(i < (length - 1));
     }
@@ -166,10 +166,10 @@ ALWAYS INLINE float compensate_temp(int32_t adc_T) {
     int32_t var1 = ((adc_T >> 3) - ((int32_t)dig_T1 << 1));
     int32_t var2 = (var1 * (int32_t)dig_T2) >> 11;
     int32_t var3 = ((var1 >> 1) * (var1 >> 1)) >> 12;
-    var3 = (var3 * ((int32_t)dig_T3 << 4)) >> 14; 
-    
+    var3 = (var3 * ((int32_t)dig_T3 << 4)) >> 14;
+
     t_fine = var2 + var3;
-    
+
     int32_t T = (t_fine * 5 + 128) >> 8;
     return (float)T * 0.01f;
 }
@@ -182,8 +182,8 @@ ALWAYS INLINE float compensate_press(int32_t adc_P) {
     var2 = ((((var1 >> 2) * (var1 >> 2)) >> 11) * (int32_t)dig_P6) >> 2;
     var2 = var2 + ((var1 * (int32_t)dig_P5) << 1);
     var2 = (var2 >> 2) + ((int32_t)dig_P4 << 16);
-    
-    var1 = (((((var1 >> 2) * (var1 >> 2)) >> 13) * ((int32_t)dig_P3 << 5)) >> 3) + 
+
+    var1 = (((((var1 >> 2) * (var1 >> 2)) >> 13) * ((int32_t)dig_P3 << 5)) >> 3) +
            (((int32_t)dig_P2 * var1) >> 1);
     var1 = var1 >> 18;
     var1 = ((32768 + var1) * (int32_t)dig_P1) >> 15;
@@ -202,9 +202,9 @@ ALWAYS INLINE float compensate_press(int32_t adc_P) {
     var1 = ((int32_t)dig_P9 * (int32_t)(((pressure_comp >> 3) * (pressure_comp >> 3)) >> 13)) >> 12;
     var2 = ((int32_t)dig_P8 * (int32_t)(pressure_comp >> 2)) >> 13;
     var3 = ((int32_t)dig_P10 * (int32_t)(pressure_comp >> 8)) >> 12;
-    
+
     int32_t p = (int32_t)((int32_t)pressure_comp + ((var1 + var2 + var3 + ((int32_t)dig_P7 << 7)) >> 4));
-    
+
     return (float)p * 0.01f;
 }
 
@@ -225,7 +225,7 @@ ALWAYS INLINE void draw_dashboard(float temp, float press, bool sensor_found) {
     termPrintAt(1,  8, STRING("TEMPERATURE (C):"));
     ftoa(temp, str_buf, 16, 3);
     termPrintAt(18, 8, str_buf);
-    
+
     termPrintAt(1, 10, STRING("PRESSURE (mmHg):"));
     ftoa(press, str_buf, 16, 3);
     termPrintAt(18, 10, str_buf);
@@ -250,26 +250,26 @@ int _start(int argc, char** argv, MicroDosAPI* api) {
         // --------------------------------------------------------
         uint8_t calib_1[25] ALIGNED;
         uint8_t calib_2[16] ALIGNED;
-        
+
         // BME68x calibration is divided into two distinct regions
         sensor_read_bytes(0x89, calib_1, 25);
         sensor_read_bytes(0xE1, calib_2, 16);
-        
+
         // Map Temperature calibration factors
         dig_T1 = (calib_2[2] << 8) | calib_2[1];
         dig_T2 = (calib_1[2] << 8) | calib_1[1];
-        dig_T3 = (int8_t)calib_1[3]; 
+        dig_T3 = (int8_t)calib_1[3];
 
         dig_P1  = (calib_1[6] << 8) | calib_1[5];
         dig_P2  = (calib_1[8] << 8) | calib_1[7];
-        dig_P3  = (int8_t)calib_1[9];  
+        dig_P3  = (int8_t)calib_1[9];
         dig_P4  = (calib_1[12] << 8) | calib_1[11];
         dig_P5  = (calib_1[14] << 8) | calib_1[13];
-        dig_P6  = (int8_t)calib_1[15]; 
-        dig_P7  = (int8_t)calib_1[16]; 
+        dig_P6  = (int8_t)calib_1[15];
+        dig_P7  = (int8_t)calib_1[16];
         dig_P8  = (calib_1[19] << 8) | calib_1[18];
         dig_P9  = (calib_1[21] << 8) | calib_1[20];
-        dig_P10 = (int8_t)calib_2[8]; 
+        dig_P10 = (int8_t)calib_2[8];
 
         // --------------------------------------------------------
         // Configure Sensor Settings & Mode (Forcing Forced Mode)
@@ -277,7 +277,7 @@ int _start(int argc, char** argv, MicroDosAPI* api) {
 
         // Set Humidity Oversampling to x1 (Register 0x72)
         sensor_write_reg(REG_CTRL_HUM, 0x01);
-        
+
         // Set Temp & Press Oversampling to x1 and trigger "Forced Mode" (0x01)
         // Bits [7:5] = Temperature x1 (0x01)
         // Bits [4:2] = Pressure x1    (0x01)
@@ -305,7 +305,7 @@ int _start(int argc, char** argv, MicroDosAPI* api) {
             if (sensor_read_bytes(REG_DATA_START, raw_data, 6)) {
                 int32_t adc_P = ((int32_t)raw_data[0] << 12) | ((int32_t)raw_data[1] << 4) | (raw_data[2] >> 4);
                 int32_t adc_T = ((int32_t)raw_data[3] << 12) | ((int32_t)raw_data[4] << 4) | (raw_data[5] >> 4);
-                
+
                 current_t = compensate_temp(adc_T);
                 current_p = compensate_press(adc_P);
             }
@@ -323,3 +323,4 @@ int _start(int argc, char** argv, MicroDosAPI* api) {
     clearScreen();
     return 0;
 }
+
