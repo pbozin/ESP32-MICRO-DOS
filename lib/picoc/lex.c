@@ -2,19 +2,6 @@
 
 #include "interpreter.h"
 
-/*
-#undef isalpha
-#undef isdigit
-#undef isalnum
-#undef isspace
-#undef isxdigit
-#define isalpha(c)  (((c) >= 'a' && (c) <= 'z') || ((c) >= 'A' && (c) <= 'Z'))
-#define isdigit(c)  ((c) >= '0' && (c) <= '9')
-#define isalnum(c)  (isalpha(c) || isdigit(c))
-#define isspace(c)  ((c) == ' ' || (c) == '\t' || (c) == '\n' || (c) == '\r' || (c) == '\v' || (c) == '\f')
-#define isxdigit(c) (isdigit(c) || ((c) >= 'a' && (c) <= 'f') || ((c) >= 'A' && (c) <= 'F'))
-*/
-
 #define isCidstart(c) (isalpha(c) || (c)=='_' || (c)=='#')
 #define isCident(c) (isalnum(c) || (c)=='_')
 

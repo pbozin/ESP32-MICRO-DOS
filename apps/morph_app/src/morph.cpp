@@ -52,7 +52,7 @@ int _start(int argc, char** argv, MicroDosAPI* api) {
     float screenWidth = (float)getTermWidth();
     float screenHeight = (float)getTermHeight();
     float minDimension = (screenWidth < screenHeight) ? screenWidth : screenHeight;
-    
+
     float scaleFactor = minDimension * 0.25f;
     float cameraDistance = 3.5f;
 
@@ -62,7 +62,7 @@ int _start(int argc, char** argv, MicroDosAPI* api) {
     while (running) {
         int key = getKey();
         if (key == '\x15' || key == 'Q' || key == 'q') break;
-        
+
         if (key == '\x11') scaleFactor -= 10.0f;
         if (key == '\x12') scaleFactor += 10.0f;
 
@@ -81,7 +81,7 @@ int _start(int argc, char** argv, MicroDosAPI* api) {
         m3d_transform_and_project(
             cubeLayout, displayCoordinates, 8,
             angleX, angleY, angleZ,
-            currentGlobalState, 
+            currentGlobalState,
             octaLayout, tetraLayout,
             scaleFactor, cameraDistance,
             screenWidth, screenHeight
@@ -102,11 +102,11 @@ int _start(int argc, char** argv, MicroDosAPI* api) {
         }
 
         flushGameMatrix();
-        
+
         angleX += 0.02f;
         angleY += 0.03f;
         angleZ += 0.01f;
-        
+
         delayMs(20);
     }
 
