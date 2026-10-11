@@ -53,13 +53,20 @@ Run these commands directly inside the interactive touch console interface:
 | :--- | :--- | :--- |
 | `HELP` | System | Displays the system command vocabulary matrix grouped by utility type. |
 | `FREE` | System | Queries the Espressif system API heap space counters to dump live available memory bytes. |
-| `DIR` / `CAT` | Storage | Scans the file directory tree on the micro SD card, rendering names and explicit byte allocations. |
+| `DIR` | Storage | Scans the file directory tree on the micro SD card, rendering names and explicit byte allocations. |
+| `LOAD <file>` | Storage | Loads .BAS file from the micro SD card into program memory. |
+| `LOAD$ <file>` | Storage | Loads text file from the micro SD card and displays it on screen. |
+| `SAVE <file>` | Storage | Saves contents of program memory to .BAS file on the micro SD card. |
+| `SAVE$ <file>` | Storage | Saves content of complete display buffer to the micro SD card as text file. |
+| `DELETE <file>` | Storage | Deletes a file from the micro SD card. |
 | `EDIT <file>` | Storage | Launches a modal line-by-line interactive text utility allowing engineers to build, list, append, or patch scripts on the fly. |
 | `LIST [r1, r2]`| Interpreter | Outputs lines matching target script ranges stored inside the interpretation buffer stack. |
-| `RUN [file]` | Interpreter | Dispatches the text interpreter engine, executing local or SD-stored `.BAS` files line by line. |
+| `CRUN [file]` | Interpreter | Dispatches the text C interpreter engine, executing SD-stored `.C` files line by line, or running as an interactive shell. |
+| `RUN [file]` | Interpreter | Dispatches the text BASIC interpreter engine, executing local or SD-stored `.BAS` files line by line. |
+| `NEW` | Interpreter | Clears BASIC program memory. |
 | `EXEC <binary>`| Native | Commands the dynamic linker to resolve, relocate, inject, and launch native precompiled compiled applications. |
 | `DUMP / DUMPS` | Forensic | Emulates the classic hex-dump inspector, generating binary matrix hexadecimal tracks or readable printable ASCII sweeps. |
-| `IMVIEW <img_path>`| Multimedia | Connects with hardware JPEG decoders to stream high-resolution graphics straight onto display buffers. |
+| `IMVIEW <file>, x, y`| Multimedia | Displays 16bit or 4bit color JPEG file from the micro SD card straight onto display buffers. |
 
 ---
 
@@ -76,10 +83,10 @@ Helpers for rendering, scaling and morphing or wireframe objects.
 ### 3. String Utilities (`api/include/microdos_util.h`)
 String utilities, replacement for missing standard library functions.
 
-### 4. Integer Math Helpers (`api/include/microdos_math.h`) **[deprecated]**
+### 4. **[DEPRECATED]** Integer Math Helpers (`api/include/microdos_math.h`)
 Integer math functions, replacement for missing standard library functions.
 
-### 5. Floating Point Math Helpers (`api/include/microdos_fmath.h`) **[deprecated]**
+### 5. **[DEPRECATED]** Floating Point Math Helpers (`api/include/microdos_fmath.h`)
 Floating point math functions, replacement for missing standard library functions.
 
 ---
