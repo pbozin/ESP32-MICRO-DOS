@@ -235,7 +235,7 @@ ALWAYS INLINE void draw_dashboard(float temp, float press, bool sensor_found) {
 int _start(int argc, char** argv, MicroDosAPI* api) {
     _global_api_ptr = api;
 
-    termClear();
+    clearScreen();
 
     pinMode(SDA_PIN, INPUT_PULLUP);
     pinMode(SCL_PIN, INPUT_PULLUP);
@@ -291,7 +291,7 @@ int _start(int argc, char** argv, MicroDosAPI* api) {
     }
 
     delayMs(2000);
-    termClear();
+    clearScreen();
 
     TouchState touch;
     int loop_counter = 0;
@@ -320,6 +320,6 @@ int _start(int argc, char** argv, MicroDosAPI* api) {
         loop_counter++;
         delayMs(20);
     }
-    termClear();
+    clearScreen();
     return 0;
 }

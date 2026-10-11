@@ -185,7 +185,7 @@ ALWAYS INLINE void inputStr(const char* prompt,
 			    int maxLen)          { kernel()->inputStr(prompt, destBuffer, maxLen); }
 ALWAYS INLINE void termPrint(const char* text)   { kernel()->print(text); }
 ALWAYS INLINE void termPrintln(const char* text) { kernel()->println(text); }
-ALWAYS INLINE void termClear()                   { kernel()->clear(); }
+ALWAYS INLINE void clearScreen()                 { kernel()->clear(); }
 ALWAYS INLINE void getTouch(TouchState* state)   { kernel()->getTouch(state); }
 ALWAYS INLINE void clearFKeys()                  { kernel()->clearFKeys(); }
 ALWAYS INLINE int  getKey()                      { return kernel()->inkey(); }

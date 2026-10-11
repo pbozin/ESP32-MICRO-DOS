@@ -21,11 +21,11 @@ extern "C" int _start(int argc, char** argv, MicroDosAPI* api) {
     int v = -4;
 
     setFKeys(STRING("  <-  "), STRING("      "), STRING("  ESC "), STRING("      "), STRING("  ->  "));
-    termClear();
+    clearScreen();
     setColor(GREEN);
     termPrintln(STRING("BRICKS STARTING"));
     delayMs(1000);
-    termClear();
+    clearScreen();
 
     for (int i = 0; i < 10 * 5; i++) {
         poke(i, 1);
@@ -109,7 +109,7 @@ extern "C" int _start(int argc, char** argv, MicroDosAPI* api) {
 
         if (y > getTermHeight() - 10) {
             playSound(150, 600);
-            termClear();
+            clearScreen();
             setColor(RED);
             termPrintln("\nGAME OVER!");
             delayMs(2000);
@@ -120,6 +120,6 @@ extern "C" int _start(int argc, char** argv, MicroDosAPI* api) {
 
     clearFKeys();
     setColor(GREEN);
-    termClear();
+    clearScreen();
     return 0;
 }

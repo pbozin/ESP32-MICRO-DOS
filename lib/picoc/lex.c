@@ -776,7 +776,8 @@ enum LexToken LexGetRawToken(struct ParseState *Parser, struct Value **Value,
                 if (PlatformGetLine(&LineBuffer[0], LINEBUFFER_MAX, Prompt) == NULL)
                     return TokenEOF;
 
-		if (LineBuffer[0] == 'b' && LineBuffer[1] == 'y' && LineBuffer[2] == 'e') {
+                if (strcmp(LineBuffer, "QUIT") == 0 || strcmp(LineBuffer, "BYE") == 0 ||
+                    strcmp(LineBuffer, "quit") == 0 || strcmp(LineBuffer, "bye") == 0 ) {
 		    PlatformRunning = false;
                     return TokenEOF;
 		}

@@ -644,7 +644,7 @@ extern "C" int _start(int argc, char** argv, MicroDosAPI* api) {
 
     int fSize = getTermWidth() / 8;
 
-    termClear();
+    clearScreen();
     setFKeys(STRING(" NEW  "), STRING(" UNDO "), STRING(" FLIP "), STRING("      "), STRING(" QUIT "));
     cacheAllChessSprites();
     initToledoBoard();

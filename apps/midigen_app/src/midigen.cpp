@@ -612,7 +612,7 @@ int _start(int argc, char** argv, MicroDosAPI* api) {
     }
 
     serialOpen(31250, -1, -1);;
-    termClear();
+    clearScreen();
     setColor(MAGENTA);
     termPrintAt(5, 1, STRING("bpm"));
     termPrintAt(5, 2, STRING("pattern"));
@@ -628,7 +628,7 @@ int _start(int argc, char** argv, MicroDosAPI* api) {
         delayMs(stepIntervalMs);
     }
     silenceAllChannels();
-    termClear();
+    clearScreen();
     return 0;
 }
 
