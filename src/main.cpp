@@ -409,14 +409,6 @@ const uint16_t ramOSPalette[16] = {
       }
     }
 
-    void fillRect(int16_t x, int16_t y, int16_t w, int16_t h, uint16_t colorIndex) {
-      for (int16_t j = y; j < y + h; j++) {
-        for (int16_t i = x; i < x + w; i++) {
-          drawPixel(i, j, colorIndex);
-        }
-      }
-    }
-
     void drawLine(int16_t x0, int16_t y0, int16_t x1, int16_t y1, uint16_t colorIndex) {
       int16_t dx = abs(x1 - x0), sx = x0 < x1 ? 1 : -1;
       int16_t dy = -abs(y1 - y0), sy = y0 < y1 ? 1 : -1;
@@ -430,10 +422,35 @@ const uint16_t ramOSPalette[16] = {
       }
     }
 
+    void fillRect(int16_t x, int16_t y, int16_t w, int16_t h, uint16_t colorIndex) {
+      for (int16_t j = y; j < y + h; j++) {
+        for (int16_t i = x; i < x + w; i++) {
+          drawPixel(i, j, colorIndex);
+        }
+      }
+    }
+
+    void drawRect(int16_t x, int16_t y, int16_t w, int16_t h, uint16_t colorIndex) {
+      drawLine(x, y, x+w, y, colorIndex);
+      drawLine(x+w, y, x+w, y+h, colorIndex);
+      drawLine(x+w, y+h, x, y+h, colorIndex);
+      drawLine(x, y+h, x, y, colorIndex);
+    }
+
     void fillCircle(int16_t x0, int16_t y0, int16_t r, uint16_t colorIndex) {
       for (int16_t y = -r; y <= r; y++) {
         for (int16_t x = -r; x <= r; x++) {
           if (x*x + y*y <= r*r) {
+            drawPixel(x0 + x, y0 + y, colorIndex);
+          }
+        }
+      }
+    }
+
+    void drawCircle(int16_t x0, int16_t y0, int16_t r, uint16_t colorIndex) {
+      for (int16_t y = -r; y <= r; y++) {
+        for (int16_t x = -r; x <= r; x++) {
+          if (x*x + y*y == r*r) {
             drawPixel(x0 + x, y0 + y, colorIndex);
           }
         }
@@ -4899,6 +4916,7 @@ void api_setup() {
     renderSprite.deleteSprite();
     tempSprite.deleteSprite();
     bgCanvas.deleteSprite();
+    kernelAPI.clear();
   };
 
   kernelAPI.sysDebugDump = host_sysDebugDump;

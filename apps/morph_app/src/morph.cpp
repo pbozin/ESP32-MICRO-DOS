@@ -42,7 +42,7 @@ int _start(int argc, char** argv, MicroDosAPI* api) {
     if (!api) return -1;
     if (!initGameMatrix()) return -1;
 
-    termClear();
+    clearScreen();
     setFKeys(STRING("ZOOM-"), STRING("ZOOM+"), STRING("      "), STRING("      "), STRING(" QUIT "));
 
     float angleX = 0.0f, angleY = 0.0f, angleZ = 0.0f;

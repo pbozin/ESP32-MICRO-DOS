@@ -21,7 +21,7 @@ int _start(int argc, char** argv, MicroDosAPI* api) {
 
     delayMs(500);
     int chatting = 1;
-    termClear();
+    clearScreen();
 
     setColor(YELLOW);
     termPrint(STRING("  --[ "));
@@ -38,7 +38,8 @@ int _start(int argc, char** argv, MicroDosAPI* api) {
         setColor(GREEN);
         inputStr(STRING("YOU> "), promptBuffer, sizeof(promptBuffer));
 
-        if (strcmp(promptBuffer, STRING("QUIT")) == 0 || strcmp(promptBuffer, STRING("BYE")) == 0) {
+        if (strcmp(promptBuffer, STRING("QUIT")) == 0 || strcmp(promptBuffer, STRING("BYE")) == 0 || 
+            strcmp(promptBuffer, STRING("quit")) == 0 || strcmp(promptBuffer, STRING("bye")) == 0 ) {
             chatting = 0;
             break;
         }
