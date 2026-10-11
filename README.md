@@ -30,7 +30,7 @@ MicroDOS implements a lightweight C interpreter (PicoC) with full access to file
 ### 4. Universal Dual-Segment Relocation Loader (`EXEC`)
 A feature typically reserved for full application-class processors. MicroDOS breaks the flat-memory constraint of microcontrollers by acting as an on-device **Dynamic Linker & Loader** for custom `.BIN` files compiled on a PC:
 * **Phase 1 (Literal Pool Patches):** Scans instruction tracks block-by-word inside isolated IRAM staging spaces, capturing relative file offsets and updating them to absolute physical addresses allocated on the ESP32 instruction bus (`MALLOC_CAP_EXEC`).
-* **Phase 2 (GOT Table Mapping):** Crawls the application's internal Global Offset Table (GOT) lookup grid to update indirect function pointers and global variables before spinning up a standalone, stack-guarded, runtime isolated FreeRTOS thread worker. **update** Since GOT tables are completely empty when using latest versions of linker script, this part is left in the code only in hopes this might help a lost soul looking for clues.
+* **Phase 2 (GOT Table Mapping):** Crawls the application's internal Global Offset Table (GOT) lookup grid to update indirect function pointers and global variables before spinning up a standalone, stack-guarded, runtime isolated FreeRTOS thread worker. **[UPDATE]** Since GOT tables are completely empty when using latest versions of linker script, this part is left in the code only in hopes it might help a lost soul looking for clues.
 
 ### 5. AI Stream Engine & Autonomous Code Harvesting
 MicroDOS implements a lightweight token streaming state-machine that communicates with localized or remote **Ollama AI Servers**.
@@ -76,10 +76,10 @@ Helpers for rendering, scaling and morphing or wireframe objects.
 ### 3. String Utilities (`api/include/microdos_util.h`)
 String utilities, replacement for missing standard library functions.
 
-### 4. Integer Math Helpers (`api/include/microdos_math.h`) **deprecated**
+### 4. Integer Math Helpers (`api/include/microdos_math.h`) **[deprecated]**
 Integer math functions, replacement for missing standard library functions.
 
-### 5. Floating Point Math Helpers (`api/include/microdos_fmath.h`) **deprecated**
+### 5. Floating Point Math Helpers (`api/include/microdos_fmath.h`) **[deprecated]**
 Floating point math functions, replacement for missing standard library functions.
 
 ---
