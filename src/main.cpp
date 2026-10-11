@@ -3502,8 +3502,8 @@ bool runSingleLine(const char* rawLine, int &currentLineIdx) {
     return true;
   }
 
-  if (strncmp(line, "FILLRECT ", 5) == 0) {
-    char* args = line + 5;
+  if (strncmp(line, "FILLRECT ", 9) == 0) {
+    char* args = line + 9;
     char* p1 = strchr(args, ','); if (!p1) { kernelAPI.println("ERR: RECT SYNTAX"); return false; } *p1 = '\0';
     char* p2 = strchr(p1 + 1, ','); if (!p2) { kernelAPI.println("ERR: RECT SYNTAX"); return false; } *p2 = '\0';
     char* p3 = strchr(p2 + 1, ','); if (!p3) { kernelAPI.println("ERR: RECT SYNTAX"); return false; } *p3 = '\0';
@@ -3551,8 +3551,8 @@ bool runSingleLine(const char* rawLine, int &currentLineIdx) {
     return true;
   }
 
-  if (strncmp(line, "FILLCIRCLE ", 7) == 0) {
-    char* args = line + 7;
+  if (strncmp(line, "FILLCIRCLE ", 11) == 0) {
+    char* args = line + 11;
     char* p1 = strchr(args, ','); if (!p1) { kernelAPI.println("ERR: CIRCLE SYNTAX"); return false; } *p1 = '\0';
     char* p2 = strchr(p1 + 1, ','); if (!p2) { kernelAPI.println("ERR: CIRCLE SYNTAX"); return false; } *p2 = '\0';
     char* p3 = strchr(p2 + 1, ','); if (!p3) { kernelAPI.println("ERR: CIRCLE SYNTAX"); return false; } *p3 = '\0';
