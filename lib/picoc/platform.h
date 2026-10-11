@@ -2,6 +2,7 @@
 #ifndef PLATFORM_H
 #define PLATFORM_H
 
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <ctype.h>

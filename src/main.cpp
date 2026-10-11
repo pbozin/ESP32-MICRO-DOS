@@ -2307,8 +2307,10 @@ void executeCProgram(const char* filename) {
     PicocInitialize(pc, 16 * 1024);
     PicocIncludeAllSystemHeaders(pc);
 
-    PicocParse(pc, pathBuf, srcCode, fileSize, 1, 1, 1, 0);
-    PicocCallMain(pc, 0, NULL);
+    if (setjmp(pc->HostExitBuf) == 0) {
+        PicocParse(pc, pathBuf, srcCode, fileSize, 1, 1, 1, 0);
+        PicocCallMain(pc, 0, NULL);
+    }
 
     delay(100);
 
