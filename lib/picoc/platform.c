@@ -100,6 +100,7 @@ void PicocCallMain(Picoc *pc, int argc, char **argv)
                 strlen(CALL_MAIN_WITH_ARGS_RETURN_INT), true, true, false,
                 gEnableDebugger);
     }
+    PlatformExit(pc, 0);
 }
 #endif
 

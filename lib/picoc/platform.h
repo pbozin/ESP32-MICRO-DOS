@@ -57,7 +57,7 @@ typedef struct MicroDosAPI_t {
   void (*drawSprite)(uint32_t spriteHandle, int x, int y);
   void (*clearSprite)(uint32_t spriteHandle);
   void (*freeSprite)(uint32_t spriteHandle);
-  bool (*initGameMatrix)();
+  int  (*initGameMatrix)();
   void (*flushGameMatrix)();
   void (*closeGameMatrix)();
   void (*sysDebugDump)(const char* label, const void* memoryAddress, unsigned int byteCount, uint32_t virtualAddr);

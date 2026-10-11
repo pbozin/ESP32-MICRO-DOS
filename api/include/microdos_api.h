@@ -106,7 +106,7 @@ typedef struct MicroDosAPI_t {
   void  (*drawSprite)(uint32_t spriteHandle, int x, int y);
   void  (*clearSprite)(uint32_t spriteHandle);
   void  (*freeSprite)(uint32_t spriteHandle);
-  bool  (*initGameMatrix)();
+  int  (*initGameMatrix)();
   void  (*flushGameMatrix)();
   void  (*closeGameMatrix)();
 
@@ -236,7 +236,7 @@ ALWAYS INLINE uint32_t createSprite(const char* file,
 		                    int size)   { return kernel()->createSprite(file, size); }
 ALWAYS INLINE void clearSprite(uint32_t spr)    { kernel()->clearSprite(spr); }
 ALWAYS INLINE void freeSprite(uint32_t spr)     { kernel()->freeSprite(spr); }
-ALWAYS INLINE bool initGameMatrix()             { return kernel()->initGameMatrix(); }
+ALWAYS INLINE int  initGameMatrix()             { return kernel()->initGameMatrix(); }
 ALWAYS INLINE void flushGameMatrix()            { kernel()->flushGameMatrix(); }
 ALWAYS INLINE void closeGameMatrix()            { kernel()->closeGameMatrix(); }
 
