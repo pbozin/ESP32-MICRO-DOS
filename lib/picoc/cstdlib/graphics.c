@@ -132,6 +132,14 @@ struct LibraryFunction GraphicsFunctions[] =
     { GraphicsSetColor,        "void     setColor(int colorId);" },
     { GraphicsClearScreen,     "void     clearScreen();" },
 
+    { GraphicsDrawPoint,       "void     drawPoint(int x, int y, int colorId);" },
+    { GraphicsDrawLine,        "void     drawLine(int x1, int y1, int x2, int y2, int colorId);" },
+    { GraphicsDrawRect,        "void     drawRect(int x, int y, int w, int h, int colorId);" },
+    { GraphicsFillRect,        "void     fillRect(int x, int y, int w, int h, int colorId);" },
+    { GraphicsDrawCircle,      "void     drawCircle(int x, int y, int r, int colorId);" },
+    { GraphicsFillCircle,      "void     fillCircle(int x, int y, int r, int colorId);" },
+    { GraphicsDrawJpeg,        "void     drawJpeg(char* filename, int x, int y);" },
+
     { GraphicsCreateSprite,    "int      createSprite(char* filename, int spriteSize);" },
     { GraphicsDrawSprite,      "void     drawSprite(int spriteHandle, int x, int y);" },
     { GraphicsClearSprite,     "void     clearSprite(int spriteHandle);" },
@@ -140,14 +148,6 @@ struct LibraryFunction GraphicsFunctions[] =
     { GraphicsInitGameMatrix,  "int      initGameMatrix();" },
     { GraphicsFlushGameMatrix, "void     flushGameMatrix();" },
     { GraphicsCloseGameMatrix, "void     closeGameMatrix();" },
-
-    { GraphicsDrawPoint,       "void     drawPoint(int x, int y, int colorId);" },
-    { GraphicsDrawLine,        "void     drawLine(int x1, int y1, int x2, int y2, int colorId);" },
-    { GraphicsDrawRect,        "void     drawRect(int x, int y, int w, int h, int colorId);" },
-    { GraphicsDrawCircle,      "void     drawCircle(int x, int y, int r, int colorId);" },
-    { GraphicsFillRect,        "void     fillRect(int x, int y, int w, int h, int colorId);" },
-    { GraphicsFillCircle,      "void     fillCircle(int x, int y, int r, int colorId);" },
-    { GraphicsDrawJpeg,        "void     drawJpeg(char* filename, int x, int y);" },
 
     { NULL,                    NULL }
 };

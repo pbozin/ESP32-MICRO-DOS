@@ -194,7 +194,6 @@ const uint16_t ramOSPalette[16] = {
 
 #define KEYBOARD_Y_START (TFT_HEIGHT - (KEY_ROWS*KEY_HEIGHT))
 
-#define MATRIX_ACTIVE (bgCanvas.frameBuffer(0) != nullptr)
 #define CLAMP(val, min, max) ((val) < (min) ? (min) : ((val) > (max) ? (max) : (val)))
 
 #if defined(BOARD_JC3248)
@@ -626,6 +625,8 @@ static TFT_eSprite bgCanvas = TFT_eSprite(&tft);
 static TFT_eSprite renderSprite = TFT_eSprite(&tft);
 static TFT_eSprite tempSprite = TFT_eSprite(&tft);
 
+#define MATRIX_ACTIVE (bgCanvas.frameBuffer(0) != nullptr)
+
 struct OSSprite_t {
     bool isOnScreen = false;
     uint8_t* rawSprite = NULL;
@@ -766,7 +767,7 @@ typedef struct MicroDosAPI_t {
   void (*drawSprite)(uint32_t spriteHandle, int x, int y);
   void (*clearSprite)(uint32_t spriteHandle);
   void (*freeSprite)(uint32_t spriteHandle);
-  bool (*initGameMatrix)();
+  int  (*initGameMatrix)();
   void (*flushGameMatrix)();
   void (*closeGameMatrix)();
   void (*sysDebugDump)(const char* label, const void* memoryAddress, unsigned int byteCount, uint32_t virtualAddr);
@@ -785,7 +786,14 @@ typedef struct MicroDosAPI_t {
 
 MicroDosAPI kernelAPI;
 
-bool sdAvailable = false;
+static bool _sdAvailable = false;
+
+bool sdAvailable() {
+  if (_sdAvailable) return true;
+  initSD();
+  if (_sdAvailable) return true;
+  return false;
+}
 
 struct ProgramLine {
   int lineNumber;
@@ -890,7 +898,7 @@ void setup() {
   tft.setTouch(cD);
 
   initSD();
-  if (sdAvailable) {
+  if (sdAvailable()) {
 #ifdef SERIAL_DEBUG
     Serial.println(F("- Init SD Card OK"));
 #endif
@@ -921,7 +929,7 @@ void setup() {
   Serial.println(F("OK\n"));
 #endif
 
-  if (sdAvailable && SD.exists("/AUTOEXEC.BAS")) {
+  if (sdAvailable() && SD.exists("/AUTOEXEC.BAS")) {
     terminalPrintln("EXECUTING AUTOEXEC.BAS...");
     delay(1000);
     processCommand("RUN /AUTOEXEC.BAS");
@@ -1023,13 +1031,47 @@ void drawStatusBar() {
 }
 
 #ifdef ENABLE_JPEG
+uint8_t getClosestPaletteIndex(uint16_t color) {
+    int r = (color >> 11) & 0x1F;
+    int g = (color >> 5)  & 0x3F;
+    int b = color         & 0x1F;
+
+    int minDistance = 0x7FFFFFFF;
+    uint8_t closestIndex = 0;
+
+    for (uint8_t i = 0; i < 16; i++) {
+        uint16_t pColor = ramOSPalette[i];
+        int dr = r - ((pColor >> 11) & 0x1F);
+        int dg = g - ((pColor >> 5)  & 0x3F);
+        int db = b - (pColor         & 0x1F);
+
+        int distance = (dr * dr) + (dg * dg) + (db * db);
+        if (distance < minDistance) {
+            minDistance = distance;
+            closestIndex = i;
+            if (distance == 0) break;
+        }
+    }
+    return closestIndex;
+}
+
+void convert16BitTo4Bit(const uint16_t* input, uint32_t numPixels, uint8_t* output) {
+    for (uint32_t i = 0; i < numPixels; i += 2) {
+        uint8_t p1 = getClosestPaletteIndex(input[i]);
+        uint8_t p2 = (i + 1 < numPixels) ? getClosestPaletteIndex(input[i + 1]) : 0;
+
+        output[i / 2] = (p1 << 4) | (p2 & 0x0F);
+    }
+}
+
 bool tft_output(int16_t x, int16_t y, uint16_t w, uint16_t h, uint16_t* bitmap) {
-  if (y >= tft.width()) return false;
+  if (y >= kernelAPI.termWidth or x >= kernelAPI.termHeight) return false;
 
   if (MATRIX_ACTIVE) {
-    //TODO Decode 16-bit RGB565 to 4-bit indexed color array
-    bgCanvas.pushImage(x, y, w, h, bitmap);
-    bgCanvas.pushSprite(0, 0);
+    uint8_t *convmap = (uint8_t*)malloc((w*h)/2);
+    convert16BitTo4Bit(bitmap, w*h, convmap);
+    bgCanvas.pushImage(x, y, w, h, (uint16_t*)convmap);
+    free(convmap);
   } else {
     tft.pushImage(x, y, w, h, bitmap);
   }
@@ -1038,7 +1080,7 @@ bool tft_output(int16_t x, int16_t y, uint16_t w, uint16_t h, uint16_t* bitmap) 
 }
 
 void loadJpegToScreen(const char* filename, int16_t xOut, int16_t yOut) {
-  if (!sdAvailable) { terminalPrintln("ERR: NO DISK"); return; }
+  if (!sdAvailable()) { terminalPrintln("ERR: NO DISK"); return; }
 
   fixedFilename[0] = '\0';
   if (filename[0] != '/') {
@@ -1058,7 +1100,12 @@ void loadJpegToScreen(const char* filename, int16_t xOut, int16_t yOut) {
   TJpgDec.setCallback(tft_output);
 
   uint32_t startTime = millis();
+
   TJpgDec.drawSdJpg(xOut, yOut, fixedFilename);
+  if (MATRIX_ACTIVE) {
+    bgCanvas.pushSprite(0, 0);
+  }
+
   uint32_t duration = millis() - startTime;
 }
 #endif
@@ -1274,23 +1321,23 @@ void initSD() {
 #if defined(BOARD_CYD)
   sdSPI.begin(SYS_SD_CLK, SYS_SD_D0, SYS_SD_CMD, SYS_SD_CS);
   if (!SD.begin(SYS_SD_CS, sdSPI, SPI_FREQUENCY)) {
-    sdAvailable = false;
+    _sdAvailable = false;
   } else {
-    sdAvailable = true;
+    _sdAvailable = true;
   }
 #elif defined(BOARD_JC3248)
   SD_MMC.setPins(SYS_SD_CLK, SYS_SD_CMD, SYS_SD_D0);
 
   if (!SD_MMC.begin("/sd", true)) {
-    sdAvailable = false;
+    _sdAvailable = false;
   } else {
-    sdAvailable = true;
+    _sdAvailable = true;
   }
 #endif
 }
 
 void loadBuffer(const char* filename) {
-  if (!sdAvailable) { terminalPrintln("ERR: NO DISK"); return; }
+  if (!sdAvailable()) { terminalPrintln("ERR: NO DISK"); return; }
 
   memset(fixedFilename, 0, FILENAME_SIZE);
   if (filename[0] != '/') {
@@ -1322,7 +1369,7 @@ void loadBuffer(const char* filename) {
 
 void loadFile(const char* filename) {
   terminalPrintln(filename);
-  if (!sdAvailable) { terminalPrintln("ERR: NO DISK"); return; }
+  if (!sdAvailable()) { terminalPrintln("ERR: NO DISK"); return; }
 
   memset(fixedFilename, 0, FILENAME_SIZE);
   if (filename[0] != '/') {
@@ -1364,7 +1411,7 @@ void loadFile(const char* filename) {
 }
 
 void saveBuffer(const char* filename) {
-  if (!sdAvailable) { terminalPrintln("ERR: NO DISK"); return; }
+  if (!sdAvailable()) { terminalPrintln("ERR: NO DISK"); return; }
 
   memset(fixedFilename, 0, FILENAME_SIZE);
   if (filename[0] != '/') {
@@ -1411,7 +1458,7 @@ void clearProgram() {
 }
 
 void saveFile(const char* filename) {
-  if (!sdAvailable) { terminalPrintln("ERR: NO DISK"); return; }
+  if (!sdAvailable()) { terminalPrintln("ERR: NO DISK"); return; }
 
   memset(fixedFilename, 0, FILENAME_SIZE);
   if (filename[0] != '/') {
@@ -2261,7 +2308,7 @@ void executeCProgram(const char* filename) {
         return;
     }
 
-    if (!sdAvailable) {
+    if (!sdAvailable()) {
         terminalPrintln("ERR: NO DISK");
         return;
     }
@@ -2307,7 +2354,7 @@ void executeCProgram(const char* filename) {
     PicocInitialize(pc, 16 * 1024);
     PicocIncludeAllSystemHeaders(pc);
 
-    if (setjmp(pc->HostExitBuf) == 0) {
+    if (setjmp(pc->PicocExitBuf) == 0) {
         PicocParse(pc, pathBuf, srcCode, fileSize, 1, 1, 1, 0);
         PicocCallMain(pc, 0, NULL);
     }
@@ -2361,7 +2408,7 @@ void processCommand(const char* rawCmd) {
   }
 
   if (strcmp(firstToken, "DIR") == 0) {
-    if (!sdAvailable) { terminalPrintln("ERR: NO DISK"); return; }
+    if (!sdAvailable()) { terminalPrintln("ERR: NO DISK"); return; }
 
     File root = SD.open("/");
     if (!root) { terminalPrintln("ERR: OPEN FAILED"); return; }
@@ -2403,7 +2450,7 @@ void processCommand(const char* rawCmd) {
         fixedFilename[FILENAME_SIZE - 1] = '\0';
       }
 
-      if (!sdAvailable) { terminalPrintln("ERR: NO DISK"); return; }
+      if (!sdAvailable()) { terminalPrintln("ERR: NO DISK"); return; }
 
       if (SD.exists(fixedFilename)) {
         if (SD.remove(fixedFilename)) {
@@ -2532,7 +2579,7 @@ void processCommand(const char* rawCmd) {
         fixedFilename[FILENAME_SIZE - 1] = '\0';
       }
 
-      if (!sdAvailable) { terminalPrintln("ERR: NO DISK"); return; }
+      if (!sdAvailable()) { terminalPrintln("ERR: NO DISK"); return; }
       File file = SD.open(fixedFilename, FILE_READ);
       if (!file) { terminalPrintln("NOT FOUND"); return; }
 
@@ -2588,7 +2635,7 @@ void processCommand(const char* rawCmd) {
         fixedFilename[FILENAME_SIZE - 1] = '\0';
       }
 
-      if (!sdAvailable) { terminalPrintln("ERR: NO DISK"); return; }
+      if (!sdAvailable()) { terminalPrintln("ERR: NO DISK"); return; }
       File file = SD.open(fixedFilename, FILE_READ);
       if (!file) { terminalPrintln("NOT FOUND"); return; }
 
@@ -2625,26 +2672,6 @@ void processCommand(const char* rawCmd) {
     }
     return;
   }
-#ifdef ENABLE_JPEG
-  else if (strcmp(firstToken, "IMVIEW") == 0) {
-    if (firstSpace != NULL) {
-      memset(baseFilename, 0, FILENAME_SIZE);
-      strncpy(baseFilename, firstSpace + 1, FILENAME_SIZE);
-      baseFilename[FILENAME_SIZE - 1] = '\0';
-      stripQuotes(baseFilename);
-      trimCString(baseFilename);
-
-      loadJpegToScreen(baseFilename, 0, 0);
-
-      getKeyPress(true);
-
-      redrawTerminal();
-    } else {
-      terminalPrintln("ERR: SPECIFY IMAGE FILENAME");
-    }
-    return;
-  }
-#endif
   else if (strcmp(firstToken, "EDIT") == 0) {
     strncpy(previousPrompt, currentPrompt, PROMPT_SIZE - 1);
     previousPrompt[PROMPT_SIZE - 1] = '\0';
@@ -2676,7 +2703,7 @@ void processCommand(const char* rawCmd) {
       String lines[MAX_EDIT_LINES];
       int fileLineCount = 0;
 
-      if (sdAvailable && SD.exists(fixedFilename)) {
+      if (sdAvailable() && SD.exists(fixedFilename)) {
         File f = SD.open(fixedFilename, FILE_READ);
         if (f) {
           while (f.available() && fileLineCount < MAX_EDIT_LINES) {
@@ -2798,7 +2825,7 @@ void processCommand(const char* rawCmd) {
 	  continue;
         }
         else if (userEntry.equalsIgnoreCase("S")) {
-          if (sdAvailable) {
+          if (sdAvailable()) {
             SD.remove(fixedFilename);
             File f = SD.open(fixedFilename, FILE_WRITE);
             if (f) {
@@ -2949,7 +2976,7 @@ void processCommand(const char* rawCmd) {
         }
       }
 
-      if (!sdAvailable) { terminalPrintln("ERR: NO DISK"); return; }
+      if (!sdAvailable()) { terminalPrintln("ERR: NO DISK"); return; }
 
       File file = SD.open(fixedFilename, FILE_READ);
       if (!file) { terminalPrintln("NOT FOUND"); return; }
@@ -3255,7 +3282,7 @@ void processCommand(const char* rawCmd) {
     lookupName[FILENAME_SIZE - 1] = '\0';
     trimCString(lookupName);
 
-    if (sdAvailable && strlen(lookupName) > 0) {
+    if (sdAvailable() && strlen(lookupName) > 0) {
       char checkPath[FILENAME_SIZE];
 
       snprintf(checkPath, FILENAME_SIZE, "/%s.BIN", lookupName);
@@ -3558,7 +3585,34 @@ bool runSingleLine(const char* rawLine, int &currentLineIdx) {
     kernelAPI.println("ERR: INVALID PLOT ARGS");
     return false;
   }
+#ifdef ENABLE_JPEG
+  if (strncmp(line, "IMVIEW ", 7) == 0) {
+    char* args = line + 7;
+    char* firstComma = strchr(args, ',');
+    if (firstComma != NULL) {
+      *firstComma = '\0';
+      char* secondComma = strchr(firstComma + 1, ',');
+      if (secondComma != NULL) {
+        *secondComma = '\0';
+        memset(baseFilename, 0, FILENAME_SIZE);
+        strncpy(baseFilename, args, FILENAME_SIZE);
+        baseFilename[FILENAME_SIZE - 1] = '\0';
+        stripQuotes(baseFilename);
+        trimCString(baseFilename);
+        int x = evaluateExpression(firstComma + 1);
+        int y = evaluateExpression(secondComma + 1);
 
+        kernelAPI.drawJpeg(baseFilename, x, y);
+        while (getKeyPress(true) == 0) delay(10);
+        kernelAPI.clear();
+	return true;
+      }
+    } else {
+      terminalPrintln("ERR: INVALID IMVIEW ARGS");
+    }
+    return false;
+  }
+#endif
   if (strcmp(line, "CLEAR") == 0 || strcmp(line, "CLS") == 0) {
     kernelAPI.clear();
     return true;
@@ -4246,11 +4300,7 @@ void api_setup() {
   };
 
   kernelAPI.color = [] (int colorId) {
-    if (MATRIX_ACTIVE) {
-      currentActivePaletteId = colorId;
-    } else {
-      currentActivePaletteId = colorId;
-    }
+    currentActivePaletteId = colorId;
   };
 
   kernelAPI.plot = [] (int x, int y, int colorId) {
@@ -4273,19 +4323,19 @@ void api_setup() {
     }
   };
 
-  kernelAPI.fillRect = [] (int x, int y, int w, int h, int colorId) {
-     if (MATRIX_ACTIVE) {
-      bgCanvas.fillRect(x, y, w, h, colorId);
-    } else {
-      tft.fillRect(x, y, w, h, getPaletteColor(colorId));
-    }
-  };
-
   kernelAPI.drawRect = [] (int x, int y, int w, int h, int colorId) {
      if (MATRIX_ACTIVE) {
       bgCanvas.drawRect(x, y, w, h, colorId);
     } else {
       tft.drawRect(x, y, w, h, getPaletteColor(colorId));
+    }
+  };
+
+  kernelAPI.fillRect = [] (int x, int y, int w, int h, int colorId) {
+     if (MATRIX_ACTIVE) {
+      bgCanvas.fillRect(x, y, w, h, colorId);
+    } else {
+      tft.fillRect(x, y, w, h, getPaletteColor(colorId));
     }
   };
 
@@ -4669,7 +4719,7 @@ void api_setup() {
   };
 
   kernelAPI.createSprite = [](const char* filename, int spriteSize) -> uint32_t {
-    if (!filename || filename[0] == '\0' || !sdAvailable) return 0;
+    if (!filename || filename[0] == '\0' || !sdAvailable()) return 0;
 
     char safePath[64];
     if (filename[0] != '/') {
@@ -4820,7 +4870,7 @@ void api_setup() {
     }
   };
 
-  kernelAPI.initGameMatrix = []() -> bool {
+  kernelAPI.initGameMatrix = []() -> int {
     if (!MATRIX_ACTIVE) {
       tempSprite.deleteSprite();
       renderSprite.deleteSprite();
@@ -4832,7 +4882,7 @@ void api_setup() {
     }
     bgCanvas.fillSprite(TFT_BLACK);
     bgCanvas.pushSprite(0, 0);
-    return true;
+    return 1;
   };
 
   kernelAPI.flushGameMatrix = []() {
@@ -4870,16 +4920,6 @@ void api_setup() {
     return (void*)f;
   };
 
-  kernelAPI.sdWrite = [](void* fileHandle, const void* buffer, uint32_t size, uint32_t count) -> uint32_t {
-    if (!fileHandle || !buffer) return 0;
-    fs::File* filePtr = (fs::File*)fileHandle;
-
-    size_t bytesToWrite = size * count;
-    size_t bytesWritten = filePtr->write((const uint8_t*)buffer, bytesToWrite);
-
-    return bytesWritten / size;
-  };
-
   kernelAPI.sdRead = [](void* fileHandle, void* buffer, uint32_t size, uint32_t count) -> uint32_t {
     if (!fileHandle || !buffer) return 0;
     fs::File* filePtr = (fs::File*)fileHandle;
@@ -4888,6 +4928,16 @@ void api_setup() {
     size_t bytesRead = filePtr->read((uint8_t*)buffer, bytesToRead);
 
     return bytesRead / size;
+  };
+
+  kernelAPI.sdWrite = [](void* fileHandle, const void* buffer, uint32_t size, uint32_t count) -> uint32_t {
+    if (!fileHandle || !buffer) return 0;
+    fs::File* filePtr = (fs::File*)fileHandle;
+
+    size_t bytesToWrite = size * count;
+    size_t bytesWritten = filePtr->write((const uint8_t*)buffer, bytesToWrite);
+
+    return bytesWritten / size;
   };
 
   kernelAPI.sdClose = [](void* fileHandle) {
