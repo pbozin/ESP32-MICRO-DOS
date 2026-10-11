@@ -628,9 +628,9 @@ INLINE ALWAYS void cacheAllChessSprites() {
             numBuf[idx] = '\0';
 
             // Sequential concatenation pipeline
-            concat("CHESS.DAT/", chessSpriteFiles[fileIdx], tempPath); // "CHESS.DAT/Chess_xxx"
-            concat(tempPath, numBuf, sFilename);                       // "CHESS.DAT/Chess_xxx64"
-            concat(sFilename, ".spr", tempPath);                       // "CHESS.DAT/Chess_xxx64.spr"
+            concat(STRING("CHESS.DAT/"), chessSpriteFiles[fileIdx], tempPath); // "CHESS.DAT/Chess_xxx"
+            concat(tempPath, numBuf, sFilename);                               // "CHESS.DAT/Chess_xxx64"
+            concat(sFilename, STRING(".spr"), tempPath);                       // "CHESS.DAT/Chess_xxx64.spr"
 
             pieceSprites[i] = createSprite(tempPath, fSize);
         }
