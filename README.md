@@ -5,7 +5,7 @@
 
 # ESP32 MicroDOS
 
-An advanced, retro-style retro-operating system and interactive environment designed for ESP32 boards with touch displays: 
+An advanced, retro-futuristic operating system and interactive environment designed for ESP32 boards with touch display, including: 
 * 320x480 E32R40T [https://www.lcdwiki.com/4.0inch_ESP32-32E_Display]
 * 240x320 E32R32P [https://www.lcdwiki.com/3.2inch_ESP32-32E_Display] 
 * 320x480 JC3248W535C [https://www.aliexpress.com/item/1005007566332450.html]
