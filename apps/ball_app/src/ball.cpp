@@ -164,7 +164,7 @@ extern "C" int _start(int argc, char** argv, MicroDosAPI* api) {
         }
 
         flushGameMatrix();
-        delayMs(16);
+        delay(16);
     }
 
     clearFKeys();

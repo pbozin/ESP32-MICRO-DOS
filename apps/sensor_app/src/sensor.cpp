@@ -239,7 +239,7 @@ int _start(int argc, char** argv, MicroDosAPI* api) {
 
     pinMode(SDA_PIN, INPUT_PULLUP);
     pinMode(SCL_PIN, INPUT_PULLUP);
-    delayMs(100);
+    delay(100);
 
     uint8_t chip_id = 0;
     bool connected = sensor_read_bytes(REG_CHIP_ID, &chip_id, 1);
@@ -290,7 +290,7 @@ int _start(int argc, char** argv, MicroDosAPI* api) {
         termPrintln(STRING("[Error] No BME68x module detected"));
     }
 
-    delayMs(2000);
+    delay(2000);
     clearScreen();
 
     TouchState touch;
@@ -300,7 +300,7 @@ int _start(int argc, char** argv, MicroDosAPI* api) {
     while (1) {
         if (loop_counter % 50 == 0 && connected) {
             sensor_write_reg(REG_CTRL_MEAS, 0x25);
-	    delayMs(20);
+	    delay(20);
             uint8_t raw_data[6];
             if (sensor_read_bytes(REG_DATA_START, raw_data, 6)) {
                 int32_t adc_P = ((int32_t)raw_data[0] << 12) | ((int32_t)raw_data[1] << 4) | (raw_data[2] >> 4);
@@ -318,7 +318,7 @@ int _start(int argc, char** argv, MicroDosAPI* api) {
             break;
         }
         loop_counter++;
-        delayMs(20);
+        delay(20);
     }
     clearScreen();
     return 0;

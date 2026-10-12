@@ -485,7 +485,7 @@ INLINE ALWAYS void executeMove(const char* moveStr) {
     if (executeToledoMove(moveStr)) {
       handlePawnPromotion();
       refreshBoard();
-      delayMs(200);
+      delay(200);
 
       if (countLegalMoves(humanIsWhite == 0) == 0) {
         if (isKingUnderAttack(humanIsWhite == 0)) {
@@ -493,14 +493,14 @@ INLINE ALWAYS void executeMove(const char* moveStr) {
         } else {
           setFKeys(STRING(" NEW  "), STRING(" UNDO "), STRING(" FLIP "), STRING("DRAW!!"), STRING(" QUIT "));
         }
-        delayMs(2000);
+        delay(2000);
         return;
       }
 
       aiThinkAndRespond();
       handlePawnPromotion();
       refreshBoard();
-      delayMs(200);
+      delay(200);
 
       if (countLegalMoves(humanIsWhite != 0) == 0) {
         if (isKingUnderAttack(humanIsWhite != 0)) {
@@ -508,7 +508,7 @@ INLINE ALWAYS void executeMove(const char* moveStr) {
         } else {
           setFKeys(STRING(" NEW  "), STRING(" UNDO "), STRING(" FLIP "), STRING("DRAW!!"), STRING(" QUIT "));
         }
-        delayMs(2000);
+        delay(2000);
         return;
       }
     } else {
@@ -637,7 +637,7 @@ INLINE ALWAYS void cacheAllChessSprites() {
     }
 }
 
-extern "C" int _start(int argc, char** argv, MicroDosAPI* api) {
+int _start(int argc, char** argv, MicroDosAPI* api) {
     _global_api_ptr = api;
     if (!api) return -1;
     if (!initGameMatrix()) return -1;
@@ -671,7 +671,7 @@ extern "C" int _start(int argc, char** argv, MicroDosAPI* api) {
             if (executeUndo()) {
                 selectX = -1; selectY = -1;
                 refreshBoard();
-                delayMs(300);
+                delay(300);
             }
             continue;
         }
@@ -690,7 +690,7 @@ extern "C" int _start(int argc, char** argv, MicroDosAPI* api) {
               if (pieceSprites[i] != 0) { clearSprite(pieceSprites[i]); }
             }
             refreshBoard();
-            delayMs(300);
+            delay(300);
             continue;
         }
         // FLIP
@@ -719,7 +719,7 @@ extern "C" int _start(int argc, char** argv, MicroDosAPI* api) {
                 playerTurn = true;
             }
 
-            delayMs(300);
+            delay(300);
             continue;
         }
         // Backspace
@@ -732,7 +732,7 @@ extern "C" int _start(int argc, char** argv, MicroDosAPI* api) {
                 }
                 setFKeys(STRING(" NEW  "), STRING(" UNDO "), STRING(" FLIP "), textBuf, STRING(" QUIT "));
             }
-            delayMs(200);
+            delay(200);
             continue;
         }
         // Enter
@@ -752,7 +752,7 @@ extern "C" int _start(int argc, char** argv, MicroDosAPI* api) {
                 selectX = -1;
                 selectY = -1;
             }
-            delayMs(300);
+            delay(300);
             continue;
         }
         // Alphanumeric
@@ -767,7 +767,7 @@ extern "C" int _start(int argc, char** argv, MicroDosAPI* api) {
                 textBuf[bufLen] = '\0';
                 setFKeys(STRING(" NEW  "), STRING(" UNDO "), STRING(" FLIP "), textBuf, STRING(" QUIT "));
             }
-            delayMs(200);
+            delay(200);
             continue;
         }
 
@@ -803,9 +803,9 @@ extern "C" int _start(int argc, char** argv, MicroDosAPI* api) {
                 selectX = -1;
                 selectY = -1;
             }
-            delayMs(300);
+            delay(300);
         }
-        delayMs(30);
+        delay(30);
     }
 
     clearFKeys();
@@ -813,7 +813,7 @@ extern "C" int _start(int argc, char** argv, MicroDosAPI* api) {
         if (pieceSprites[i] != 0) freeSprite(pieceSprites[i]);
     }
     closeGameMatrix();
-    delayMs(100);
+    delay(100);
     return 0;
 }
 

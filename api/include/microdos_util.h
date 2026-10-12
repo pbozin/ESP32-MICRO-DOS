@@ -159,6 +159,37 @@ WEAK char* strncpy(char* dest, const char* src, size_t n) {
     return dest;
 }
 
+WEAK char* strcpy(char* dest, const char* src) {
+    size_t i = 0;
+
+    while (src[i] != '\0') {
+        dest[i] = src[i];
+        i++;
+    }
+
+    dest[i] = '\0';
+
+    return dest;
+}
+
+WEAK char* strcat(char* dest, const char* src) {
+    size_t dest_len = 0;
+    size_t i = 0;
+
+    while (dest[dest_len] != '\0') {
+        dest_len++;
+    }
+
+    while (src[i] != '\0') {
+        dest[dest_len + i] = src[i];
+        i++;
+    }
+
+    dest[dest_len + i] = '\0';
+
+    return dest;
+}
+
 WEAK int strcmp(const char* s1, const char* s2) {
     while (*s1 && (*s1 == *s2)) {
         s1++;

@@ -42,7 +42,13 @@ typedef struct MicroDosAPI_t {
   void (*inputStr)(const char* prompt, char* destBuffer, int maxLen);
   int  (*wifiUp)(const char* ssid, const char* pass);
   void (*wifiDown)();
-  int  (*ollamaStream)(const char* prompt, const char* serverIp, const char* modelName, const char* sysPrompt, int streamToConsole);
+  int  (*ollamaStream)(const char* prompt,
+		       const char* serverIp,
+		       const char* modelName,
+		       const char* sysPrompt,
+		       char* outBuf,
+		       int outBufSize,
+		       int streamToConsole);
   void (*getTouch)(TouchState* state);
   int  termWidth;
   int  termHeight;

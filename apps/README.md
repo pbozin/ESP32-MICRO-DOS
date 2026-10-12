@@ -18,8 +18,8 @@ A high-frame-rate breakout simulator showcasing graphics, real-time keyboard pol
 An interactive chat client that connects your ESP32 terminal to a remote **Ollama Large Language Model** server.
 
 ### Architectural Blueprint
-* **System Automation Fallback (`api->wifiUp`):** Initializes the internal network stack. Passing placeholder parameters like `STRING("SSID")` causes the kernel to automatically look for local credentials inside `/WIFI.CFG` on the SD card.
-* **Token Stream Interceptor:** Connects via `api->ollamaStream()` to point-of-presence servers (default: `192.168.0.131:11434`) running lightweight models like `qwen2.5-theory-24k:3b`. Tokens are parsed directly from socket streams to conserve RAM.
+* **System Automation Fallback (`api->wifiUp`):** Initializes the internal network stack. Passing placeholder parameters like `STRING("CFG")` causes the kernel to automatically look for local credentials inside `/WIFI.CFG` on the SD card.
+* **Token Stream Interceptor:** Connects via `api->ollamaStream()` to point-of-presence servers (defined in /OLLAMA.CFG) running lightweight model (also defined in /OLLAMA.CFG). Tokens are parsed directly from socket streams to conserve RAM.
 * **Modal Text Accumulator:** Captures text via `api->inputStr()`, appending prompts cleanly behind `YOU> ` and routing incoming tokens dynamically to stream outputs.
 
 ---
@@ -37,7 +37,7 @@ A development pipeline that prompts a remote AI Coder model to write, compile, a
 A compact, highly optimized chess simulator featuring multi-sprite graphics engine, a dual-input control layout, dynamic function key overrides, and an internal Toledo-style look-ahead heuristic evaluator.
 
 ### Architectural Blueprint
-* **Hybrid Touch & Alphanumeric Input:** Leverages a dual-mode event listener stack. Users can input standard algebraic coordinate strings (e.g., e2e4) over serial/keyboard polling buffers (`api->inkey()`) or click squares directly on the panel utilizing localized display coordinate division math (`touch.x / 40`, `touch.y / 40`).
+* **Hybrid Touch & Alphanumeric Input:** Leverages a dual-mode event listener stack. Users can input standard algebraic coordinate strings (e.g., e2e4) over serial/keyboard polling buffers (`api->inkey()`) or click squares directly on the panel utilizing localized display coordinate division math.
 * **Persistent BIOS Function-Key Hooks:** Interlaces UI feedback structures cleanly with the host operating system layer by mapping string pointers back to dynamic hardware macros (`api->setFKeys`). This yields responsive rendering adjustments, board configuration shifts (`FLIP`), and multi-state history adjustments (`UNDO`, `NEW`, `QUIT`).
 * **Toledo-Heuristic Material Scan Loop:** Implements a standalone evaluation state-machine running over a shared memory index layout (`b[from]`). The logic simulates individual positions, drops illegal tracks via King tracking verification arrays (`isKingUnderAttack`), rewards structural positional ownership over center-ring grids, and calculates real-time coordinate differentials to pass calculated move paths directly back down to target evaluation hooks (`executeToledoMove`).
 
@@ -73,7 +73,17 @@ A software-driven 3D vector engine displaying mathematical shape interpolation, 
 
 ---
 
-## 🎵 8. Algorithmic Markov MIDI Generative Sequencer (`midigen.bin`)
+## 🎮 8. Game of GO against AI (`go.bin`)
+A game engine .
+
+### Architectural Blueprint
+* **Touch Input:** Users can click square intersections directly on the panel utilizing localized display coordinate division math.
+* **Persistent BIOS Function-Key Hooks:** Interlaces UI feedback structures cleanly with the host operating system layer by mapping string pointers back to dynamic hardware macros. This yields responsive multi-state history adjustments (`UNDO`, `NEW`, `PASS`).
+* **AI model player** Users is playing against local ollama LLM configured in /OLLAMA.CFG (together with /WIFI.CFG for networking).
+
+---
+
+## 🎵 9. Algorithmic Markov MIDI Generative Sequencer (`midigen.bin`)
 A live music composition engine that processes dynamic Markov chains and geometric probability distributions entirely in software to stream real-time multi-channel MIDI note data down the system serial bus.
 
 ### Architectural Blueprint
@@ -97,20 +107,30 @@ Applications are compiled outside the core kernel image using **PlatformIO**:
 
 ### 2. SD Mounting & Shell Launch Execution
 1. Copy your compiled binary file onto a FAT32-formatted Micro SD card, renaming it properly (eg. CHESS.BIN or BRICKS.BIN).
-2. In the case of `CHAT.BIN` and `CODE.BIN`, ensure a `/WIFI.CFG` file exists on the SD root directory with your access credentials:
+2. In the case of `CHAT.BIN`, `CODE.BIN` and 'GO.BIN', ensure that `/WIFI.CFG` and '/OLLAMA.CFG' files exist on the SD root directory:
+
+  **/WIFI.CFG**
+
    ```text
-   Your_WiFi_SSID
-   Your_WiFi_Password
+   wifi_ssid
+   wifi_pass
+   ```
+
+   **/OLLAMA.CFG**
+
+   ```text
+   host:port
+   model_name
    ```
 3. Insert the card into your ESP32 display device and power on.
 4. Launch your application from the interactive command-line interface using the native file loader command:
    ```bash
-   > EXEC BRICKS.BIN
+   > EXEC CHAT.BIN
    ```
 
    Alternatively:
    ```bash
-   > BRICKS
+   > CHAT
    ```
 
 <img width="300" alt="bricks" src="https://github.com/user-attachments/assets/e8cf1f2c-280f-4051-b826-3669cdfcb3c0" />
