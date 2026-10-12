@@ -3,11 +3,11 @@
 
 #define BOARD_SIZE 9
 #define COLOR_BACKGROUND 2
-#define COLOR_GRID      15 
+#define COLOR_GRID      15
 #define COLOR_BLACK      0
 #define COLOR_WHITE      1
 
-NEW_STRING(system_prompt, "You are a Weiqi (GO game) engine bot. " 
+NEW_STRING(system_prompt, "You are a Weiqi (GO game) engine bot. "
 		          "You are playing White (O) on a 9x9 board. "
 			  "Black is (X). "
 			  "Empty field is (.). "
@@ -74,29 +74,29 @@ ALWAYS INLINE void initGame() {
 
     int screenW = getTermWidth();
     int screenH = getTermHeight();
-    
+
     int minDim = (screenW < screenH) ? screenW : screenH;
-    boardWidth = minDim - 30; 
+    boardWidth = minDim - 30;
     boardHeight = boardWidth;
-    
+
     boardOffsetX = (screenW - boardWidth) / 2;
     boardOffsetY = (screenH - boardHeight) / 2;
-    
+
     cellWidth = boardWidth / (BOARD_SIZE - 1);
     cellHeight = boardHeight / (BOARD_SIZE - 1);
 }
 
 ALWAYS INLINE void renderGame() {
     fillRect(boardOffsetX - 15, boardOffsetY - 15, boardWidth + 30, boardHeight + 30, COLOR_BACKGROUND);
-    
+
     for (int i = 0; i < BOARD_SIZE; i++) {
         int x = boardOffsetX + (i * cellWidth);
         int y = boardOffsetY + (i * cellHeight);
-        
+
         drawLine(x, boardOffsetY, x, boardOffsetY + boardHeight, COLOR_GRID);
         drawLine(boardOffsetX, y, boardOffsetX + boardWidth, y, COLOR_GRID);
     }
-    
+
     int starPoints[] = {2, 4, 6};
     for(int sy = 0; sy < 3; sy++) {
         for(int sx = 0; sx < 3; sx++) {
@@ -105,14 +105,14 @@ ALWAYS INLINE void renderGame() {
             fillCircle(px, py, 3, COLOR_GRID);
         }
     }
-    
+
     int radius = (cellWidth < cellHeight ? cellWidth : cellHeight) * 45 / 135;
-    
+
     for (int y = 0; y < BOARD_SIZE; y++) {
         for (int x = 0; x < BOARD_SIZE; x++) {
             int px = boardOffsetX + (x * cellWidth);
             int py = boardOffsetY + (y * cellHeight);
-            
+
             if (board[y][x] == S_BLACK) {
                 fillCircle(px, py, radius, COLOR_BLACK);
             } else if (board[y][x] == S_WHITE) {
@@ -121,7 +121,7 @@ ALWAYS INLINE void renderGame() {
             }
         }
     }
-    
+
     flushGameMatrix();
 }
 
@@ -137,16 +137,16 @@ INLINE void countLiberties(int x, int y, int stoneType, int &liberties, int &gro
 
     int dx[] = {0, 0, -1, 1};
     int dy[] = {-1, 1, 0, 0};
-    
+
     for (int i = 0; i < 4; i++) {
         int nx = x + dx[i];
         int ny = y + dy[i];
-        
+
         if (nx >= 0 && nx < BOARD_SIZE && ny >= 0 && ny < BOARD_SIZE) {
             if (board[ny][nx] == S_EMPTY) {
                 if (!visited[ny][nx]) {
                     liberties++;
-                    visited[ny][nx] = true; 
+                    visited[ny][nx] = true;
                 }
             } else if (board[ny][nx] == stoneType && !visited[ny][nx]) {
                 countLiberties(nx, ny, stoneType, liberties, groupSize, groupX, groupY);
@@ -164,28 +164,28 @@ ALWAYS INLINE bool processMove(int targetX, int targetY, int player) {
     }
 
     board[targetY][targetX] = player;
-    
+
     int opponent = (player == S_BLACK) ? S_WHITE : S_BLACK;
     bool captureHappened = false;
     int turnCaptures = 0;
 
     int dx[] = {0, 0, -1, 1};
     int dy[] = {-1, 1, 0, 0};
-    
+
     for (int i = 0; i < 4; i++) {
         int nx = targetX + dx[i];
         int ny = targetY + dy[i];
-        
+
         if (nx >= 0 && nx < BOARD_SIZE && ny >= 0 && ny < BOARD_SIZE && board[ny][nx] == opponent) {
             for(int r = 0; r < BOARD_SIZE; r++) for(int c = 0; c < BOARD_SIZE; c++) visited[r][c] = false;
-            
+
             int liberties = 0;
             int groupSize = 0;
             int groupX[BOARD_SIZE * BOARD_SIZE];
             int groupY[BOARD_SIZE * BOARD_SIZE];
-            
+
             countLiberties(nx, ny, opponent, liberties, groupSize, groupX, groupY);
-            
+
             if (liberties == 0) {
                 for (int g = 0; g < groupSize; g++) {
                     board[groupY[g]][groupX[g]] = S_EMPTY;
@@ -202,7 +202,7 @@ ALWAYS INLINE bool processMove(int targetX, int targetY, int player) {
         int groupSize = 0;
         int groupX[BOARD_SIZE * BOARD_SIZE];
         int groupY[BOARD_SIZE * BOARD_SIZE];
-        
+
         countLiberties(targetX, targetY, player, liberties, groupSize, groupX, groupY);
         if (liberties == 0) {
             board[targetY][targetX] = S_EMPTY;
@@ -219,7 +219,7 @@ ALWAYS INLINE bool processMove(int targetX, int targetY, int player) {
     if (player == S_BLACK) blackCaptures += turnCaptures;
     else whiteCaptures += turnCaptures;
 
-    return true; 
+    return true;
 }
 
 ALWAYS INLINE void serializeBoard(char *outputPrompt) {
@@ -285,9 +285,9 @@ int _start(int argc, char** argv, MicroDosAPI* api) {
     blackCaptures = 0;
     whiteCaptures = 0;
     hasUndoHistory = 0;
-    
+
     int wasPressedLastFrame = 0;
-    
+
     termPrintln(STRING("CONNECTING..."));
 
     if (wifiUp(STRING("CFG"), STRING("CFG")) != 0) {
@@ -322,14 +322,14 @@ int _start(int argc, char** argv, MicroDosAPI* api) {
 
     while (running) {
         renderGame();
-        
+
         if (currentPlayer == S_WHITE) {
             setFKeys(STRING(" NEW  "), STRING(" UNDO "), STRING(" THNKNG"), textBuf, STRING(" QUIT "));
             renderGame();
-            
+
             int aiX, aiY;
             bool aiMoved = false;
-            
+
             for (int attempts = 0; attempts < 3; attempts++) {
                 if (getAiMoveFromOllama(aiX, aiY)) {
                     if (processMove(aiX, aiY, S_WHITE)) {
@@ -338,34 +338,52 @@ int _start(int argc, char** argv, MicroDosAPI* api) {
                     }
                 }
             }
-            
+
             if (!aiMoved) {
                 saveUndoState();
             }
-            
+
             currentPlayer = S_BLACK;
             updateStatusText();
             continue;
         }
 
         int key = getKey();
-        if (key != -1) { 
-            if (key == '\x15' || key == 'Q' || key == 'q') { running = false; break; }
-            if (key == '\x12' || key == 'U' || key == 'u') { performUndo(); updateStatusText(); continue; }
-            if (key == '\x11' || key == 'N' || key == 'n') { initGame(); blackCaptures = 0; whiteCaptures = 0; updateStatusText(); continue; }
-            if (key == '\x13' || key == 'P' || key == 'p') { saveUndoState(); currentPlayer = S_WHITE; updateStatusText(); continue; }
+        if (key != -1) {
+            if (key == '\x15' || key == 'Q' || key == 'q') {
+		    running = false;
+		    break; }
+            if (key == '\x12' || key == 'U' || key == 'u') {
+		    performUndo();
+		    updateStatusText();
+		    continue;
+	    }
+            if (key == '\x11' || key == 'N' || key == 'n') {
+                    ollamaStream(STRING("NEW"), STRING("CFG"), STRING("CFG"), system_prompt, NULL, 0, 0);
+		    initGame();
+		    blackCaptures = 0;
+		    whiteCaptures = 0;
+		    updateStatusText();
+		    continue;
+	    }
+            if (key == '\x13' || key == 'P' || key == 'p') {
+		    saveUndoState();
+		    currentPlayer = S_WHITE;
+		    updateStatusText();
+		    continue;
+	    }
         }
-        
+
         TouchState touch;
         getTouch(&touch);
-        
-        if (touch.isPressed && !wasPressedLastFrame) { 
+
+        if (touch.isPressed && !wasPressedLastFrame) {
             if (touch.x >= (boardOffsetX - cellWidth / 2) && touch.x <= (boardOffsetX + boardWidth + cellWidth / 2) &&
                 touch.y >= (boardOffsetY - cellHeight / 2) && touch.y <= (boardOffsetY + boardHeight + cellHeight / 2)) {
-                
+
                 int gridX = (touch.x - boardOffsetX + (cellWidth / 2)) / cellWidth;
                 int gridY = (touch.y - boardOffsetY + (cellHeight / 2)) / cellHeight;
-                
+
                 if (gridX >= 0 && gridX < BOARD_SIZE && gridY >= 0 && gridY < BOARD_SIZE) {
                     if (processMove(gridX, gridY, S_BLACK)) {
                         currentPlayer = S_WHITE;
@@ -374,7 +392,7 @@ int _start(int argc, char** argv, MicroDosAPI* api) {
                 }
             }
         }
-        
+
         wasPressedLastFrame = touch.isPressed;
         delay(16);
     }
