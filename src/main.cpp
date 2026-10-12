@@ -606,6 +606,8 @@ int systemRAM[SYSTEM_RAM_SIZE];
 #ifdef ENABLE_OLLAMA
 static char chatContext[CONTEXT_BUF_SIZE] = "";
 static char* activeContext = NULL;
+static char cachedServer[32] = "";
+static char cachedModel[32] = "";
 #endif
 
 static char terminalBuffer[TOTAL_ROWS][TERM_COLS + 1];
@@ -769,7 +771,13 @@ typedef struct MicroDosAPI_t {
   void (*inputStr)(const char* prompt, char* destBuffer, int maxLen);
   int  (*wifiUp)(const char* ssid, const char* pass);
   void (*wifiDown)();
-  int  (*ollamaStream)(const char* prompt, const char* serverIp, const char* modelName, const char* sysPrompt, int streamToConsole);
+  int  (*ollamaStream)(const char* prompt,
+		       const char* serverIp,
+		       const char* modelName,
+		       const char* sysPrompt,
+		       char* outBuf,
+		       int outBufSize,
+		       int streamToConsole);
   void (*getTouch)(TouchState* state);
   int  termWidth;
   int  termHeight;
@@ -2368,8 +2376,12 @@ void executeCProgram(const char* filename) {
         return;
     }
 
-    PicocInitialize(pc, 16 * 1024);
-    PicocIncludeAllSystemHeaders(pc);
+    int allocSize = (int)(fileSize/1024) * 8;
+    if (allocSize < 16)
+	    allocSize = 16;
+    if (allocSize > 64)
+	    allocSize = 64;
+    PicocInitialize(pc, allocSize * 1024);
 
     if (setjmp(pc->PicocExitBuf) == 0) {
         PicocParse(pc, pathBuf, srcCode, fileSize, 1, 1, 1, 0);
@@ -3924,7 +3936,7 @@ bool runSingleLine(const char* rawLine, int &currentLineIdx) {
       if (kernelAPI.wifiUp(ssid, pass) == 0) {
         IPAddress localIP = WiFi.localIP();
         char ipBuf[32];
-        snprintf(ipBuf, 32, "NETWORK IS LIVE. IP: %d.%d.%d.%d", localIP[0], localIP[1], localIP[2], localIP[3]);
+        snprintf(ipBuf, 32, "IP: %d.%d.%d.%d", localIP[0], localIP[1], localIP[2], localIP[3]);
         kernelAPI.println(ipBuf);
       } else {
         kernelAPI.println("ERR: CONNECTION TIMEOUT OR BAD CREDENTIALS");
@@ -4127,7 +4139,7 @@ void slideWindowAppend(char* dest, const char* src, size_t maxWindowSize) {
     }
 }
 
-void processIncomingToken(const char* token, const char* m, bool &isRecordingCode, char* textAccumulator, size_t textAccumMaxSize, char* markdownBuffer, size_t mdMaxSize, bool &insideThinkBlock, char* fullAssistantResponse, size_t farMaxSize, int streamToConsole) {
+void processIncomingToken(const char* token, const char* m, bool &isRecordingCode, char* textAccumulator, size_t textAccumMaxSize, char* markdownBuffer, size_t mdMaxSize, bool &insideThinkBlock, char* fullAssistantResponse, size_t farMaxSize, int streamToConsole, char* outBuf, int outBufSize) {
     const char* cleanToken = token;
     if (strcmp(token, "\\n") == 0) cleanToken = "\n";
     else if (strcmp(token, "\\t") == 0) cleanToken = "\t";
@@ -4139,12 +4151,12 @@ void processIncomingToken(const char* token, const char* m, bool &isRecordingCod
     // ==========================================
     if (strstr(cleanToken, "<think>") != NULL) {
         insideThinkBlock = true;
-        if (showThinkingLogs) terminalPrint("\n[THINKING: ");
+        if (showThinkingLogs && streamToConsole == 1) terminalPrint("\n[THINKING: ");
         return;
     }
     if (strstr(cleanToken, "</think>") != NULL) {
         insideThinkBlock = false;
-        if (showThinkingLogs) terminalPrintln("]\n");
+        if (showThinkingLogs && streamToConsole == 1) terminalPrintln("]\n");
         return;
     }
     if (insideThinkBlock) {
@@ -4215,6 +4227,9 @@ void processIncomingToken(const char* token, const char* m, bool &isRecordingCod
         if (strcmp(token, "\\n") == 0)      terminalPrintln("");
         else if (strcmp(token, "\\t") == 0) terminalPrint("    ");
         else                     terminalPrint(cleanToken);
+    } else {
+	if (strlen(outBuf) + strlen(cleanToken) < outBufSize - 1)
+	    strcat(outBuf, cleanToken);
     }
 }
 #endif
@@ -4452,7 +4467,7 @@ void api_setup() {
     char localPASS[16] = {0};
     bool useFallback = false;
 
-    if (!ssid || !pass || strcmp(ssid, "SSID") == 0 || strcmp(pass, "PASS") == 0 || strlen(ssid) == 0) {
+    if (!ssid || !pass || strcmp(ssid, "CFG") == 0 || strcmp(pass, "CFG") == 0 || strlen(ssid) == 0) {
       useFallback = true;
     }
 
@@ -4506,10 +4521,60 @@ void api_setup() {
   };
 
 
-  kernelAPI.ollamaStream = [] (const char* p, const char* s, const char* m, const char* sysPrompt, int streamToConsole) -> int {
+  kernelAPI.ollamaStream = [] (const char* p, const char* s, const char* m, const char* sysPrompt, char* outBuf, int outBufSize, int streamToConsole) -> int {
 #ifdef ENABLE_OLLAMA
     if (WiFi.status() != WL_CONNECTED || !p || strlen(p) == 0 || !m) return -1;
 
+    char localS[32] = {0};
+    char localM[32] = {0};
+    bool useFallback = false;
+
+    if (!s || !m || strcmp(s, "CFG") == 0 || strcmp(m, "CFG") == 0 || strlen(m) == 0 || strlen(s) == 0) {
+      useFallback = true;
+    }
+
+    if (useFallback) {
+      if (cachedModel[0] == '\0' or cachedServer[0] == '\0') {
+        File cfgFile = SD.open("/OLLAMA.CFG", FILE_READ);
+        if (cfgFile) {
+          int len = cfgFile.readBytesUntil('\n', localS, sizeof(localS) - 1);
+          localS[len] = '\0';
+
+          len = cfgFile.readBytesUntil('\n', localM, sizeof(localM) - 1);
+          localM[len] = '\0';
+
+          cfgFile.close();
+          strncpy(cachedServer, localS, sizeof(cachedServer) - 1);
+          cachedServer[sizeof(cachedServer) - 1] = '\0';
+
+          strncpy(cachedModel, localM, sizeof(cachedModel) - 1);
+          cachedModel[sizeof(cachedModel) - 1] = '\0';
+
+    Serial.println(localS);
+    Serial.println(localM);
+
+        } else {
+          return -1;
+        }
+      } else {
+        strncpy(localS, cachedServer, sizeof(localS) - 1);
+        localS[sizeof(localS) - 1] = '\0';
+
+        strncpy(localM, cachedModel, sizeof(localM) - 1);
+        localM[sizeof(localM) - 1] = '\0';
+      }
+    } else {
+      strncpy(localS, s, sizeof(localS) - 1);
+      localS[sizeof(localS) - 1] = '\0';
+
+      strncpy(localM, m, sizeof(localM) - 1);
+      localM[sizeof(localM) - 1] = '\0';
+    }
+
+    trimCString(localS);
+    trimCString(localM);
+
+    memset((char*)outBuf, 0, outBufSize);
     String inputStr = String(p);
     String thinking = "false";
 
@@ -4561,7 +4626,7 @@ void api_setup() {
 
 
     HTTPClient http;
-    http.begin("http://" + String(s) + ":11434/api/generate");
+    http.begin("http://" + String(localS) + "/api/generate");
     http.setTimeout((uint16_t)30000);
     http.addHeader("Content-Type", "application/json");
 
@@ -4577,7 +4642,7 @@ void api_setup() {
     systemInstructions.replace("\n", "\\n");
 
     String payload = "{"
-          "\"model\":\"" + String(m) + "\","
+          "\"model\":\"" + String(localM) + "\","
           "\"prompt\":\"" + jsonPrompt + "\","
           "\"system\":\"" + systemInstructions + "\","
           "\"stream\":true,"
@@ -4589,6 +4654,11 @@ void api_setup() {
         "}";
 
     int code = http.POST(payload);
+
+#ifdef SERIAL_DEBUG
+    jsonPrompt.replace("\\n", "\n\r");
+    Serial.println(jsonPrompt);
+#endif
 
     if (code == HTTP_CODE_OK) {
       WiFiClient* stream = http.getStreamPtr();
@@ -4645,7 +4715,7 @@ void api_setup() {
             if (textAccumulator && fullAssistantResponse) {
               processIncomingToken(token.c_str(), m, isRecordingCode, textAccumulator,
 			           WORK_ACC_SIZE, markdownBuffer, WORK_MD_SIZE, insideThinkBlock,
-				   fullAssistantResponse, WORK_FAR_SIZE, streamToConsole);
+				   fullAssistantResponse, WORK_FAR_SIZE, streamToConsole, outBuf, outBufSize);
             }
           }
           else if (c == '\\') {
@@ -4659,7 +4729,7 @@ void api_setup() {
             if (textAccumulator && fullAssistantResponse) {
               processIncomingToken(token.c_str(), m, isRecordingCode, textAccumulator, WORK_ACC_SIZE,
 			            markdownBuffer, WORK_MD_SIZE, insideThinkBlock, fullAssistantResponse,
-				    WORK_FAR_SIZE, streamToConsole);
+				    WORK_FAR_SIZE, streamToConsole, outBuf, outBufSize);
             }
           }
         }
@@ -4687,6 +4757,10 @@ void api_setup() {
       if (textAccumulator) free(textAccumulator);
       if (fullAssistantResponse) free(fullAssistantResponse);
       http.end();
+#ifdef SERIAL_DEBUG
+      Serial.print("Response: ");
+      Serial.println(outBuf);
+#endif
       return 0;
     }
 

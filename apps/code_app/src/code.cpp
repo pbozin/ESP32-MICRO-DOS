@@ -1,8 +1,6 @@
 #include "microdos_api.h"
 #include "microdos_util.h"
 
-NEW_STRING(ollama_server, "192.168.0.131");
-NEW_STRING(ollama_model,  "qwen2.5-coder-24k:3b");
 NEW_STRING(system_prompt, "You are an ESP32 BASIC compiler. "
                           "CRITICAL rules:\n"
                           "1. You MUST wrap all code inside a standard markdown block starting with ```basic and ending with ```\n"
@@ -15,30 +13,19 @@ int _start(int argc, char** argv, MicroDosAPI* api) {
     _global_api_ptr = api;
     static char promptBuffer[128];
 
-    delayMs(100);
+    delay(100);
     termPrintln(STRING("CONNECTING..."));
 
-    if (wifiUp(STRING("SSID"), STRING("PASS")) != 0) {
+    if (wifiUp(STRING("CFG"), STRING("CFG")) != 0) {
         setColor(RED);
         termPrintln(STRING("ERR: WI-FI PROVISIONING FAILED."));
         setColor(GREEN);
         return -1;
     }
 
-    delayMs(500);
+    delay(500);
     int chatting = 1;
     clearScreen();
-
-    setColor(YELLOW);
-    termPrint(STRING("  --[ "));
-    if (getTermWidth() < 320) {
-        termPrint(ollama_model);
-    } else {
-        termPrint(ollama_model);
-        termPrint(STRING(" ]--[ "));
-        termPrint(ollama_server);
-    }
-    termPrintln(STRING(" ]--"));
 
     while (chatting) {
         setColor(GREEN);
@@ -59,9 +46,11 @@ int _start(int argc, char** argv, MicroDosAPI* api) {
 
         int status = ollamaStream(
             promptBuffer,
-            ollama_server,
-            ollama_model,
+            STRING("CFG"),
+            STRING("CFG"),
 	    system_prompt,
+	    NULL,
+	    0,
             1
         );
 

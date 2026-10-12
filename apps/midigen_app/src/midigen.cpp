@@ -130,7 +130,7 @@ ALWAYS INLINE void selectElectribePattern(uint16_t patternIndex) {
     midiMsg(0xC0, program, 0);
 
     displayValue(patternIndex, 2);
-    delayMs(40);
+    delay(40);
 }
 
 ALWAYS INLINE void silenceAllChannels() {
@@ -625,7 +625,7 @@ int _start(int argc, char** argv, MicroDosAPI* api) {
     transitionToNextArtist();
     while (getKey() != '\x13') {
         runPsybientEngine();
-        delayMs(stepIntervalMs);
+        delay(stepIntervalMs);
     }
     silenceAllChannels();
     clearScreen();

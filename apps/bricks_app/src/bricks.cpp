@@ -24,7 +24,7 @@ extern "C" int _start(int argc, char** argv, MicroDosAPI* api) {
     clearScreen();
     setColor(GREEN);
     termPrintln(STRING("BRICKS STARTING"));
-    delayMs(1000);
+    delay(1000);
     clearScreen();
 
     for (int i = 0; i < 10 * 5; i++) {
@@ -36,7 +36,7 @@ extern "C" int _start(int argc, char** argv, MicroDosAPI* api) {
         fillRect(a, b, bWidth - 1, bHeight - 1, r + 3);
     }
 
-    delayMs(500);
+    delay(500);
     int running = 1;
 
     while (running) {
@@ -112,10 +112,10 @@ extern "C" int _start(int argc, char** argv, MicroDosAPI* api) {
             clearScreen();
             setColor(RED);
             termPrintln("\nGAME OVER!");
-            delayMs(2000);
+            delay(2000);
             running = 0;
         }
-        delayMs(8);
+        delay(8);
     }
 
     clearFKeys();

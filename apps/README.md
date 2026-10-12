@@ -18,8 +18,8 @@ A high-frame-rate breakout simulator showcasing graphics, real-time keyboard pol
 An interactive chat client that connects your ESP32 terminal to a remote **Ollama Large Language Model** server.
 
 ### Architectural Blueprint
-* **System Automation Fallback (`api->wifiUp`):** Initializes the internal network stack. Passing placeholder parameters like `STRING("SSID")` causes the kernel to automatically look for local credentials inside `/WIFI.CFG` on the SD card.
-* **Token Stream Interceptor:** Connects via `api->ollamaStream()` to point-of-presence servers (default: `192.168.0.131:11434`) running lightweight models like `qwen2.5-theory-24k:3b`. Tokens are parsed directly from socket streams to conserve RAM.
+* **System Automation Fallback (`api->wifiUp`):** Initializes the internal network stack. Passing placeholder parameters like `STRING("CFG")` causes the kernel to automatically look for local credentials inside `/WIFI.CFG` on the SD card.
+* **Token Stream Interceptor:** Connects via `api->ollamaStream()` to point-of-presence servers (defined in /OLLAMA.CFG) running lightweight model (also defined in /OLLAMA.CFG). Tokens are parsed directly from socket streams to conserve RAM.
 * **Modal Text Accumulator:** Captures text via `api->inputStr()`, appending prompts cleanly behind `YOU> ` and routing incoming tokens dynamically to stream outputs.
 
 ---
@@ -97,20 +97,30 @@ Applications are compiled outside the core kernel image using **PlatformIO**:
 
 ### 2. SD Mounting & Shell Launch Execution
 1. Copy your compiled binary file onto a FAT32-formatted Micro SD card, renaming it properly (eg. CHESS.BIN or BRICKS.BIN).
-2. In the case of `CHAT.BIN` and `CODE.BIN`, ensure a `/WIFI.CFG` file exists on the SD root directory with your access credentials:
+2. In the case of `CHAT.BIN`, `CODE.BIN` and 'GO.BIN', ensure that `/WIFI.CFG` and '/OLLAMA.CFG' files exist on the SD root directory:
+
+  **/WIFI.CFG**
+
    ```text
-   Your_WiFi_SSID
-   Your_WiFi_Password
+   WiFi_SSID
+   WiFi_Password
+   ```
+
+   **/OLLAMA.CFG**
+
+   ```text
+   Ollama_server:Port
+   Ollama_model_name
    ```
 3. Insert the card into your ESP32 display device and power on.
 4. Launch your application from the interactive command-line interface using the native file loader command:
    ```bash
-   > EXEC BRICKS.BIN
+   > EXEC CHAT.BIN
    ```
 
    Alternatively:
    ```bash
-   > BRICKS
+   > CHAT
    ```
 
 <img width="300" alt="bricks" src="https://github.com/user-attachments/assets/e8cf1f2c-280f-4051-b826-3669cdfcb3c0" />

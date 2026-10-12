@@ -69,12 +69,12 @@ int _start(int argc, char** argv, MicroDosAPI* api) {
         if (cyclingForward) {
             currentGlobalState += 0.01f;
             if (currentGlobalState >= 2.0f) {
-                currentGlobalState = 2.0f; cyclingForward = false; delayMs(800);
+                currentGlobalState = 2.0f; cyclingForward = false; delay(800);
             }
         } else {
             currentGlobalState -= 0.01f;
             if (currentGlobalState <= 0.0f) {
-                currentGlobalState = 0.0f; cyclingForward = true; delayMs(800);
+                currentGlobalState = 0.0f; cyclingForward = true; delay(800);
             }
         }
 
@@ -107,7 +107,7 @@ int _start(int argc, char** argv, MicroDosAPI* api) {
         angleY += 0.03f;
         angleZ += 0.01f;
 
-        delayMs(20);
+        delay(20);
     }
 
     clearFKeys();

@@ -79,6 +79,8 @@ typedef struct MicroDosAPI_t {
 		       const char* serverIp,
 		       const char* modelName,
 		       const char* sysPrompt,
+		       char* outBuf,
+		       int outBufSize,
 		       int streamToConsole);
 
   // --- Touch Panel Input Engine ---
@@ -203,7 +205,7 @@ ALWAYS INLINE int  getRamSize()                  { return kernel()->getRamSize()
 ALWAYS INLINE void poke(int address, int value)  { kernel()->poke(address, value); }
 ALWAYS INLINE int  peek(int address)             { return kernel()->peek(address); }
 ALWAYS INLINE void playSound(int freq, int ms)   { kernel()->beep(freq, ms); }
-ALWAYS INLINE void delayMs(int ms)               { kernel()->delay(ms); }
+ALWAYS INLINE void delay(int ms)                 { kernel()->delay(ms); }
 ALWAYS INLINE void pinMode(int pin, int m)       { kernel()->pinMode(pin, m); }
 ALWAYS INLINE void digitalWrite(int p, int v)    { kernel()->digitalWrite(p, v); }
 ALWAYS INLINE int  digitalRead(int pin)          { return kernel()->digitalRead(pin); }
@@ -221,7 +223,7 @@ ALWAYS INLINE void sdClose(void* filehandle)     { kernel()->sdClose(filehandle)
 
 // --- LOW-LEVEL GRAPHICS ENGINE WRAPPERS ---
 ALWAYS INLINE void setColor(int colorId)                           { kernel()->color(colorId); }
-ALWAYS INLINE void drawPixel(int x, int y, int c)                  { kernel()->plot(x, y, c); }
+ALWAYS INLINE void drawPoint(int x, int y, int c)                  { kernel()->plot(x, y, c); }
 ALWAYS INLINE void drawLine(int x1, int y1, int x2, int y2, int c) { kernel()->drawLine(x1, y1, x2, y2, c); }
 ALWAYS INLINE void drawRect(int x, int y, int w, int h, int c)     { kernel()->drawRect(x, y, w, h, c); }
 ALWAYS INLINE void fillRect(int x, int y, int w, int h, int c)     { kernel()->fillRect(x, y, w, h, c); }
@@ -258,11 +260,15 @@ ALWAYS INLINE int ollamaStream(const char* prompt,
 		               const char* serverIp,
 			       const char* modelName,
 			       const char* sysPrompt,
+			       char* outBuf,
+			       int outBufSize,
 			       int streamToConsole) {
 	                           return kernel()->ollamaStream(prompt,
 				                                 serverIp,
 								 modelName,
 								 sysPrompt,
+								 outBuf,
+								 outBufSize,
 								 streamToConsole);
                                }
 ALWAYS INLINE void kernelDebug(const char* lbl,

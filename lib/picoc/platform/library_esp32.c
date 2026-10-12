@@ -84,7 +84,9 @@ void CEsp32OllamaStream(struct ParseState *Parser, struct Value *ReturnValue, st
         Param[1]->Val->Pointer, // serverIp
         Param[2]->Val->Pointer, // modelName
         Param[3]->Val->Pointer, // sysPrompt
-        Param[4]->Val->Integer  // streamToConsole
+        Param[4]->Val->Pointer, // outBuf
+        Param[5]->Val->Integer, // outBufSize
+        Param[6]->Val->Integer  // streamToConsole
     );
 }
 
@@ -153,7 +155,7 @@ struct LibraryFunction Esp32Functions[] =
     { CEsp32DigitalRead,    "int digitalRead(int);" },
     { CEsp32WifiUp,         "int wifiUp(char *, char *);" },
     { CEsp32WifiDown,       "void wifiDown();" },
-    { CEsp32OllamaStream,   "int ollamaStream(char *, char *, char *, char *, int);" },
+    { CEsp32OllamaStream,   "int ollamaStream(char *, char *, char *, char *, char*, int, int);" },
     { CEsp32SetFKeys,       "void setFKeys(char *, char *, char *, char *, char *);" },
     { CEsp32ClearFKeys,     "void clearFKeys();" },
     { CEsp32GetTouch,       "void getTouch(struct TouchState *);" },

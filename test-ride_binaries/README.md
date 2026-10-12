@@ -1,4 +1,4 @@
-# Precompiled Firmware Releases [version 2026-10-10] 🚀
+# Precompiled Firmware Releases [version 2026-10-12] 🚀
 
 This directory contains fully merged, production-ready factory images for **ESP32-MICRO-DOS**. 
 
@@ -51,4 +51,4 @@ If using the official **Espressif Flash Download Tool**:
 ---
 
 ## 💾 Post-Flash Setup
-After a successful flash, ensure you have copied example apps from SDCARD/ directory to **Micro SD card formatted to FAT32**. Micro SD card can be inserted (or ejected) at any time while operating.
+After a successful flash, ensure you have copied example apps from SDCARD/ directory to **Micro SD card formatted to FAT32**. Micro SD card can be inserted (or ejected) at any time while operating. For CHAT.BIN, CODE.BIN and GO.BIN to be usable, there should be two files in SDCARD root directory, /WIFI.CFG and /OLLAMA.CFG.
