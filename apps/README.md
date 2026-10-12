@@ -74,7 +74,7 @@ A software-driven 3D vector engine displaying mathematical shape interpolation, 
 ---
 
 ## 🎮 8. Game of GO against AI (`go.bin`)
-A game engine .
+An AI-assisted graphical GO game engine.
 
 ### Architectural Blueprint
 * **Touch Input:** Users can click square intersections directly on the panel utilizing localized display coordinate division math.
