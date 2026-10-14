@@ -138,5 +138,8 @@ extern jmp_buf ExitBuf;
 extern jmp_buf HostExitBuf;
 
 extern bool PlatformRunning;
+extern bool WriteToErrorBuf;
+extern char* ExternalErrorBuf;
+extern int ExternalErrorBufSize;
 
 #endif /* PLATFORM_H */

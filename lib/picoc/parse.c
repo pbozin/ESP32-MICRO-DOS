@@ -23,6 +23,9 @@ static int gEnableDebugger = true;
 static int gEnableDebugger = false;
 #endif
 
+bool WriteToErrorBuf = false;
+char* ExternalErrorBuf = NULL;
+int ExternalErrorBufSize = 0;
 
 /* deallocate any memory */
 void ParseCleanup(Picoc *pc)
@@ -861,6 +864,55 @@ enum ParseResult ParseStatement(struct ParseState *Parser,
     return ParseResultOk;
 }
 
+/* quick scan a source file for errors */
+void PicocParseForErrors(Picoc *pc, const char *FileName, const char *Source,
+    int SourceLen, int RunIt, int CleanupNow, int CleanupSource,
+    int EnableDebugger, char* errorBuf, int errorBufSize)
+{
+    char *RegFileName = TableStrRegister(pc, FileName);
+    enum ParseResult Ok;
+    struct ParseState Parser;
+    struct CleanupTokenNode *NewCleanupNode;
+
+    WriteToErrorBuf = true;
+
+    ExternalErrorBufSize = errorBufSize;
+    ExternalErrorBuf = errorBuf;
+
+    void *Tokens = LexAnalyse(pc, RegFileName, Source, SourceLen, NULL);
+
+    /* allocate a cleanup node so we can clean up the tokens later */
+    if (!CleanupNow) {
+        NewCleanupNode = HeapAllocMem(pc, sizeof(struct CleanupTokenNode));
+        if (NewCleanupNode == NULL)
+            ProgramFailNoParser(pc, "(PicocParse) out of memory");
+
+        NewCleanupNode->Tokens = Tokens;
+        if (CleanupSource)
+            NewCleanupNode->SourceText = Source;
+        else
+            NewCleanupNode->SourceText = NULL;
+
+        NewCleanupNode->Next = pc->CleanupTokenList;
+        pc->CleanupTokenList = NewCleanupNode;
+    }
+
+    /* do the parsing */
+    LexInitParser(&Parser, pc, Source, Tokens, RegFileName, RunIt,
+        EnableDebugger);
+
+    do {
+        Ok = ParseStatement(&Parser, true);
+    } while (Ok == ParseResultOk);
+
+    if (Ok == ParseResultError)
+        ProgramFail(&Parser, "parse error");
+
+    /* clean up */
+    if (CleanupNow)
+        HeapFreeMem(pc, Tokens);
+}
+
 /* quick scan a source file for definitions */
 void PicocParse(Picoc *pc, const char *FileName, const char *Source,
     int SourceLen, int RunIt, int CleanupNow, int CleanupSource,
@@ -872,6 +924,8 @@ void PicocParse(Picoc *pc, const char *FileName, const char *Source,
     struct CleanupTokenNode *NewCleanupNode;
 
     void *Tokens = LexAnalyse(pc, RegFileName, Source, SourceLen, NULL);
+
+    WriteToErrorBuf = false;
 
     /* allocate a cleanup node so we can clean up the tokens later */
     if (!CleanupNow) {

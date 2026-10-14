@@ -6,6 +6,7 @@ NEW_STRING(system_prompt, "You are a multidisciplinary philosopher. Keep convers
 int _start(int argc, char** argv, MicroDosAPI* api) {
     _global_api_ptr = api;
     static char promptBuffer[128];
+    static char errorBuffer[64];
 
     delay(100);
     termPrintln(STRING("CONNECTING..."));
@@ -43,8 +44,8 @@ int _start(int argc, char** argv, MicroDosAPI* api) {
             STRING("CFG"),
             STRING("CFG"),
 	    system_prompt,
-	    NULL,
-	    0,
+	    errorBuffer,
+	    sizeof(errorBuffer),
             1
         );
 

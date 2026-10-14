@@ -14,7 +14,6 @@ static int gEnableDebugger = true;
 static int gEnableDebugger = false;
 #endif
 
-
 /* initialize everything */
 void PicocInitialize(Picoc *pc, int StackSize)
 {
@@ -148,14 +147,20 @@ void PrintSourceTextErrorLine(IOFILE *Stream, const char *FileName,
 void ProgramFail(struct ParseState *Parser, const char *Message, ...)
 {
     va_list Args;
-
-    PrintSourceTextErrorLine(Parser->pc->CStdOut, Parser->FileName,
-        Parser->SourceText, Parser->Line, Parser->CharacterPos);
-    va_start(Args, Message);
-    PlatformVPrintf(Parser->pc->CStdOut, Message, Args);
-    va_end(Args);
-    PlatformPrintf(Parser->pc->CStdOut, "\n");
-    PlatformExit(Parser->pc, 1);
+    if (WriteToErrorBuf) {
+        va_start(Args, Message);
+        vsnprintf(ExternalErrorBuf, ExternalErrorBufSize, Message, Args);
+        va_end(Args);
+        PlatformExit(Parser->pc, 1);
+    } else {
+        PrintSourceTextErrorLine(Parser->pc->CStdOut, Parser->FileName,
+            Parser->SourceText, Parser->Line, Parser->CharacterPos);
+        va_start(Args, Message);
+        PlatformVPrintf(Parser->pc->CStdOut, Message, Args);
+        va_end(Args);
+        PlatformPrintf(Parser->pc->CStdOut, "\n");
+        PlatformExit(Parser->pc, 1);
+    }
 }
 
 /* exit with a message, when we're not parsing a program */
@@ -163,11 +168,18 @@ void ProgramFailNoParser(Picoc *pc, const char *Message, ...)
 {
     va_list Args;
 
-    va_start(Args, Message);
-    PlatformVPrintf(pc->CStdOut, Message, Args);
-    va_end(Args);
-    PlatformPrintf(pc->CStdOut, "\n");
-    PlatformExit(pc, 1);
+    if (WriteToErrorBuf) {
+        va_start(Args, Message);
+        vsnprintf(ExternalErrorBuf, ExternalErrorBufSize, Message, Args);
+        va_end(Args);
+        PlatformExit(pc, 1);
+    } else {
+        va_start(Args, Message);
+        PlatformVPrintf(pc->CStdOut, Message, Args);
+        va_end(Args);
+        PlatformPrintf(pc->CStdOut, "\n");
+        PlatformExit(pc, 1);
+    }
 }
 
 /* like ProgramFail() but gives descriptive error messages for assignment */
@@ -175,23 +187,45 @@ void AssignFail(struct ParseState *Parser, const char *Format,
     struct ValueType *Type1, struct ValueType *Type2, int Num1, int Num2,
     const char *FuncName, int ParamNo)
 {
-    IOFILE *Stream = Parser->pc->CStdOut;
+    if (WriteToErrorBuf) {
+        size_t max_len = ExternalErrorBufSize;
+        size_t len = 0;
 
-    PrintSourceTextErrorLine(Parser->pc->CStdOut, Parser->FileName,
-        Parser->SourceText, Parser->Line, Parser->CharacterPos);
-    PlatformPrintf(Stream, "can't %s ", (FuncName == NULL) ? "assign" : "set");
+        len += snprintf(ExternalErrorBuf + len, max_len - len,
+                    "can't %s ", (FuncName == NULL) ? "assign" : "set");
 
-    if (Type1 != NULL)
-        PlatformPrintf(Stream, Format, Type1, Type2);
-    else
-        PlatformPrintf(Stream, Format, Num1, Num2);
+        if (len < max_len) {
+            if (Type1 != NULL)
+                len += snprintf(ExternalErrorBuf + len, max_len - len, Format, Type1, Type2);
+            else
+                len += snprintf(ExternalErrorBuf + len, max_len - len, Format, Num1, Num2);
+        }
 
-    if (FuncName != NULL)
-        PlatformPrintf(Stream, " in argument %d of call to %s()", ParamNo,
-            FuncName);
+        if (FuncName != NULL && len < max_len) {
+            len += snprintf(ExternalErrorBuf + len, max_len - len,
+                        " in argument %d of call to %s()", ParamNo, FuncName);
+        }
 
-    PlatformPrintf(Stream, "\n");
-    PlatformExit(Parser->pc, 1);
+        PlatformExit(Parser->pc, 1);
+    } else {
+        IOFILE *Stream = Parser->pc->CStdOut;
+
+        PrintSourceTextErrorLine(Parser->pc->CStdOut, Parser->FileName,
+            Parser->SourceText, Parser->Line, Parser->CharacterPos);
+        PlatformPrintf(Stream, "can't %s ", (FuncName == NULL) ? "assign" : "set");
+
+        if (Type1 != NULL)
+            PlatformPrintf(Stream, Format, Type1, Type2);
+        else
+            PlatformPrintf(Stream, Format, Num1, Num2);
+
+        if (FuncName != NULL)
+            PlatformPrintf(Stream, " in argument %d of call to %s()", ParamNo,
+                FuncName);
+
+        PlatformPrintf(Stream, "\n");
+        PlatformExit(Parser->pc, 1);
+    }
 }
 
 /* exit lexing with a message */
@@ -199,13 +233,20 @@ void LexFail(Picoc *pc, struct LexState *Lexer, const char *Message, ...)
 {
     va_list Args;
 
-    PrintSourceTextErrorLine(pc->CStdOut, Lexer->FileName, Lexer->SourceText,
-        Lexer->Line, Lexer->CharacterPos);
-    va_start(Args, Message);
-    PlatformVPrintf(pc->CStdOut, Message, Args);
-    va_end(Args);
-    PlatformPrintf(pc->CStdOut, "\n");
-    PlatformExit(pc, 1);
+    if (WriteToErrorBuf) {
+        va_start(Args, Message);
+        vsnprintf(ExternalErrorBuf, ExternalErrorBufSize, Message, Args);
+        va_end(Args);
+        PlatformExit(pc, 1);
+    } else {
+        PrintSourceTextErrorLine(pc->CStdOut, Lexer->FileName, Lexer->SourceText,
+            Lexer->Line, Lexer->CharacterPos);
+        va_start(Args, Message);
+        PlatformVPrintf(pc->CStdOut, Message, Args);
+        va_end(Args);
+        PlatformPrintf(pc->CStdOut, "\n");
+        PlatformExit(pc, 1);
+    }
 }
 
 /* printf for compiler error reporting */
