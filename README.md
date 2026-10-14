@@ -1,7 +1,10 @@
-<img width="200" alt="shell" src="https://github.com/user-attachments/assets/8d52df68-ab0f-4e3b-826a-33f8e01c15d0" />
-<img width="200" alt="bricks" src="https://github.com/user-attachments/assets/e8cf1f2c-280f-4051-b826-3669cdfcb3c0" />
-<img width="200" alt="chat" src="https://github.com/user-attachments/assets/782b2ec2-74e2-42a8-af48-0b7fd8c68536" />
-<img width="200" alt="chess" src="https://github.com/user-attachments/assets/3ef64f03-ed15-4048-ae7f-aa57d674d884" />
+<img width="320" alt="go" src="https://github.com/user-attachments/assets/b5eedcbd-db0d-42d9-9d5a-5e65efd00053" />
+<img width="320" alt="chess" src="https://github.com/user-attachments/assets/6d88283a-2952-4353-bf6d-665407f43529" />
+<img width="320" alt="bricks" src="https://github.com/user-attachments/assets/097d9da4-8c6c-46db-b757-24c1f5410a33" />
+<br>
+<img width="320" alt="help" src="https://github.com/user-attachments/assets/700286a4-7262-4814-be58-1e8195dc1a24" />
+<img width="320" alt="ollama_c" src="https://github.com/user-attachments/assets/1fdc3b57-a5eb-48b2-96aa-fba67de17762" />
+<img width="320" alt="ollama-basic" src="https://github.com/user-attachments/assets/8ec660be-5760-4863-8e8a-260bddc49c5b" />
 
 # ESP32 MicroDOS
 
