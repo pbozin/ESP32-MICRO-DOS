@@ -4,11 +4,11 @@
 #include <WiFiClient.h>
 #include <HTTPClient.h>
 
-#ifdef ENABLE_JPEG
+#if defined(ENABLE_JPEG)
 #include <TJpg_Decoder.h>
 #endif
 
-#ifdef ENABLE_PICOC
+#if defined(ENABLE_PICOC)
 extern "C" {
 #include "picoc.h"
 extern jmp_buf HostExitBuf;
@@ -47,7 +47,7 @@ extern jmp_buf HostExitBuf;
 #define TKN_F4 '\x14'
 #define TKN_F5 '\x15'
 
-#ifdef ENABLE_OLLAMA
+#if defined(ENABLE_OLLAMA)
 #define CONTEXT_BUF_SIZE 2048
 #endif
 
@@ -522,7 +522,7 @@ void listProgram();
 void listProgramRange(int start, int end);
 void loadBuffer(const char* filename);
 void loadFile(const char* filename);
-#ifdef ENABLE_JPEG
+#if defined(ENABLE_JPEG)
 void loadJpegToScreen(const char* filename, int16_t xOut, int16_t yOut);
 #endif
 void loop();
@@ -613,7 +613,7 @@ uint16_t getPaletteColor(int cId) {
 
 int systemRAM[SYSTEM_RAM_SIZE];
 
-#ifdef ENABLE_OLLAMA
+#if defined(ENABLE_OLLAMA)
 static char chatContext[CONTEXT_BUF_SIZE] = "";
 static char* activeContext = NULL;
 static char cachedServer[32] = "";
@@ -889,7 +889,7 @@ static int lastTouchY = 0;
 static bool touchHeld = false;
 
 void setup() {
-#ifdef SERIAL_DEBUG
+#if defined(SERIAL_DEBUG)
   Serial.begin(115200);
   unsigned long startWait = millis();
   while (!Serial && (millis() - startWait < 1000)) { delay(10); }
@@ -898,11 +898,11 @@ void setup() {
 
   WiFi.mode(WIFI_STA);
   if (WiFi.mode(WIFI_OFF)) {
-#ifdef SERIAL_DEBUG
+#if defined(SERIAL_DEBUG)
     Serial.println(F("- Init WiFi    OK"));
 #endif
   } else {
-#ifdef SERIAL_DEBUG
+#if defined(SERIAL_DEBUG)
     Serial.println(F("- Init WiFi    FAIL"));
 #endif
   }
@@ -915,14 +915,14 @@ void setup() {
   pinMode(TFT_BL, OUTPUT);
   digitalWrite(TFT_BL, HIGH);
 
-#ifdef SERIAL_DEBUG
+#if defined(SERIAL_DEBUG)
   Serial.println(F("- Init TFT     OK"));
 
   Serial.println(F("\n\rTouch the screen!\n\r"));
 #endif
   uint16_t cD[] = { 0, 0, 0, 0, 0 };
   tft.calibrateTouch(cD, TFT_RED, TFT_BLUE, TFT_WIDTH/20);
-#ifdef SERIAL_DEBUG
+#if defined(SERIAL_DEBUG)
   Serial.print("[ ");
   for (int i=0; i<5; i++) {
     Serial.print(cD[i]);
@@ -934,11 +934,11 @@ void setup() {
 
   initSD();
   if (sdAvailable()) {
-#ifdef SERIAL_DEBUG
+#if defined(SERIAL_DEBUG)
     Serial.println(F("- Init SD Card OK"));
 #endif
   } else {
-#ifdef SERIAL_DEBUG
+#if defined(SERIAL_DEBUG)
     Serial.println(F("- Init SD Card FAIL"));
 #endif
   }
@@ -950,7 +950,7 @@ void setup() {
   pinMode(AUDIO_DATA_PIN, OUTPUT);
 
   api_setup();
-#ifdef SERIAL_DEBUG
+#if defined(SERIAL_DEBUG)
   Serial.println(F("- Init API     OK"));
 #endif
 
@@ -960,7 +960,7 @@ void setup() {
   kernelAPI.clear();
   clearProgram();
   printLogo();
-#ifdef SERIAL_DEBUG
+#if defined(SERIAL_DEBUG)
   Serial.println(F("OK\n"));
 #endif
 
@@ -1026,7 +1026,7 @@ String get_next_screenshot_name() {
     return String("/CAP_OVERFLOW.BMP");
 }
 
-#ifdef JC3248
+#if defined(BOARD_JC3248)
 bool captureScreenshot() {
     String targetPath = get_next_screenshot_name();
     const char * path = targetPath.c_str();
@@ -1034,7 +1034,7 @@ bool captureScreenshot() {
     int h = TFT_HEIGHT;
     uint16_t* frameBuffer = (uint16_t*)canvas_bridge->getFramebuffer();
     if (!frameBuffer) {
-#ifdef SERIAL_DEBUG
+#if defined(SERIAL_DEBUG)
         Serial.println("Error: Sprite framebuffer pointer is null!");
 #endif
         return false;
@@ -1046,7 +1046,7 @@ bool captureScreenshot() {
 
     File screenshotFile = SD.open(path, FILE_WRITE);
     if (!screenshotFile) {
-#ifdef SERIAL_DEBUG
+#if defined(SERIAL_DEBUG)
         Serial.println("Failed to open file for writing!");
 #endif
         return false;
@@ -1078,7 +1078,7 @@ bool captureScreenshot() {
     }
 
     screenshotFile.close();
-#ifdef SERIAL_DEBUG
+#if defined(SERIAL_DEBUG)
     Serial.println("Screen capture saved.");
 #endif
     return true;
@@ -1101,7 +1101,7 @@ bool captureScreenshot() {
 
     File screenshotFile = SD.open(path, FILE_WRITE);
     if (!screenshotFile) {
-#ifdef SERIAL_DEBUG
+#if defined(SERIAL_DEBUG)
         Serial.println("Failed to open file for writing!");
 #endif
         return false;
@@ -1144,7 +1144,7 @@ bool captureScreenshot() {
         }
     }
     screenshotFile.close();
-#ifdef SERIAL_DEBUG
+#if defined(SERIAL_DEBUG)
     Serial.println("Screen capture saved.");
 #endif
     return true;
@@ -1224,7 +1224,7 @@ void drawStatusBar() {
 #endif
 }
 
-#ifdef ENABLE_JPEG
+#if defined(ENABLE_JPEG)
 uint8_t getClosestPaletteIndex(uint16_t color) {
     int r = (color >> 11) & 0x1F;
     int g = (color >> 5)  & 0x3F;
@@ -1403,7 +1403,7 @@ const char* getStringVariable(const char* name) {
     return "";
 }
 
-#ifdef ENABLE_OLLAMA
+#if defined(ENABLE_OLLAMA)
 void clearConversationContext() {
     if (activeContext != NULL) {
         activeContext[0] = '\0';
@@ -2508,7 +2508,7 @@ void printMemoryMap(bool showVars) {
   terminalPrintln("=======================================");
 }
 
-#ifdef ENABLE_PICOC
+#if defined(ENABLE_PICOC)
 void verifyCBuffer(const char* c_source, char* errorBuf, int errorBufSize) {
 
     Picoc* pc = (Picoc*)malloc(sizeof(Picoc));
@@ -2812,7 +2812,7 @@ void processCommand(const char* rawCmd) {
     executeProgram();
     return;
   }
-#ifdef ENABLE_PICOC
+#if defined(ENABLE_PICOC)
   else if (strcmp(firstToken, "CRUN") == 0) {
     if (firstSpace != NULL) {
       memset(baseFilename, 0, FILENAME_SIZE);
@@ -3291,7 +3291,7 @@ void processCommand(const char* rawCmd) {
 
       file.close();
 
-#ifdef SERIAL_DEBUG
+#if defined(SERIAL_DEBUG)
       // ============================================================================
       // DIAGNOSTIC BLOCK: HEADER & ALLOCATION BLUEPRINT
       // ============================================================================
@@ -3355,7 +3355,7 @@ void processCommand(const char* rawCmd) {
 
           if (targetSegment) {
               literalPool[i] = patchedAddr;
-#ifdef SERIAL_DEBUG
+#if defined(SERIAL_DEBUG)
                Serial.printf("  Pool [%d] @ 0x%04X (Raw: 0x%08X) -> 🛠️  PATCHED %s: 0x%08X\n\r",
                             i, (i * 4) + iramStart, rawVal, targetSegment, patchedAddr);
 #endif
@@ -3381,19 +3381,19 @@ void processCommand(const char* rawCmd) {
 
               if (rawGot >= iramStart && rawGot < iramEnd) {
                   realGotTable[i] = (rawGot - iramStart) + (uint32_t)localIramBuffer;
-#ifdef SERIAL_DEBUG
+#if defined(SERIAL_DEBUG)
                   Serial.printf("  GOT [%d] (Raw: 0x%08X) -> 🛠️  PATCHED IRAM: 0x%08X\n\r", i, rawGot, realGotTable[i]);
 #endif
               } else if (rawGot >= dramStart && rawGot <= dramEnd) {
                   realGotTable[i] = (rawGot - dramStart) + (uint32_t)localDramBuffer;
-#ifdef SERIAL_DEBUG
+#if defined(SERIAL_DEBUG)
                   Serial.printf("  GOT [%d] (Raw: 0x%08X) -> 🛠️  PATCHED DRAM: 0x%08X\n\r", i, rawGot, realGotTable[i]);
 #endif
               }
           }
       }
 
-#ifdef SERIAL_DEBUG
+#if defined(SERIAL_DEBUG)
       Serial.printf("\n\rFirst 32 Bytes of DRAM Payload (Raw Character Look):\n\r");
       for (int i = 0; i < 32; i += 4) {
           Serial.printf("  DRAM + 0x%02X: %02X %02X %02X %02X | %c%c%c%c\n\r",
@@ -3543,13 +3543,13 @@ void processCommand(const char* rawCmd) {
     terminalPrintln("DOS:  DIR, LOAD, LOAD$, SAVE, SAVE$,");
     terminalPrintln("      DELETE");
     terminalPrintln("CODE: BEEP, CIRCLE, CLEAR, COLOR, COS(,");
-#ifdef ENABLE_PICOC
+#if defined(ENABLE_PICOC)
     terminalPrintln("      CRUN, DELAY, DUMP, DUMPS, EDIT,");
 #else
     terminalPrintln("      DELAY, DUMP, DUMPS, EDIT,");
 #endif
     terminalPrintln("      EXEC, FALSE, FILLCIRCLE, FILLRECT,");
-#ifdef ENABLE_JPEG
+#if defined(ENABLE_JPEG)
     terminalPrintln("      GOSUB, GOTO, HIGH, IF, IMVIEW,");
 #else
     terminalPrintln("      GOSUB, GOTO, HIGH, IF,");
@@ -3871,7 +3871,7 @@ bool runSingleLine(const char* rawLine, int &currentLineIdx) {
     kernelAPI.println("ERR: INVALID PLOT ARGS");
     return false;
   }
-#ifdef ENABLE_JPEG
+#if defined(ENABLE_JPEG)
   if (strncmp(line, "IMVIEW ", 7) == 0) {
     char* args = line + 7;
     char* firstComma = strchr(args, ',');
@@ -4356,7 +4356,7 @@ bool runSingleLine(const char* rawLine, int &currentLineIdx) {
   return false;
 }
 
-#ifdef ENABLE_OLLAMA
+#if defined(ENABLE_OLLAMA)
 void writeEscapedToStream(WiFiClient* stream, const char* src) {
   if (!src) return;
   while (*src) {
@@ -4528,7 +4528,7 @@ int processIncomingToken(const char* token, bool &isRecordingCode, char* textAcc
                 if (trimIdx != NULL) *trimIdx = '\0';
 
                 if (isBlockC) {
-#ifdef ENABLE_PICOC
+#if defined(ENABLE_PICOC)
                     // ==========================================
                     // ROUTE TO PICOC EXECUTION ENGINE
                     // ==========================================
@@ -4607,7 +4607,7 @@ bool isPinProtected(int pin) {
 }
 
 void host_sysDebugDump(const char* label, const void* memoryAddress, unsigned int byteCount, uint32_t virtualAddr) {
-#ifdef SERIAL_DEBUG
+#if defined(SERIAL_DEBUG)
     const uint8_t* buffer = (const uint8_t*)memoryAddress;
 
     uint8_t misalignment = ((uint32_t)memoryAddress) & 3;
@@ -4883,7 +4883,7 @@ void api_setup() {
 
 
   kernelAPI.ollamaStream = [] (const char* p, const char* s, const char* m, const char* sysPrompt, char* outBuf, int outBufSize, int streamToConsole) -> int {
-#ifdef ENABLE_OLLAMA
+#if defined(ENABLE_OLLAMA)
     if (WiFi.status() != WL_CONNECTED || !p || strlen(p) == 0 || !m) return -1;
 
     char localS[32] = {0};
@@ -5012,7 +5012,7 @@ void api_setup() {
 
     int code = http.POST(payload);
 
-#ifdef SERIAL_DEBUG
+#if defined(SERIAL_DEBUG)
     jsonPrompt.replace("\\n", "\n\r");
     Serial.println(jsonPrompt);
 #endif
@@ -5116,7 +5116,7 @@ void api_setup() {
       }
       http.end();
 
-#ifdef ENABLE_PICOC
+#if defined(ENABLE_PICOC)
           if (execAccumulator < 0) {
             currentActivePaletteId = 2;
 	    terminalPrintln("");
@@ -5129,7 +5129,7 @@ void api_setup() {
 
       if (textAccumulator) free(textAccumulator);
       if (fullAssistantResponse) free(fullAssistantResponse);
-#ifdef SERIAL_DEBUG
+#if defined(SERIAL_DEBUG)
       Serial.print("Response: ");
       Serial.println(outBuf);
 #endif
@@ -5152,7 +5152,7 @@ void api_setup() {
   kernelAPI.charHeight  = CHAR_HEIGHT;
 
   kernelAPI.drawJpeg    = [] (const char* filename, int x, int y) -> void {
-#ifdef ENABLE_JPEG
+#if defined(ENABLE_JPEG)
     loadJpegToScreen(filename, x, y);
 #endif
   };
