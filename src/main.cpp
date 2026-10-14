@@ -552,9 +552,18 @@ void kernel_getTouchState(TouchState* state);
 void decompressRLEToCanvas(TFT_eSprite* canvas, int startX, int startY, const uint8_t* rleData, int rleSize);
 int compress4BitRLE(const uint8_t* source, uint8_t* destination);
 bool isPinProtected(int pin);
-void processIncomingToken(const char* token, const char* m, bool &isRecordingCode, char* textAccumulator,
-	         	  size_t textAccumMaxSize, char* markdownBuffer, size_t mdMaxSize, bool &insideThinkBlock,
-			  char* fullAssistantResponse, size_t farMaxSize, int streamToConsole);
+int processIncomingToken(const char* token,
+		         bool &isRecordingCode,
+			 char* textAccumulator,
+			 size_t textAccumMaxSize,
+			 char* markdownBuffer,
+			 size_t mdMaxSize,
+			 bool &insideThinkBlock,
+			 char* fullAssistantResponse,
+			 size_t farMaxSize,
+			 int streamToConsole,
+			 char* outBuf,
+			 int outBufSize);
 
 int host_serialOpen(uint32_t baud, int txPin, int rxPin) {
     int resolved_tx = (txPin == -1) ? SYS_UART_TX : txPin;
@@ -2316,6 +2325,51 @@ void printMemoryMap(bool showVars) {
 }
 
 #ifdef ENABLE_PICOC
+void verifyCBuffer(const char* c_source, char* errorBuf, int errorBufSize) {
+
+    Picoc* pc = (Picoc*)malloc(sizeof(Picoc));
+    if (pc == NULL) {
+      terminalPrintln("ERR: OUT OF RAM (ENGINE)");
+      return;
+    }
+    PicocInitialize(pc, 16 * 1024);
+
+    PicocIncludeAllSystemHeaders(pc);
+
+    if (setjmp(pc->PicocExitBuf) == 0) {
+        PicocParseForErrors(pc, "ollama_live.c", c_source, strlen(c_source), TRUE, TRUE, TRUE, FALSE, errorBuf, errorBufSize);
+    }
+
+    PicocCleanup(pc);
+    free(pc);
+    return;
+}
+
+int executeCBuffer(const char* c_source) {
+    int runStatus = 0;
+
+    Picoc* pc = (Picoc*)malloc(sizeof(Picoc));
+    if (pc == NULL) {
+      terminalPrintln("ERR: OUT OF RAM (ENGINE)");
+      return runStatus;
+    }
+    PicocInitialize(pc, 16 * 1024);
+
+    PicocIncludeAllSystemHeaders(pc);
+    if (setjmp(pc->HostExitBuf) == 0) {
+        PicocParse(pc, "ollama_live.c", c_source, strlen(c_source), TRUE, TRUE, TRUE, FALSE);
+	if (strstr(c_source, "main(") != NULL)
+            PicocCallMain(pc, 0, NULL);
+        runStatus = 1;
+    } else {
+        runStatus = 0;
+    }
+
+    PicocCleanup(pc);
+    free(pc);
+    return runStatus;
+}
+
 void executeCProgram(const char* filename) {
     if (filename[0] == '\0') {
         Picoc* pc = (Picoc*)malloc(sizeof(Picoc));
@@ -2324,8 +2378,8 @@ void executeCProgram(const char* filename) {
             return;
         }
         PicocInitialize(pc, 16 * 1024);
-        PicocIncludeAllSystemHeaders(pc);
 	if (setjmp(pc->HostExitBuf) == 0) {
+            PicocIncludeAllSystemHeaders(pc);
             PicocParseInteractive(pc);
 	}
         PicocCleanup(pc);
@@ -2384,8 +2438,9 @@ void executeCProgram(const char* filename) {
     PicocInitialize(pc, allocSize * 1024);
 
     if (setjmp(pc->PicocExitBuf) == 0) {
-        PicocParse(pc, pathBuf, srcCode, fileSize, 1, 1, 1, 0);
-        PicocCallMain(pc, 0, NULL);
+        PicocParse(pc, pathBuf, srcCode, fileSize, TRUE, TRUE, TRUE, FALSE);
+	if (strstr(srcCode, "main(") != NULL)
+            PicocCallMain(pc, 0, NULL);
     }
 
     delay(100);
@@ -4139,8 +4194,11 @@ void slideWindowAppend(char* dest, const char* src, size_t maxWindowSize) {
     }
 }
 
-void processIncomingToken(const char* token, const char* m, bool &isRecordingCode, char* textAccumulator, size_t textAccumMaxSize, char* markdownBuffer, size_t mdMaxSize, bool &insideThinkBlock, char* fullAssistantResponse, size_t farMaxSize, int streamToConsole, char* outBuf, int outBufSize) {
+static bool isBlockC = false;
+
+int processIncomingToken(const char* token, bool &isRecordingCode, char* textAccumulator, size_t textAccumMaxSize, char* markdownBuffer, size_t mdMaxSize, bool &insideThinkBlock, char* fullAssistantResponse, size_t farMaxSize, int streamToConsole, char* outBuf, int outBufSize) {
     const char* cleanToken = token;
+    int executeTextAccumulator = 0;
     if (strcmp(token, "\\n") == 0) cleanToken = "\n";
     else if (strcmp(token, "\\t") == 0) cleanToken = "\t";
     else if (strcmp(token, "\\\"") == 0) cleanToken = "\"";
@@ -4152,67 +4210,96 @@ void processIncomingToken(const char* token, const char* m, bool &isRecordingCod
     if (strstr(cleanToken, "<think>") != NULL) {
         insideThinkBlock = true;
         if (showThinkingLogs && streamToConsole == 1) terminalPrint("\n[THINKING: ");
-        return;
+        return executeTextAccumulator;
     }
     if (strstr(cleanToken, "</think>") != NULL) {
         insideThinkBlock = false;
         if (showThinkingLogs && streamToConsole == 1) terminalPrintln("]\n");
-        return;
+        return executeTextAccumulator;
     }
     if (insideThinkBlock) {
         if (showThinkingLogs && streamToConsole == 1) {
             if (strcmp(token, "\\n") == 0) terminalPrint(" ");
             else if (strcmp(token, "\\t") != 0) terminalPrint(cleanToken);
         }
-        return;
+        return executeTextAccumulator;
     }
 
     appendToBuffer(fullAssistantResponse, cleanToken, farMaxSize);
 
-    // ==========================================
-    // MARKDOWN EXTRACTION ENGINE (CODER ONLY)
-    // ==========================================
-    if (strstr(m, "coder") != NULL) {
+    // ==========================
+    // MARKDOWN EXTRACTION ENGINE
+    // ==========================
+    if (true) {
         slideWindowAppend(markdownBuffer, cleanToken, mdMaxSize);
 
         if (!isRecordingCode) {
             if (strstr(markdownBuffer, "```basic") != NULL || strstr(markdownBuffer, "```BASIC") != NULL) {
                 isRecordingCode = true;
+                isBlockC = false;
                 clearProgram();
+                textAccumulator[0] = '\0';
+                markdownBuffer[0] = '\0';
+            }
+            else if (strstr(markdownBuffer, "```c") != NULL || strstr(markdownBuffer, "```C") != NULL) {
+                isRecordingCode = true;
+                isBlockC = true;
                 textAccumulator[0] = '\0';
                 markdownBuffer[0] = '\0';
             }
         } else {
             if (strstr(markdownBuffer, "```") != NULL) {
                 isRecordingCode = false;
+
                 char* trimIdx = strstr(textAccumulator, "```");
                 if (trimIdx != NULL) *trimIdx = '\0';
 
-                char* startPos = textAccumulator;
-                while (startPos != NULL && *startPos != '\0') {
-                    char* nextNewline = strchr(startPos, '\n');
-                    if (nextNewline != NULL) *nextNewline = '\0';
+                if (isBlockC) {
+#ifdef ENABLE_PICOC
+                    // ==========================================
+                    // ROUTE TO PICOC EXECUTION ENGINE
+                    // ==========================================
+                    trimIdx = strstr(textAccumulator, "``");
+                    if (trimIdx != NULL) *trimIdx = '\0';
+                    trimIdx = strstr(textAccumulator, "`");
+                    if (trimIdx != NULL) *trimIdx = '\0';
+                    memset(outBuf, 0, outBufSize);
+		    verifyCBuffer(textAccumulator, outBuf, outBufSize);
+		    if (strlen(outBuf) > 0)
+		        executeTextAccumulator = -1;
+		    else
+		        executeTextAccumulator = 1;
+#endif
+                } else {
+                    // ==========================================
+                    // EXISTING BASIC PARSER LOOP
+                    // ==========================================
+                    char* startPos = textAccumulator;
+                    while (startPos != NULL && *startPos != '\0') {
+                        char* nextNewline = strchr(startPos, '\n');
+                        if (nextNewline != NULL) *nextNewline = '\0';
 
-                    char codeLine[MAX_LINE_LEN];
-                    strncpy(codeLine, startPos, MAX_LINE_LEN);
-                    codeLine[MAX_LINE_LEN - 1] = '\0';
-                    trimCString(codeLine);
+                        char codeLine[MAX_LINE_LEN];
+                        strncpy(codeLine, startPos, MAX_LINE_LEN);
+                        codeLine[MAX_LINE_LEN - 1] = '\0';
+                        trimCString(codeLine);
 
-                    if (strlen(codeLine) > 0) {
-                        char* spaceIdx = strchr(codeLine, ' ');
-                        if (spaceIdx != NULL) {
-                            *spaceIdx = '\0';
-                            bool isNum = true;
-                            for (int i = 0; codeLine[i]; i++) {
-                                if (!isdigit((unsigned char)codeLine[i])) { isNum = false; break; }
-                            }
-                            if (isNum) {
-                                storeLine(atoi(codeLine), spaceIdx + 1);
+                        if (strlen(codeLine) > 0) {
+                            char* spaceIdx = strchr(codeLine, ' ');
+                            if (spaceIdx != NULL) {
+                                *spaceIdx = '\0';
+                                bool isNum = true;
+                                for (int i = 0; codeLine[i]; i++) {
+                                    if (!isdigit((unsigned char)codeLine[i])) { isNum = false; break; }
+                                }
+                                if (isNum) {
+                                    storeLine(atoi(codeLine), spaceIdx + 1);
+                                }
                             }
                         }
+                        if (nextNewline != NULL) startPos = nextNewline + 1;
+                        else startPos = NULL;
                     }
-                    if (nextNewline != NULL) startPos = nextNewline + 1;
-                    else startPos = NULL;
                 }
             } else {
                 appendToBuffer(textAccumulator, cleanToken, textAccumMaxSize);
@@ -4231,6 +4318,7 @@ void processIncomingToken(const char* token, const char* m, bool &isRecordingCod
 	if (strlen(outBuf) + strlen(cleanToken) < outBufSize - 1)
 	    strcat(outBuf, cleanToken);
     }
+    return executeTextAccumulator;
 }
 #endif
 
@@ -4679,6 +4767,8 @@ void api_setup() {
       bool insideResponseValue = false;
       bool escapeActive = false;
 
+      int execAccumulator = 0;
+
       while (http.connected() && (stream->available() || insideResponseValue)) {
         if (!stream->available()) {
           delay(1);
@@ -4713,9 +4803,10 @@ void api_setup() {
             String token = "\\" + String(c);
             escapeActive = false;
             if (textAccumulator && fullAssistantResponse) {
-              processIncomingToken(token.c_str(), m, isRecordingCode, textAccumulator,
-			           WORK_ACC_SIZE, markdownBuffer, WORK_MD_SIZE, insideThinkBlock,
-				   fullAssistantResponse, WORK_FAR_SIZE, streamToConsole, outBuf, outBufSize);
+              int tempExecAccumulator = processIncomingToken(token.c_str(), isRecordingCode, textAccumulator,
+			               WORK_ACC_SIZE, markdownBuffer, WORK_MD_SIZE, insideThinkBlock,
+				       fullAssistantResponse, WORK_FAR_SIZE, streamToConsole, outBuf, outBufSize);
+	      if (execAccumulator == 0 and tempExecAccumulator != 0) execAccumulator = tempExecAccumulator;
             }
           }
           else if (c == '\\') {
@@ -4727,9 +4818,10 @@ void api_setup() {
           else {
             String token = String(c);
             if (textAccumulator && fullAssistantResponse) {
-              processIncomingToken(token.c_str(), m, isRecordingCode, textAccumulator, WORK_ACC_SIZE,
-			            markdownBuffer, WORK_MD_SIZE, insideThinkBlock, fullAssistantResponse,
-				    WORK_FAR_SIZE, streamToConsole, outBuf, outBufSize);
+              int tempExecAccumulator = processIncomingToken(token.c_str(), isRecordingCode, textAccumulator, WORK_ACC_SIZE,
+			               markdownBuffer, WORK_MD_SIZE, insideThinkBlock, fullAssistantResponse,
+				       WORK_FAR_SIZE, streamToConsole, outBuf, outBufSize);
+	      if (execAccumulator == 0 and tempExecAccumulator != 0) execAccumulator = tempExecAccumulator;
             }
           }
         }
@@ -4753,10 +4845,21 @@ void api_setup() {
         }
         strcat(activeContext, farStr.c_str());
       }
+      http.end();
+
+#ifdef ENABLE_PICOC
+          if (execAccumulator < 0) {
+            currentActivePaletteId = 2;
+	    terminalPrintln("");
+	    terminalPrintln(outBuf);
+            currentActivePaletteId = 6;
+	  } else if (execAccumulator > 0) {
+	    executeCBuffer(textAccumulator);
+	  }
+#endif
 
       if (textAccumulator) free(textAccumulator);
       if (fullAssistantResponse) free(fullAssistantResponse);
-      http.end();
 #ifdef SERIAL_DEBUG
       Serial.print("Response: ");
       Serial.println(outBuf);
