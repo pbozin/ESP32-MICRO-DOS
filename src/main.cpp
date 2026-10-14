@@ -529,6 +529,7 @@ void loop();
 void nativeBinaryTaskWorker(void* pvParameters);
 void playBeep(int frequency, int durationMs);
 void printLogo();
+bool captureScreenshot();
 void processCommand(const char* cmd);
 void processCommand(const char* rawCmd);
 void processTerminalTouchScrolling(uint16_t x, uint16_t y);
@@ -990,6 +991,165 @@ void loop() {
   }
   delay(10);
 }
+
+#pragma pack(push, 1)
+typedef struct {
+    uint16_t bfType;
+    uint32_t bfSize;
+    uint16_t bfReserved1;
+    uint16_t bfReserved2;
+    uint32_t bfOffBits;
+    uint32_t biSize;
+    int32_t  biWidth;
+    int32_t  biHeight;
+    uint16_t biPlanes;
+    uint16_t biBitCount;
+    uint32_t biCompression;
+    uint32_t biSizeImage;
+    int32_t  biXPelsPerMeter;
+    int32_t  biYPelsPerMeter;
+    uint32_t biClrUsed;
+    uint32_t biClrImportant;
+} BMPHeader;
+#pragma pack(pop)
+
+String get_next_screenshot_name() {
+    char filenameBuffer[32];
+    int fileNumber = 1;
+    while (fileNumber <= 999) {
+        snprintf(filenameBuffer, sizeof(filenameBuffer), "/CAP%03d.BMP", fileNumber);
+        if (!SD.exists(filenameBuffer)) {
+            return String(filenameBuffer);
+        }
+        fileNumber++;
+    }
+    return String("/CAP_OVERFLOW.BMP");
+}
+
+#ifdef JC3248
+bool captureScreenshot() {
+    String targetPath = get_next_screenshot_name();
+    const char * path = targetPath.c_str();
+    int w = TFT_WIDTH;
+    int h = TFT_HEIGHT;
+    uint16_t* frameBuffer = (uint16_t*)canvas_bridge->getFramebuffer();
+    if (!frameBuffer) {
+#ifdef SERIAL_DEBUG
+        Serial.println("Error: Sprite framebuffer pointer is null!");
+#endif
+        return false;
+    }
+
+    int rowSize = (w * 3 + 3) & ~3;
+    int padding = rowSize - (w * 3);
+    uint32_t fileSize = 54 + (rowSize * h);
+
+    File screenshotFile = SD.open(path, FILE_WRITE);
+    if (!screenshotFile) {
+#ifdef SERIAL_DEBUG
+        Serial.println("Failed to open file for writing!");
+#endif
+        return false;
+    }
+
+    BMPHeader header = {
+        0x4D42, fileSize, 0, 0, 54, 40, w, -h, 1, 24, 0, 0, 0, 0, 0, 0
+    };
+    screenshotFile.write((uint8_t*)&header, sizeof(BMPHeader));
+
+    uint8_t paddingBytes[3] = {0, 0, 0};
+
+    for (int y = 0; y < h; y++) {
+        for (int x = 0; x < w; x++) {
+            uint32_t pixelIndex = (y * w) + x;
+            uint16_t pixel = frameBuffer[pixelIndex];
+
+            uint8_t r = ((pixel >> 11) & 0x1F) << 3;
+            uint8_t g = ((pixel >> 5)  & 0x3F) << 2;
+            uint8_t b = (pixel        & 0x1F) << 3;
+
+            screenshotFile.write(b);
+            screenshotFile.write(g);
+            screenshotFile.write(r);
+        }
+        if (padding > 0) {
+            screenshotFile.write(paddingBytes, padding);
+        }
+    }
+
+    screenshotFile.close();
+#ifdef SERIAL_DEBUG
+    Serial.println("Screen capture saved.");
+#endif
+    return true;
+}
+
+#else
+
+bool captureScreenshot() {
+    String targetPath = get_next_screenshot_name();
+    const char * path = targetPath.c_str();
+    int w = TFT_WIDTH;
+    int h = TFT_HEIGHT;
+    int rowBytes = w * 3;
+    int padding = (4 - (rowBytes % 4)) % 4;
+    uint32_t fileSize = 54 + ((rowBytes + padding) * h);
+
+    BMPHeader header = {
+        0x4D42, fileSize, 0, 0, 54, 40, w, -h, 1, 24, 0, 0, 0, 0, 0, 0
+    };
+
+    File screenshotFile = SD.open(path, FILE_WRITE);
+    if (!screenshotFile) {
+#ifdef SERIAL_DEBUG
+        Serial.println("Failed to open file for writing!");
+#endif
+        return false;
+    }
+
+    screenshotFile.write((uint8_t*)&header, sizeof(BMPHeader));
+
+    uint8_t paddingBytes[3] = {0, 0, 0};
+
+    uint8_t* ptr4Bit = (uint8_t*)bgCanvas.frameBuffer(0);
+    if (ptr4Bit == nullptr) return false;
+
+    for (int y = 0; y < h; y++) {
+        for (int x = 0; x < w; x++) {
+            uint32_t totalPixelIndex = (y * w) + x;
+            uint32_t byteIndex = totalPixelIndex / 2;
+
+            uint8_t packedByte = ptr4Bit[byteIndex];
+            uint8_t paletteIndex = 0;
+
+            if (totalPixelIndex % 2 == 0) {
+                paletteIndex = (packedByte >> 4) & 0x0F;
+            } else {
+                paletteIndex = packedByte & 0x0F;
+            }
+
+            uint16_t pixel565 = bgCanvas.getPaletteColor(paletteIndex);
+
+            uint8_t r = ((pixel565 >> 11) & 0x1F) << 3;
+            uint8_t g = ((pixel565 >> 5)  & 0x3F) << 2;
+            uint8_t b = (pixel565         & 0x1F) << 3;
+
+            screenshotFile.write(b);
+            screenshotFile.write(g);
+            screenshotFile.write(r);
+        }
+
+        if (padding > 0) {
+            screenshotFile.write(paddingBytes, padding);
+        }
+    }
+    screenshotFile.close();
+#ifdef SERIAL_DEBUG
+    Serial.println("Screen capture saved.");
+#endif
+    return true;
+}
+#endif
 
 void processTerminalTouchScrolling(uint16_t x, uint16_t y) {
   if (y >= 0 && y <= TFT_HEIGHT_DRAW) {
@@ -1621,11 +1781,29 @@ void executeProgram() {
   memset(logBuf, 0, TERM_COLS);
 
   while (currentIdx < programLineCount) {
-    if (digitalRead(0) == LOW) {
-      snprintf(logBuf, TERM_COLS, "\nBREAK AT LINE %d", programMemory[currentIdx].lineNumber);
-      terminalPrintln(logBuf);
-      while (digitalRead(0) == LOW) { delay(10); }
-      break;
+    if (digitalRead(HARD_BREAK_PIN) == LOW) {
+      unsigned long pressStartTime = millis();
+      bool triggeredLongPress = false;
+
+      while (digitalRead(HARD_BREAK_PIN) == LOW) {
+        if (!triggeredLongPress && (millis() - pressStartTime >= 2000)) {
+          triggeredLongPress = true;
+        }
+        delay(10);
+      }
+
+      if (triggeredLongPress) {
+        captureScreenshot();
+      } else {
+        if (millis() - pressStartTime > 50) {
+          snprintf(logBuf,
+                   TERM_COLS,
+                   "\nBREAK AT LINE %d",
+                   programMemory[currentIdx].lineNumber);
+          terminalPrintln(logBuf);
+          break;
+        }
+      }
     }
 
     int trackingIdx = currentIdx;
@@ -2078,6 +2256,41 @@ int evaluateExpression(const char* rawExpr) {
   int len = strlen(expr);
   if (len == 0) return 0;
 
+  int opIdx = -1; char foundOp = ' '; int parenDepth = 0;
+  for (int i = len - 1; i >= 0; i--) {
+    char c = expr[i];
+    if (c == ')') parenDepth++;
+    else if (c == '(') parenDepth--;
+    else if (parenDepth == 0 && (c == '+' || c == '-')) {
+      opIdx = i; foundOp = c; break;
+    }
+  }
+
+  if (opIdx == -1) {
+    parenDepth = 0;
+    for (int i = len - 1; i >= 0; i--) {
+      char c = expr[i];
+      if (c == ')') parenDepth++;
+      else if (c == '(') parenDepth--;
+      else if (parenDepth == 0 && (c == '*' || c == '/' || c == '%')) {
+        opIdx = i; foundOp = c; break;
+      }
+    }
+  }
+
+  if (opIdx != -1) {
+    expr[opIdx] = '\0';
+    int leftVal = evaluateExpression(expr);
+    int rightVal = evaluateExpression(expr + opIdx + 1);
+    switch (foundOp) {
+      case '+': return leftVal + rightVal;
+      case '-': return leftVal - rightVal;
+      case '*': return leftVal * rightVal;
+      case '/': return (rightVal != 0) ? leftVal / rightVal : 0;
+      case '%': return (rightVal != 0) ? leftVal % rightVal : 0;
+    }
+  }
+
   if (strcasecmp(expr, "TRUE") == 0)  return 1;
   if (strcasecmp(expr, "FALSE") == 0) return 0;
 
@@ -2157,39 +2370,9 @@ int evaluateExpression(const char* rawExpr) {
     }
   }
 
-  int opIdx = -1; char foundOp = ' '; int parenDepth = 0;
-  for (int i = len - 1; i >= 0; i--) {
-    char c = expr[i];
-    if (c == ')') parenDepth++;
-    else if (c == '(') parenDepth--;
-    else if (parenDepth == 0 && (c == '+' || c == '-')) { opIdx = i; foundOp = c; break; }
-  }
-
-  if (opIdx == -1) {
-    parenDepth = 0;
-    for (int i = len - 1; i >= 0; i--) {
-      char c = expr[i];
-      if (c == ')') parenDepth++;
-      else if (c == '(') parenDepth--;
-      else if (parenDepth == 0 && (c == '*' || c == '/' || c == '%')) {
-        opIdx = i;
-        foundOp = c;
-        break;
-      }
-    }
-  }
-
-  if (opIdx != -1) {
-    expr[opIdx] = '\0';
-    int leftVal = evaluateExpression(expr);
-    int rightVal = evaluateExpression(expr + opIdx + 1);
-    switch (foundOp) {
-      case '+': return leftVal + rightVal;
-      case '-': return leftVal - rightVal;
-      case '*': return leftVal * rightVal;
-      case '/': return (rightVal != 0) ? leftVal / rightVal : 0;
-      case '%': return (rightVal != 0) ? leftVal % rightVal : 0;
-    }
+  if (len >= 2 && expr[0] == '(' && expr[len - 1] == ')') {
+    expr[len - 1] = '\0';
+    return evaluateExpression(expr + 1);
   }
 
   if (len > 0 && isAlpha((unsigned char)expr[0])) {
@@ -2199,6 +2382,7 @@ int evaluateExpression(const char* rawExpr) {
     }
     if (validVar) return getVariable(expr);
   }
+
   return atoi(expr);
 }
 
@@ -2673,7 +2857,7 @@ void processCommand(const char* rawCmd) {
       while (file.available()) {
         if (address % 256 == 0) {
           delay(2);
-          if (digitalRead(0) == LOW) { terminalPrintln("\nDUMP ABORTED."); break; }
+          if (digitalRead(HARD_BREAK_PIN) == LOW) { terminalPrintln("\nDUMP ABORTED."); break; }
         }
 
         int bytesRead = file.read(lineBuffer, 16);
@@ -2729,7 +2913,7 @@ void processCommand(const char* rawCmd) {
       while (file.available()) {
         if (address % 256 == 0) {
           delay(2);
-          if (digitalRead(0) == LOW) { terminalPrintln("\nDUMP ABORTED."); break; }
+          if (digitalRead(HARD_BREAK_PIN) == LOW) { terminalPrintln("\nDUMP ABORTED."); break; }
         }
 
         int bytesRead = file.read(stringBuffer, 32);
@@ -3281,15 +3465,33 @@ void processCommand(const char* rawCmd) {
               break;
           }
 
-          if (digitalRead(0) == LOW) {
-              if (binaryTaskHandle != NULL) {
-                  vTaskDelete(binaryTaskHandle);
-                  vTaskDelay(pdMS_TO_TICKS(50));
-                  binaryTaskHandle = NULL;
+          if (digitalRead(HARD_BREAK_PIN) == LOW) {
+            unsigned long pressStartTime = millis();
+            bool triggeredLongPress = false;
+
+            while (digitalRead(HARD_BREAK_PIN) == LOW) {
+              if (!triggeredLongPress && (millis() - pressStartTime >= 2000)) {
+                triggeredLongPress = true;
               }
-              appExitStatus = -1;
-              break;
+              vTaskDelay(pdMS_TO_TICKS(10));
+            }
+
+            if (triggeredLongPress) {
+                captureScreenshot();
+            } else {
+              if (millis() - pressStartTime > 50) {
+                terminalPrintln("\nBREAK\n");
+                if (binaryTaskHandle != NULL) {
+                    vTaskDelete(binaryTaskHandle);
+                    vTaskDelay(pdMS_TO_TICKS(50));
+                    binaryTaskHandle = NULL;
+                }
+                appExitStatus = -1;
+                break;
+              }
+            }
           }
+
           vTaskDelay(pdMS_TO_TICKS(10));
       }
 
@@ -4194,15 +4396,86 @@ void slideWindowAppend(char* dest, const char* src, size_t maxWindowSize) {
     }
 }
 
+void decodeEscapes(char *str) {
+    char *src = str;
+    char *dst = str;
+
+    while (*src) {
+        if (strncmp(src, "\\003c", 5) == 0) {
+            *dst++ = '<';
+            src += 5;
+        }
+        else if (strncmp(src, "\\003e", 5) == 0) {
+            *dst++ = '>';
+            src += 5;
+        }
+        else {
+            *dst++ = *src++;
+        }
+    }
+    *dst = '\0';
+}
+
 static bool isBlockC = false;
+
+static char uniBuf[8] = "";
 
 int processIncomingToken(const char* token, bool &isRecordingCode, char* textAccumulator, size_t textAccumMaxSize, char* markdownBuffer, size_t mdMaxSize, bool &insideThinkBlock, char* fullAssistantResponse, size_t farMaxSize, int streamToConsole, char* outBuf, int outBufSize) {
     const char* cleanToken = token;
     int executeTextAccumulator = 0;
-    if (strcmp(token, "\\n") == 0) cleanToken = "\n";
-    else if (strcmp(token, "\\t") == 0) cleanToken = "\t";
-    else if (strcmp(token, "\\\"") == 0) cleanToken = "\"";
-    else if (strcmp(token, "\\\\") == 0) cleanToken = "\\";
+
+    // ==========================================
+    // UNICODE ESCAPE TRANSLATION LAYER (SIMPLIFIED)
+    // ==========================================
+    // Static buffer to hold the 6-character sequence "\u003c" safely
+    static char uniBuf[16] = "";
+
+    // 1. If we are tracking or if this token explicitly kicks off the sequence
+    if (uniBuf[0] != '\0' || strcmp(token, "\\u") == 0) {
+
+        // Safety: If it's a brand new start, clear anything old out first
+        if (strcmp(token, "\\u") == 0) {
+            strcpy(uniBuf, "\\u");
+        } else {
+            // Append incoming piece safely
+            if (strlen(uniBuf) + strlen(token) < sizeof(uniBuf) - 1) {
+                strcat(uniBuf, token);
+            }
+        }
+
+        // 2. Check if we have collected enough characters to evaluate
+        if (strlen(uniBuf) >= 6) {
+            if (strcasecmp(uniBuf, "\\u003c") == 0) {
+                cleanToken = "<";
+            } else if (strcasecmp(uniBuf, "\\u003e") == 0) {
+                cleanToken = ">";
+            } else {
+                // It's a valid length sequence, but NOT our brackets (e.g. \u0039).
+                // Return the raw text string back to the engine.
+                cleanToken = uniBuf;
+            }
+            uniBuf[0] = '\0'; // HARD RESET: Done processing this sequence, close the gate.
+        } else {
+            // 3. Lookahead validation: If the string starts drifting from the \u003 pattern, fail fast.
+            size_t currentLen = strlen(uniBuf);
+            if ((currentLen == 3 && uniBuf[2] != '0') ||
+                (currentLen == 4 && uniBuf[3] != '0') ||
+                (currentLen == 5 && uniBuf[4] != '3')) {
+
+                cleanToken = uniBuf; // Pattern broke! Dump what we collected out to the engine.
+                uniBuf[0] = '\0';    // HARD RESET: Close the gate.
+            } else {
+                // Still actively building a valid \u003 block.
+                // Hide the fragments silently on this token cycle.
+                cleanToken = "";
+            }
+        }
+    } else {
+        if (strcmp(token, "\\n") == 0) cleanToken = "\n";
+        else if (strcmp(token, "\\t") == 0) cleanToken = "\t";
+        else if (strcmp(token, "\\\"") == 0) cleanToken = "\"";
+        else if (strcmp(token, "\\\\") == 0) cleanToken = "\\";
+    }
 
     // ==========================================
     // THINKING TAG FILTER ENGINE
@@ -4638,9 +4911,6 @@ void api_setup() {
           strncpy(cachedModel, localM, sizeof(cachedModel) - 1);
           cachedModel[sizeof(cachedModel) - 1] = '\0';
 
-    Serial.println(localS);
-    Serial.println(localM);
-
         } else {
           return -1;
         }
@@ -4693,7 +4963,6 @@ void api_setup() {
     }
 
     activeContext = chatContext;
-
 
     if (strlen(activeContext) == 0) {
       snprintf(activeContext, CONTEXT_BUF_SIZE, "User: %s\nAssistant: ", p);
