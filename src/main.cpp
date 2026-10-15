@@ -53,7 +53,7 @@ extern jmp_buf HostExitBuf;
 
 // =================================
 
-// --- CORE SYSTEM CONTROLS ---
+// --- CORE SYSTEM CONTROL PINS ---
 #ifndef RND_SEED_PIN
   #define RND_SEED_PIN     -1
 #endif
@@ -61,7 +61,7 @@ extern jmp_buf HostExitBuf;
   #define HARD_BREAK_PIN   -1
 #endif
 
-// --- DISPLAY BUS MACROS ---
+// --- DISPLAY BUS PINS ---
 #ifndef TFT_BL
   #define TFT_BL           -1
 #endif
@@ -93,7 +93,7 @@ extern jmp_buf HostExitBuf;
   #define TFT_D3           -1
 #endif
 
-// --- TOUCH INTERFACE MACROS ---
+// --- TOUCH INTERFACE PINS ---
 #ifndef TOUCH_CS
   #define TOUCH_CS         -1
 #endif
@@ -107,7 +107,7 @@ extern jmp_buf HostExitBuf;
   #define TOUCH_SCL        -1
 #endif
 
-// --- STORAGE BUS (SD & SD_MMC) ---
+// --- STORAGE BUS PINS (SD & SD_MMC) ---
 #ifndef SYS_SD_CS
   #define SYS_SD_CS        -1
 #endif
@@ -518,6 +518,7 @@ void drawStatusBar();
 void executeProgram();
 void handleKeyPress(char key);
 void initSD();
+void setupSD();
 void listProgram();
 void listProgramRange(int start, int end);
 void loadBuffer(const char* filename);
@@ -932,6 +933,8 @@ void setup() {
 #endif
   tft.setTouch(cD);
 
+  setupSD();
+
   initSD();
   if (sdAvailable()) {
 #if defined(SERIAL_DEBUG)
@@ -1336,7 +1339,7 @@ void setVariable(const char* name, int val) {
 
   if (variableCount >= variableCapacity) {
     int newCapacity = (variableCapacity == 0) ? 8 : variableCapacity + 8;
-    Variable* newMem = (Variable*)kernelAPI.malloc(newCapacity * sizeof(Variable));
+    Variable* newMem = (Variable*)malloc(newCapacity * sizeof(Variable));
     if (!newMem) {
       terminalPrintln("ERR: OUT OF RAM (VARS)");
       return;
@@ -1344,7 +1347,7 @@ void setVariable(const char* name, int val) {
 
     if (sysVariables != nullptr) {
       memcpy(newMem, sysVariables, variableCount * sizeof(Variable));
-      kernelAPI.free(sysVariables);
+      free(sysVariables);
     }
     sysVariables = newMem;
     variableCapacity = newCapacity;
@@ -1370,7 +1373,7 @@ void setStringVariable(const char* name, const char* val) {
 
     if (stringRegistryCount >= stringRegistryCapacity) {
         int newCapacity = (stringRegistryCapacity == 0) ? 8 : stringRegistryCapacity + 8;
-        StringVariable* newMem = (StringVariable*)kernelAPI.malloc(newCapacity * sizeof(StringVariable));
+        StringVariable* newMem = (StringVariable*)malloc(newCapacity * sizeof(StringVariable));
         if (!newMem) {
             terminalPrintln("ERR: OUT OF RAM (STRINGS)");
             return;
@@ -1378,7 +1381,7 @@ void setStringVariable(const char* name, const char* val) {
 
         if (stringRegistry != nullptr) {
             memcpy(newMem, stringRegistry, stringRegistryCount * sizeof(StringVariable));
-            kernelAPI.free(stringRegistry);
+            free(stringRegistry);
         }
         stringRegistry = newMem;
         stringRegistryCapacity = newCapacity;
@@ -1511,6 +1514,12 @@ void playBeep(int frequency, int durationMs) {
   digitalWrite(AUDIO_EN_PIN, HIGH);
 }
 
+void setupSD() {
+#if defined(BOARD_JC3248)
+  SD_MMC.setPins(SYS_SD_CLK, SYS_SD_CMD, SYS_SD_D0);
+#endif
+}
+
 void initSD() {
 #if defined(BOARD_CYD)
   sdSPI.begin(SYS_SD_CLK, SYS_SD_D0, SYS_SD_CMD, SYS_SD_CS);
@@ -1520,8 +1529,6 @@ void initSD() {
     _sdAvailable = true;
   }
 #elif defined(BOARD_JC3248)
-  SD_MMC.setPins(SYS_SD_CLK, SYS_SD_CMD, SYS_SD_D0);
-
   if (!SD_MMC.begin("/sd", true)) {
     _sdAvailable = false;
   } else {
@@ -1632,15 +1639,15 @@ void saveBuffer(const char* filename) {
 }
 
 void clearProgram() {
-  if (programMemory != nullptr) { kernelAPI.free(programMemory); programMemory = nullptr; }
+  if (programMemory != nullptr) { free(programMemory); programMemory = nullptr; }
   programLineCapacity = 0;
   programLineCount = 0;
 
-  if (sysVariables != nullptr) { kernelAPI.free(sysVariables); sysVariables = nullptr; }
+  if (sysVariables != nullptr) { free(sysVariables); sysVariables = nullptr; }
   variableCapacity = 0;
   variableCount = 0;
 
-  if (stringRegistry != nullptr) { kernelAPI.free(stringRegistry); stringRegistry = nullptr; }
+  if (stringRegistry != nullptr) { free(stringRegistry); stringRegistry = nullptr; }
   stringRegistryCapacity = 0;
   stringRegistryCount = 0;
 
@@ -1695,15 +1702,15 @@ void storeLine(int num, const char* codeLine) {
 
         if (programLineCount > 0 && programLineCount <= programLineCapacity - 8) {
           int newCapacity = programLineCapacity - 8;
-          ProgramLine* newMem = (ProgramLine*)kernelAPI.malloc(newCapacity * sizeof(ProgramLine));
+          ProgramLine* newMem = (ProgramLine*)malloc(newCapacity * sizeof(ProgramLine));
           if (newMem) {
             memcpy(newMem, programMemory, programLineCount * sizeof(ProgramLine));
-            kernelAPI.free(programMemory);
+            free(programMemory);
             programMemory = newMem;
             programLineCapacity = newCapacity;
           }
         } else if (programLineCount == 0) {
-          kernelAPI.free(programMemory);
+          free(programMemory);
           programMemory = nullptr;
           programLineCapacity = 0;
         }
@@ -1723,7 +1730,7 @@ void storeLine(int num, const char* codeLine) {
 
   if (programLineCount >= programLineCapacity) {
     int newCapacity = (programLineCapacity == 0) ? 8 : programLineCapacity + 8;
-    ProgramLine* newMem = (ProgramLine*)kernelAPI.malloc(newCapacity * sizeof(ProgramLine));
+    ProgramLine* newMem = (ProgramLine*)malloc(newCapacity * sizeof(ProgramLine));
     if (!newMem) {
       terminalPrintln("ERR: OUT OF RAM");
       return;
@@ -1731,7 +1738,7 @@ void storeLine(int num, const char* codeLine) {
 
     if (programMemory != nullptr) {
       memcpy(newMem, programMemory, programLineCount * sizeof(ProgramLine));
-      kernelAPI.free(programMemory);
+      free(programMemory);
     }
     programMemory = newMem;
     programLineCapacity = newCapacity;
@@ -2511,63 +2518,47 @@ void printMemoryMap(bool showVars) {
 #if defined(ENABLE_PICOC)
 void verifyCBuffer(const char* c_source, char* errorBuf, int errorBufSize) {
 
-    Picoc* pc = (Picoc*)malloc(sizeof(Picoc));
-    if (pc == NULL) {
-      terminalPrintln("ERR: OUT OF RAM (ENGINE)");
-      return;
-    }
-    PicocInitialize(pc, 16 * 1024);
+    Picoc pc;
+    PicocInitialize(&pc, 16 * 1024);
+    PicocIncludeAllSystemHeaders(&pc);
 
-    PicocIncludeAllSystemHeaders(pc);
-
-    if (setjmp(pc->PicocExitBuf) == 0) {
-        PicocParseForErrors(pc, "ollama_live.c", c_source, strlen(c_source), TRUE, TRUE, TRUE, FALSE, errorBuf, errorBufSize);
+    if (setjmp(pc.PicocExitBuf) == 0) {
+        PicocParseForErrors(&pc, "ollama_live.c", c_source, strlen(c_source), TRUE, TRUE, TRUE, FALSE, errorBuf, errorBufSize);
     }
 
-    PicocCleanup(pc);
-    free(pc);
+    PicocCleanup(&pc);
     return;
 }
 
 int executeCBuffer(const char* c_source) {
     int runStatus = 0;
 
-    Picoc* pc = (Picoc*)malloc(sizeof(Picoc));
-    if (pc == NULL) {
-      terminalPrintln("ERR: OUT OF RAM (ENGINE)");
-      return runStatus;
-    }
-    PicocInitialize(pc, 16 * 1024);
+    Picoc pc;
+    PicocInitialize(&pc, 16 * 1024);
+    PicocIncludeAllSystemHeaders(&pc);
 
-    PicocIncludeAllSystemHeaders(pc);
-    if (setjmp(pc->HostExitBuf) == 0) {
-        PicocParse(pc, "ollama_live.c", c_source, strlen(c_source), TRUE, TRUE, TRUE, FALSE);
+    if (setjmp(pc.HostExitBuf) == 0) {
+        PicocParse(&pc, "ollama_live.c", c_source, strlen(c_source), TRUE, TRUE, TRUE, FALSE);
 	if (strstr(c_source, "main(") != NULL)
-            PicocCallMain(pc, 0, NULL);
+            PicocCallMain(&pc, 0, NULL);
         runStatus = 1;
     } else {
         runStatus = 0;
     }
 
-    PicocCleanup(pc);
-    free(pc);
+    PicocCleanup(&pc);
     return runStatus;
 }
 
 void executeCProgram(const char* filename) {
+    Picoc pc;
     if (filename[0] == '\0') {
-        Picoc* pc = (Picoc*)malloc(sizeof(Picoc));
-        if (pc == NULL) {
-            terminalPrintln("ERR: OUT OF RAM (ENGINE)");
-            return;
-        }
-        PicocInitialize(pc, 16 * 1024);
-	if (setjmp(pc->HostExitBuf) == 0) {
-            PicocIncludeAllSystemHeaders(pc);
-            PicocParseInteractive(pc);
+        PicocInitialize(&pc, 16 * 1024);
+        PicocIncludeAllSystemHeaders(&pc);
+	if (setjmp(pc.HostExitBuf) == 0) {
+            PicocParseInteractive(&pc);
 	}
-        PicocCleanup(pc);
-        free(pc);
+        PicocCleanup(&pc);
         return;
     }
 
@@ -2607,30 +2598,22 @@ void executeCProgram(const char* filename) {
     srcCode[fileSize] = '\0';
     f.close();
 
-    Picoc* pc = (Picoc*)malloc(sizeof(Picoc));
-    if (pc == NULL) {
-        free(srcCode);
-        terminalPrintln("ERR: OUT OF RAM (ENGINE)");
-        return;
-    }
-
     int allocSize = (int)(fileSize/1024) * 8;
     if (allocSize < 16)
 	    allocSize = 16;
     if (allocSize > 64)
 	    allocSize = 64;
-    PicocInitialize(pc, allocSize * 1024);
+    PicocInitialize(&pc, allocSize * 1024);
 
-    if (setjmp(pc->PicocExitBuf) == 0) {
-        PicocParse(pc, pathBuf, srcCode, fileSize, TRUE, TRUE, TRUE, FALSE);
+    if (setjmp(pc.PicocExitBuf) == 0) {
+        PicocParse(&pc, pathBuf, srcCode, fileSize, TRUE, TRUE, TRUE, FALSE);
 	if (strstr(srcCode, "main(") != NULL)
-            PicocCallMain(pc, 0, NULL);
+            PicocCallMain(&pc, 0, NULL);
     }
 
     delay(100);
 
-    PicocCleanup(pc);
-    free(pc);
+    PicocCleanup(&pc);
     free(srcCode);
 }
 #endif
@@ -3277,9 +3260,9 @@ void processCommand(const char* rawCmd) {
 
       memset(localDramBuffer, 0, totalDramAllocation);
 
-      // ============================================================================
+      // =========================
       // THE KERNEL SEGMENT LOADER
-      // ============================================================================
+      // =========================
       size_t alignedIramSize = (header.iramSize + 3) & ~3;
 
       file.seek(sizeof(MDBHeader));
@@ -3292,9 +3275,6 @@ void processCommand(const char* rawCmd) {
       file.close();
 
 #if defined(SERIAL_DEBUG)
-      // ============================================================================
-      // DIAGNOSTIC BLOCK: HEADER & ALLOCATION BLUEPRINT
-      // ============================================================================
       Serial.printf("\n\r--- [MDB DEBUG: %s] ---\n\r", fixedFilename);
       Serial.printf("Header - dramSize:    %d (0x%04X)\n\r", header.dramSize, header.dramSize);
       Serial.printf("Header - iramSize:    %d (0x%04X)\n\r", header.iramSize, header.iramSize);
@@ -3306,10 +3286,10 @@ void processCommand(const char* rawCmd) {
 
       Serial.printf("\nScanning Literal Table Entries across full IRAM...\n\r");
 #endif
-      // ============================================================================
+      // ========================================
       // UNIVERSAL DUAL-SEGMENT RELOCATION ENGINE
-      // ============================================================================
-      const uint32_t iramStart = sizeof(MDBHeader); // 16
+      // ========================================
+      const uint32_t iramStart = sizeof(MDBHeader);
       const uint32_t iramEnd   = iramStart + alignedIramSize;
       const uint32_t dramStart = iramEnd;
       const uint32_t dramEnd   = dramStart + header.dramSize;
@@ -3374,8 +3354,6 @@ void processCommand(const char* rawCmd) {
           size_t remainingDramBytes = header.dramSize - gotDramOffset;
           size_t gotWordCount = remainingDramBytes / 4;
 
-         // if (gotWordCount > 256) gotWordCount = 256;
-
           for (size_t i = 0; i < gotWordCount; i++) {
               uint32_t rawGot = realGotTable[i];
 
@@ -3406,9 +3384,9 @@ void processCommand(const char* rawCmd) {
       }
       Serial.println("----------------------------------------\n\r");
 #endif
-      // ============================================================================
+      // =======================
       // DISPATCH EXECUTION TASK
-      // ============================================================================
+      // =======================
       size_t alignedDramSize = (header.dramSize + 3) & ~3;
 
       ExecTaskParams* localTParams = (ExecTaskParams*)malloc(sizeof(ExecTaskParams));
@@ -3436,13 +3414,11 @@ void processCommand(const char* rawCmd) {
       localTParams->entryOffset  = header.entryOffset;
       localTParams->dramSize     = header.dramSize;
 
-      size_t totalTaskStackDepthWords = 2048 * 2;
-      if (header.iramSize + header.dramSize > 512)   totalTaskStackDepthWords = 2048 * 3;
-      if (header.iramSize + header.dramSize > 2048)  totalTaskStackDepthWords = 2048 * 4;
-      if (header.iramSize + header.dramSize > 4096)  totalTaskStackDepthWords = 2048 * 5;
-      if (header.iramSize + header.dramSize > 8192)  totalTaskStackDepthWords = 2048 * 6;
-      if (header.iramSize + header.dramSize > 12288) totalTaskStackDepthWords = 2048 * 7;
-      if (header.iramSize + header.dramSize > 16384) totalTaskStackDepthWords = 2048 * 8;
+      size_t totalTaskStackDepthWords = 5120;
+      int mult = (header.iramSize + header.dramSize) / 512;
+      totalTaskStackDepthWords += (512 * mult);
+      if (totalTaskStackDepthWords < 6144) (totalTaskStackDepthWords = 6144);
+      if (totalTaskStackDepthWords > 20480) (totalTaskStackDepthWords = 20480);
 
       BaseType_t taskCreated = xTaskCreatePinnedToCore(
           nativeBinaryTaskWorker,
@@ -4424,49 +4400,39 @@ int processIncomingToken(const char* token, bool &isRecordingCode, char* textAcc
     const char* cleanToken = token;
     int executeTextAccumulator = 0;
 
-    // ==========================================
-    // UNICODE ESCAPE TRANSLATION LAYER (SIMPLIFIED)
-    // ==========================================
-    // Static buffer to hold the 6-character sequence "\u003c" safely
+    // ================================
+    // UNICODE ESCAPE TRANSLATION LAYER
+    // ================================
     static char uniBuf[16] = "";
 
-    // 1. If we are tracking or if this token explicitly kicks off the sequence
     if (uniBuf[0] != '\0' || strcmp(token, "\\u") == 0) {
 
-        // Safety: If it's a brand new start, clear anything old out first
         if (strcmp(token, "\\u") == 0) {
             strcpy(uniBuf, "\\u");
         } else {
-            // Append incoming piece safely
             if (strlen(uniBuf) + strlen(token) < sizeof(uniBuf) - 1) {
                 strcat(uniBuf, token);
             }
         }
 
-        // 2. Check if we have collected enough characters to evaluate
         if (strlen(uniBuf) >= 6) {
             if (strcasecmp(uniBuf, "\\u003c") == 0) {
                 cleanToken = "<";
             } else if (strcasecmp(uniBuf, "\\u003e") == 0) {
                 cleanToken = ">";
             } else {
-                // It's a valid length sequence, but NOT our brackets (e.g. \u0039).
-                // Return the raw text string back to the engine.
                 cleanToken = uniBuf;
             }
-            uniBuf[0] = '\0'; // HARD RESET: Done processing this sequence, close the gate.
+            uniBuf[0] = '\0';
         } else {
-            // 3. Lookahead validation: If the string starts drifting from the \u003 pattern, fail fast.
             size_t currentLen = strlen(uniBuf);
             if ((currentLen == 3 && uniBuf[2] != '0') ||
                 (currentLen == 4 && uniBuf[3] != '0') ||
                 (currentLen == 5 && uniBuf[4] != '3')) {
 
-                cleanToken = uniBuf; // Pattern broke! Dump what we collected out to the engine.
-                uniBuf[0] = '\0';    // HARD RESET: Close the gate.
+                cleanToken = uniBuf;
+                uniBuf[0] = '\0';
             } else {
-                // Still actively building a valid \u003 block.
-                // Hide the fragments silently on this token cycle.
                 cleanToken = "";
             }
         }
@@ -4477,9 +4443,9 @@ int processIncomingToken(const char* token, bool &isRecordingCode, char* textAcc
         else if (strcmp(token, "\\\\") == 0) cleanToken = "\\";
     }
 
-    // ==========================================
-    // THINKING TAG FILTER ENGINE
-    // ==========================================
+    // ===================
+    // THINKING TAG FILTER
+    // ===================
     if (strstr(cleanToken, "<think>") != NULL) {
         insideThinkBlock = true;
         if (showThinkingLogs && streamToConsole == 1) terminalPrint("\n[THINKING: ");
@@ -4500,9 +4466,9 @@ int processIncomingToken(const char* token, bool &isRecordingCode, char* textAcc
 
     appendToBuffer(fullAssistantResponse, cleanToken, farMaxSize);
 
-    // ==========================
-    // MARKDOWN EXTRACTION ENGINE
-    // ==========================
+    // ===================
+    // MARKDOWN EXTRACTION
+    // ===================
     if (true) {
         slideWindowAppend(markdownBuffer, cleanToken, mdMaxSize);
 
@@ -4529,9 +4495,9 @@ int processIncomingToken(const char* token, bool &isRecordingCode, char* textAcc
 
                 if (isBlockC) {
 #if defined(ENABLE_PICOC)
-                    // ==========================================
+                    // ===============================
                     // ROUTE TO PICOC EXECUTION ENGINE
-                    // ==========================================
+                    // ===============================
                     trimIdx = strstr(textAccumulator, "``");
                     if (trimIdx != NULL) *trimIdx = '\0';
                     trimIdx = strstr(textAccumulator, "`");
@@ -4544,9 +4510,9 @@ int processIncomingToken(const char* token, bool &isRecordingCode, char* textAcc
 		        executeTextAccumulator = 1;
 #endif
                 } else {
-                    // ==========================================
+                    // ==========================
                     // EXISTING BASIC PARSER LOOP
-                    // ==========================================
+                    // ==========================
                     char* startPos = textAccumulator;
                     while (startPos != NULL && *startPos != '\0') {
                         char* nextNewline = strchr(startPos, '\n');
@@ -4580,9 +4546,9 @@ int processIncomingToken(const char* token, bool &isRecordingCode, char* textAcc
         }
     }
 
-    // ==========================================
+    // ===========================
     // CONSOLE TEXT DRAWING ENGINE
-    // ==========================================
+    // ===========================
     if (streamToConsole == 1) {
         if (strcmp(token, "\\n") == 0)      terminalPrintln("");
         else if (strcmp(token, "\\t") == 0) terminalPrint("    ");
