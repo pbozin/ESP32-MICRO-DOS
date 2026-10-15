@@ -134,5 +134,6 @@ Applications are compiled outside the core kernel image using **PlatformIO**:
    ```
 <img width="240" alt="go" src="https://github.com/user-attachments/assets/b5eedcbd-db0d-42d9-9d5a-5e65efd00053" /> |
 <img width="240" alt="chess" src="https://github.com/user-attachments/assets/6d88283a-2952-4353-bf6d-665407f43529" /> |
+<img width="240" alt="ollama_c" src="https://github.com/user-attachments/assets/1fdc3b57-a5eb-48b2-96aa-fba67de17762" /> |
 <img width="240" alt="bricks" src="https://github.com/user-attachments/assets/097d9da4-8c6c-46db-b757-24c1f5410a33" />
 
