@@ -13,7 +13,6 @@
 #define REG_CTRL_GAS_1    0x71
 #define REG_DATA_START    0x1D
 
-static int      accent_color = CYAN;
 static int32_t  t_fine = 0;
 
 static uint16_t dig_regU[2] ALIGNED = {0, 0};
@@ -293,7 +292,6 @@ int _start(int argc, char** argv, MicroDosAPI* api) {
     delay(2000);
     clearScreen();
 
-    TouchState touch;
     int loop_counter = 0;
     float current_t = 0.0f, current_p = 0.0f;
 

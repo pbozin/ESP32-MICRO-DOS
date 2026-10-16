@@ -612,8 +612,14 @@ int _start(int argc, char** argv, MicroDosAPI* api) {
     }
 
     serialOpen(31250, -1, -1);;
+
+    int origTextColor = getTextColor();
+    int origBgColor = getBgColor();
+
+    setBgColor(BLACK);
+    setTextColor(GREEN);
     clearScreen();
-    setColor(MAGENTA);
+
     termPrintAt(5, 1, STRING("bpm"));
     termPrintAt(5, 2, STRING("pattern"));
     termPrintAt(5, 3, STRING("style"));
@@ -622,12 +628,16 @@ int _start(int argc, char** argv, MicroDosAPI* api) {
     termPrintAt(5, 6, STRING("drum"));
     termPrintAt(5, 7, STRING("hats"));
     termPrintAt(5, 8, STRING("bar"));
+
     transitionToNextArtist();
+
     while (getKey() != '\x13') {
         runPsybientEngine();
         delay(stepIntervalMs);
     }
     silenceAllChannels();
+    setBgColor(origBgColor);
+    setTextColor(origTextColor);
     clearScreen();
     return 0;
 }

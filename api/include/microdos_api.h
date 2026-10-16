@@ -51,7 +51,12 @@ typedef struct MicroDosAPI_t {
   int  (*inkey)();
 
   // --- Low-Level Vector Graphics ---
-  void (*color)(int colorId);
+  void (*setTextColor)(int colorId);
+  int (*getTextColor)();
+  void (*setBgColor)(int colorId);
+  int (*getBgColor)();
+  void (*setKeyboardShift)(int state);
+  int (*getKeyboardShift)();
   void (*plot)(int x, int y, int colorId);
   void (*drawLine)(int x1, int y1, int x2, int y2, int colorId);
   void (*drawRect)(int x, int y, int w, int h, int colorId);
@@ -222,7 +227,12 @@ ALWAYS INLINE uint32_t sdWrite(void* fileHandle,
 ALWAYS INLINE void sdClose(void* filehandle)     { kernel()->sdClose(filehandle); };
 
 // --- LOW-LEVEL GRAPHICS ENGINE WRAPPERS ---
-ALWAYS INLINE void setColor(int colorId)                           { kernel()->color(colorId); }
+ALWAYS INLINE void setTextColor(int colorId)                       { kernel()->setTextColor(colorId); }
+ALWAYS INLINE void setBgColor(int colorId)                         { kernel()->setBgColor(colorId); }
+ALWAYS INLINE int getTextColor()                                   { return kernel()->getTextColor(); }
+ALWAYS INLINE int getBgColor()                                     { return kernel()->getBgColor(); }
+ALWAYS INLINE void setKeyboardShift(int state)                     { kernel()->setKeyboardShift(state); }
+ALWAYS INLINE int getKeyboardShift()                               { return kernel()->getKeyboardShift(); }
 ALWAYS INLINE void drawPoint(int x, int y, int c)                  { kernel()->plot(x, y, c); }
 ALWAYS INLINE void drawLine(int x1, int y1, int x2, int y2, int c) { kernel()->drawLine(x1, y1, x2, y2, c); }
 ALWAYS INLINE void drawRect(int x, int y, int w, int h, int c)     { kernel()->drawRect(x, y, w, h, c); }

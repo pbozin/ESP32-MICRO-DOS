@@ -712,6 +712,11 @@ extern const char GraphicsDefs[];
 extern struct LibraryFunction GraphicsFunctions[];
 extern void GraphicsSetupFunc(Picoc *pc);
 
+/* dirent.c */
+extern char DirentDefs[];
+extern struct LibraryFunction DirentFunctions[];
+extern void DirentSetupFunc(Picoc *pc);
+
 /* stdio.c */
 extern const char StdioDefs[];
 extern struct LibraryFunction StdioFunctions[];

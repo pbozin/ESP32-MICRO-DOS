@@ -644,8 +644,17 @@ int _start(int argc, char** argv, MicroDosAPI* api) {
 
     int fSize = getTermWidth() / 8;
 
-    clearScreen();
+    int origTextColor = getTextColor();
+    int origBgColor = getBgColor();
+    int origKeyboardShift = getKeyboardShift();
+
     setFKeys(STRING(" NEW  "), STRING(" UNDO "), STRING(" FLIP "), STRING("      "), STRING(" QUIT "));
+
+    setKeyboardShift(1);
+    setBgColor(BLACK);
+    setTextColor(GREEN);
+    clearScreen();
+
     cacheAllChessSprites();
     initToledoBoard();
     drawBoard();
@@ -814,6 +823,10 @@ int _start(int argc, char** argv, MicroDosAPI* api) {
     }
     closeGameMatrix();
     delay(100);
+    setKeyboardShift(origKeyboardShift);
+    setBgColor(origBgColor);
+    setTextColor(origTextColor);
+    clearScreen();
     return 0;
 }
 

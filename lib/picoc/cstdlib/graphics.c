@@ -41,9 +41,39 @@ void GraphicsGetCharHeight(struct ParseState *Parser, struct Value *ReturnValue,
     ReturnValue->Val->Integer = kernelAPI.charHeight;
 }
 
-void GraphicsSetColor(struct ParseState *Parser, struct Value *ReturnValue, struct Value **Param, int NumArgs)
+void GraphicsSetTextColor(struct ParseState *Parser, struct Value *ReturnValue, struct Value **Param, int NumArgs)
 {
-    kernelAPI.color(Param[0]->Val->Integer);
+    kernelAPI.setTextColor(Param[0]->Val->Integer);
+}
+
+void GraphicsSetBgColor(struct ParseState *Parser, struct Value *ReturnValue, struct Value **Param, int NumArgs)
+{
+    kernelAPI.setBgColor(Param[0]->Val->Integer);
+}
+
+void GraphicsGetBgColor(struct ParseState *Parser, struct Value *ReturnValue, struct Value **Param, int NumArgs)
+{
+    ReturnValue->Val->Integer = kernelAPI.getBgColor();
+}
+
+void GraphicsGetTextColor(struct ParseState *Parser, struct Value *ReturnValue, struct Value **Param, int NumArgs)
+{
+    ReturnValue->Val->Integer = kernelAPI.getTextColor();
+}
+
+void GraphicsGetKeyboardShift(struct ParseState *Parser, struct Value *ReturnValue, struct Value **Param, int NumArgs)
+{
+    ReturnValue->Val->Integer = kernelAPI.getKeyboardShift();
+}
+
+void GraphicsSetKeyboardShift(struct ParseState *Parser, struct Value *ReturnValue, struct Value **Param, int NumArgs)
+{
+    kernelAPI.setKeyboardShift(Param[0]->Val->Integer);
+}
+
+void GraphicsPrintAt(struct ParseState *Parser, struct Value *ReturnValue, struct Value **Param, int NumArgs)
+{
+    kernelAPI.printAt(Param[0]->Val->Integer, Param[1]->Val->Integer, Param[2]->Val->Pointer);
 }
 
 void GraphicsClearScreen(struct ParseState *Parser, struct Value *ReturnValue, struct Value **Param, int NumArgs)
@@ -129,8 +159,15 @@ struct LibraryFunction GraphicsFunctions[] =
     { GraphicsGetCharWidth,    "int      getCharWidth();" },
     { GraphicsGetCharHeight,   "int      getCharHeight();" },
 
-    { GraphicsSetColor,        "void     setColor(int colorId);" },
+    { GraphicsSetTextColor,    "void     setTextColor(int colorId);" },
+    { GraphicsSetBgColor,      "void     setBgColor(int colorId);" },
+    { GraphicsGetTextColor,    "int      getTextColor();" },
+    { GraphicsGetBgColor,      "int      getBgColor();" },
+    { GraphicsSetKeyboardShift,"void     setKeyboardShift(int state);" },
+    { GraphicsGetKeyboardShift,"int      getKeyboardShift();" },
     { GraphicsClearScreen,     "void     clearScreen();" },
+
+    { GraphicsPrintAt,         "void     printAt(int x, int y, char* text);" },
 
     { GraphicsDrawPoint,       "void     drawPoint(int x, int y, int colorId);" },
     { GraphicsDrawLine,        "void     drawLine(int x1, int y1, int x2, int y2, int colorId);" },
