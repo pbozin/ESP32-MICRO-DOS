@@ -9,19 +9,18 @@
 void IncludeInit(Picoc *pc)
 {
     IncludeRegister(pc, "ctype.h", NULL, &StdCtypeFunctions[0], NULL);
+    IncludeRegister(pc, "dirent.h", &DirentSetupFunc, &DirentFunctions[0], DirentDefs);
     IncludeRegister(pc, "errno.h", &StdErrnoSetupFunc, NULL, NULL);
     IncludeRegister(pc, "fcntl.h", &FcntlSetupFunc, &FcntlFunctions[0], FcntlDefs);
     IncludeRegister(pc, "graphics.h", &GraphicsSetupFunc, &GraphicsFunctions[0], GraphicsDefs);
+    IncludeRegister(pc, "math.h", &MathSetupFunc, &MathFunctions[0], NULL);
+    IncludeRegister(pc, "socket.h", &SocketSetupFunc, &SocketFunctions[0], SocketDefs);
     IncludeRegister(pc, "stdbool.h", &StdboolSetupFunc, NULL, StdboolDefs);
     IncludeRegister(pc, "stdio.h", &StdioSetupFunc, &StdioFunctions[0], StdioDefs);
     IncludeRegister(pc, "stdlib.h", &StdlibSetupFunc, &StdlibFunctions[0], NULL);
-    IncludeRegister(pc, "dirent.h", &DirentSetupFunc, &DirentFunctions[0], DirentDefs);
     IncludeRegister(pc, "string.h", &StringSetupFunc, &StringFunctions[0], NULL);
     IncludeRegister(pc, "sys/stat.h", &StatSetupFunc, &StatFunctions[0], StatDefs);
     IncludeRegister(pc, "time.h", &StdTimeSetupFunc, &StdTimeFunctions[0], StdTimeDefs);
-#ifdef ENABLE_PICOC_MATH
-    IncludeRegister(pc, "math.h", &MathSetupFunc, &MathFunctions[0], NULL);
-#  endif
 }
 
 /* clean up space used by the include system */
