@@ -237,7 +237,7 @@ const uint16_t ramOSPalette[16] = {
     void drawPixel(int16_t x, int16_t y, uint16_t c) { tft_driver->drawPixel(x,y,c); }
     void fillCircle(int16_t x, int16_t y, int16_t r, uint16_t c) { tft_driver->fillCircle(x, y, r, c);}
     void drawCircle(int16_t x, int16_t y, int16_t r, uint16_t c) { tft_driver->drawCircle(x, y, r, c);}
-    void drawChar(char c, int16_t x, int16_t y) { tft_driver->drawChar(x, y, (unsigned char)c, currentActivePaletteId, currentActiveBgPalleteId);}
+    void drawChar(char c, int16_t x, int16_t y) { tft_driver->drawChar(x, y, (unsigned char)c, currentActivePaletteId, currentActiveBgPaletteId);}
 
     void setTextColor(uint16_t c) { tft_driver->setTextColor(c, currentActiveBgPaletteId); }
     void setTextColor(uint16_t c, uint16_t b) { tft_driver->setTextColor(c, b); }
@@ -917,7 +917,7 @@ void setup() {
   tft.init();
   tft.initDMA();
   tft.setRotation(0);
-  tft.fillScreen(currentActiveBgPaletteId);
+  tft.fillScreen(getPaletteColor(currentActiveBgPaletteId));
 
   pinMode(TFT_BL, OUTPUT);
   digitalWrite(TFT_BL, HIGH);
@@ -1978,9 +1978,6 @@ void terminalPrintAt(int x, int y, const char* text) {
     return;
   }
 
-  uint16_t activeFontColor = getPaletteColor(currentActivePaletteId);
-  uint16_t activeBgColor = getPaletteColor(currentActiveBgPaletteId);
-
   if (MATRIX_ACTIVE) {
     bgCanvas.setTextColor(currentActivePaletteId, currentActiveBgPaletteId);
     bgCanvas.setCursor(pixelX, pixelY);
@@ -1989,7 +1986,7 @@ void terminalPrintAt(int x, int y, const char* text) {
     bgCanvas.pushSprite(0, 0);
   }
   else {
-    tft.setTextColor(activeFontColor, activeBgColor);
+    tft.setTextColor(getPaletteColor(currentActivePaletteId), getPaletteColor(currentActiveBgPaletteId));
     tft.setCursor(pixelX, pixelY);
     tft.print(text);
 
