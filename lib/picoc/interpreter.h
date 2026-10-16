@@ -717,6 +717,11 @@ extern char DirentDefs[];
 extern struct LibraryFunction DirentFunctions[];
 extern void DirentSetupFunc(Picoc *pc);
 
+/* dirent.c */
+extern const char SocketDefs[];
+extern struct LibraryFunction SocketFunctions[];
+extern void SocketSetupFunc(Picoc *pc);
+
 /* stdio.c */
 extern const char StdioDefs[];
 extern struct LibraryFunction StdioFunctions[];

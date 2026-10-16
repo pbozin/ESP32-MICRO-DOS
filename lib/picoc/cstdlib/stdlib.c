@@ -5,12 +5,10 @@
 
 static int Stdlib_ZeroValue = 0;
 
-#ifdef ENABLE_PICOC_MATH
 void StdlibAtof(struct ParseState *Parser, struct Value *ReturnValue, struct Value **Param, int NumArgs)
 {
     ReturnValue->Val->FP = atof(Param[0]->Val->Pointer);
 }
-#endif
 
 void StdlibAtoi(struct ParseState *Parser, struct Value *ReturnValue, struct Value **Param, int NumArgs)
 {
@@ -22,12 +20,10 @@ void StdlibAtol(struct ParseState *Parser, struct Value *ReturnValue, struct Val
     ReturnValue->Val->Integer = atol(Param[0]->Val->Pointer);
 }
 
-#ifdef ENABLE_PICOC_MATH
 void StdlibStrtod(struct ParseState *Parser, struct Value *ReturnValue, struct Value **Param, int NumArgs)
 {
     ReturnValue->Val->FP = strtod(Param[0]->Val->Pointer, Param[1]->Val->Pointer);
 }
-#endif
 
 void StdlibStrtol(struct ParseState *Parser, struct Value *ReturnValue, struct Value **Param, int NumArgs)
 {
@@ -134,10 +130,8 @@ typedef struct { \
 /* all stdlib.h functions */
 struct LibraryFunction StdlibFunctions[] =
 {
-#ifdef ENABLE_PICOC_MATH
     { StdlibAtof,           "float atof(char *);" },
     { StdlibStrtod,         "float strtod(char *,char **);" },
-#endif
     { StdlibAtoi,           "int atoi(char *);" },
     { StdlibAtol,           "int atol(char *);" },
     { StdlibStrtol,         "int strtol(char *,char **,int);" },

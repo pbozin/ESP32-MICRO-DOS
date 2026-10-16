@@ -29,12 +29,10 @@ void StdCtime(struct ParseState *Parser, struct Value *ReturnValue, struct Value
     ReturnValue->Val->Pointer = ctime(Param[0]->Val->Pointer);
 }
 
-#ifdef ENABLE_PICOC_MATH
 void StdDifftime(struct ParseState *Parser, struct Value *ReturnValue, struct Value **Param, int NumArgs)
 {
     ReturnValue->Val->FP = difftime((time_t)Param[0]->Val->Integer, Param[1]->Val->Integer);
 }
-#endif
 
 void StdGmtime(struct ParseState *Parser, struct Value *ReturnValue, struct Value **Param, int NumArgs)
 {
@@ -94,9 +92,7 @@ struct LibraryFunction StdTimeFunctions[] =
     { StdAsctime,       "char *asctime(struct tm *);" },
     { StdClock,         "time_t clock();" },
     { StdCtime,         "char *ctime(int *);" },
-#ifdef ENABLE_PICOC_MATH
     { StdDifftime,      "double difftime(int, int);" },
-#endif
     { StdGmtime,        "struct tm *gmtime(int *);" },
     { StdLocaltime,     "struct tm *localtime(int *);" },
     { StdMktime,        "int mktime(struct tm *ptm);" },
