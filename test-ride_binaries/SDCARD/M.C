@@ -197,7 +197,6 @@ void main() {
 
     while (!exitFlag) {
         draw_interface();
-	flushGameMatrix();
         ch = getchar();
 
         switch(ch) {
