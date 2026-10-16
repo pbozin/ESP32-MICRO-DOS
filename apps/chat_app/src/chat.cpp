@@ -12,18 +12,25 @@ int _start(int argc, char** argv, MicroDosAPI* api) {
     termPrintln(STRING("CONNECTING..."));
 
     if (wifiUp(STRING("CFG"), STRING("CFG")) != 0) {
-        setColor(RED);
         termPrintln(STRING("ERR: WI-FI PROVISIONING FAILED."));
-        setColor(GREEN);
         return -1;
     }
 
     delay(500);
-    int chatting = 1;
+
+    int origTextColor = getTextColor();
+    int origBgColor = getBgColor();
+    int origKeyboardShift = getKeyboardShift();
+
+    setKeyboardShift(0);
+    setBgColor(BLACK);
+    setTextColor(GREEN);
     clearScreen();
 
+    int chatting = 1;
+
     while (chatting) {
-        setColor(GREEN);
+        setTextColor(GREEN);
         inputStr(STRING("YOU> "), promptBuffer, sizeof(promptBuffer));
 
         if (strcmp(promptBuffer, STRING("QUIT")) == 0 || strcmp(promptBuffer, STRING("BYE")) == 0 ||
@@ -36,7 +43,7 @@ int _start(int argc, char** argv, MicroDosAPI* api) {
         while (promptBuffer[len] != '\0') len++;
         if (len == 0) continue;
 
-        setColor(CYAN);
+        setTextColor(CYAN);
         termPrint(STRING("AI> "));
 
         int status = ollamaStream(
@@ -50,14 +57,16 @@ int _start(int argc, char** argv, MicroDosAPI* api) {
         );
 
         if (status != 0) {
-            setColor(RED);
+            setTextColor(RED);
             termPrintln(STRING("ERR: SERVER OFFLINE"));
         }
         termPrintln(STRING(""));
     }
 
     wifiDown();
-    setColor(GREEN);
+    setKeyboardShift(origKeyboardShift);
+    setBgColor(origBgColor);
+    setTextColor(origTextColor);
     return 0;
 }
 

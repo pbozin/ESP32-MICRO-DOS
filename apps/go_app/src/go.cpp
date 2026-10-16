@@ -291,18 +291,14 @@ int _start(int argc, char** argv, MicroDosAPI* api) {
     termPrintln(STRING("CONNECTING..."));
 
     if (wifiUp(STRING("CFG"), STRING("CFG")) != 0) {
-        setColor(RED);
         termPrintln(STRING("ERR: WI-FI PROVISIONING FAILED."));
-        setColor(GREEN);
         return -1;
     }
     delay(500);
 
     int success = ollamaStream(STRING("NEW"), STRING("CFG"), STRING("CFG"), system_prompt, NULL, 0, 0);
     if (success < 0) {
-        setColor(RED);
         termPrintln(STRING("ERR: OLLAMA CONNECTION FAILED."));
-        setColor(GREEN);
         return -1;
     }
 
@@ -310,9 +306,7 @@ int _start(int argc, char** argv, MicroDosAPI* api) {
 
     if (!initGameMatrix()) {
 	wifiDown();
-        setColor(RED);
         termPrintln(STRING("ERR: GAME INIT FAILED."));
-        setColor(GREEN);
         return -1;
     }
 

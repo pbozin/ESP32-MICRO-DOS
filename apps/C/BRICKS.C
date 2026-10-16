@@ -21,15 +21,17 @@ void main() {
     int y = termHeight / 2;
     int u = 4;
     int v = -4;
-    
+
     int i;
     int running;
 
-    clearScreen(); 
-    setFKeys("  <-  ", "      ", "  ESC ", "      ", "  ->  ");
-    setColor(GREEN);
+    int origBgColor = getBgColor();
+
     printf("BRICKS STARTING\n");
-    delay(1000); 
+    delay(1000);
+    setFKeys("  <-  ", "      ", "  ESC ", "      ", "  ->  ");
+
+    setBgColor(BLACK);
     clearScreen();
 
     for (i = 0; i < 10 * 5; i++) {
@@ -44,7 +46,7 @@ void main() {
     delay(500);
     running = 1;
 
-    fcntl(0, F_SETFL, O_NONBLOCK); 
+    fcntl(0, F_SETFL, O_NONBLOCK);
 
     while (running) {
         int k = getchar();
@@ -72,7 +74,7 @@ void main() {
         if (x < 4) {
             x = 4;
             u = 0 - u;
-            beep(800, 10); 
+            beep(800, 10);
         } else if (x > termWidth - 4) {
             x = termWidth - 4;
             u = 0 - u;
@@ -116,19 +118,19 @@ void main() {
 
         if (y > termHeight - 10) {
             beep(150, 600);
+            setTextColor(RED);
             clearScreen();
-            setColor(RED);
             printf("\nGAME OVER!\n");
             delay(2000);
             running = 0;
         }
-        
-        delay(8); 
+
+        delay(8);
     }
 
-    fcntl(0, F_SETFL, O_RDONLY); 
+    fcntl(0, F_SETFL, O_RDONLY);
     clearFKeys();
+    setBgColor(origBgColor);
     clearScreen();
-    setColor(GREEN);
 }
 

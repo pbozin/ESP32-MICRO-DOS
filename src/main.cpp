@@ -153,6 +153,7 @@ SPIClass sdSPI(HSPI);
 #endif
 
 static uint16_t currentActivePaletteId = TFT_GREEN;
+static uint16_t currentActiveBgPaletteId = TFT_BLACK;
 
 const uint16_t ramOSPalette[16] = {
     TFT_BLACK,      // Index 0
@@ -236,9 +237,9 @@ const uint16_t ramOSPalette[16] = {
     void drawPixel(int16_t x, int16_t y, uint16_t c) { tft_driver->drawPixel(x,y,c); }
     void fillCircle(int16_t x, int16_t y, int16_t r, uint16_t c) { tft_driver->fillCircle(x, y, r, c);}
     void drawCircle(int16_t x, int16_t y, int16_t r, uint16_t c) { tft_driver->drawCircle(x, y, r, c);}
-    void drawChar(char c, int16_t x, int16_t y) { tft_driver->drawChar(x, y, (unsigned char)c, currentActivePaletteId, TFT_BLACK);}
+    void drawChar(char c, int16_t x, int16_t y) { tft_driver->drawChar(x, y, (unsigned char)c, currentActivePaletteId, currentActiveBgPalleteId);}
 
-    void setTextColor(uint16_t c) { tft_driver->setTextColor(c, TFT_BLACK); }
+    void setTextColor(uint16_t c) { tft_driver->setTextColor(c, currentActiveBgPaletteId); }
     void setTextColor(uint16_t c, uint16_t b) { tft_driver->setTextColor(c, b); }
 
     void setCursor(int16_t x, int16_t y) { tft_driver->setCursor(x, y); }
@@ -766,7 +767,12 @@ typedef struct MicroDosAPI_t {
   void (*beep)(int freq, int ms);
   void (*delay)(int ms);
   int  (*inkey)();
-  void (*color)(int colorId);
+  void (*setTextColor)(int colorId);
+  int (*getTextColor)();
+  void (*setBgColor)(int colorId);
+  int (*getBgColor)();
+  void (*setKeyboardShift)(int state);
+  int (*getKeyboardShift)();
   void (*plot)(int x, int y, int colorId);
   void (*drawLine)(int x1, int y1, int x2, int y2, int colorId);
   void (*drawRect)(int x, int y, int w, int h, int colorId);
@@ -911,7 +917,7 @@ void setup() {
   tft.init();
   tft.initDMA();
   tft.setRotation(0);
-  tft.fillScreen(TFT_BLACK);
+  tft.fillScreen(currentActiveBgPaletteId);
 
   pinMode(TFT_BL, OUTPUT);
   digitalWrite(TFT_BL, HIGH);
@@ -1844,15 +1850,15 @@ void redrawTerminal() {
         int charColorId = colorBuffer[targetMemoryRow][c];
         if (charColorId == 0) {
 	  if (MATRIX_ACTIVE) {
-            bgCanvas.setTextColor(getPaletteColor(currentActivePaletteId), TFT_BLACK);
+            bgCanvas.setTextColor(currentActivePaletteId, currentActiveBgPaletteId);
 	  } else {
-            tft.setTextColor(currentActivePaletteId, TFT_BLACK);
+            tft.setTextColor(getPaletteColor(currentActivePaletteId), getPaletteColor(currentActiveBgPaletteId));
 	  }
         } else {
 	  if (MATRIX_ACTIVE) {
-            bgCanvas.setTextColor(getPaletteColor(charColorId), TFT_BLACK);
+            bgCanvas.setTextColor(charColorId, currentActiveBgPaletteId);
 	  } else {
-            tft.setTextColor(getPaletteColor(charColorId), TFT_BLACK);
+            tft.setTextColor(getPaletteColor(charColorId), getPaletteColor(currentActiveBgPaletteId));
 	  }
         }
 
@@ -1867,16 +1873,16 @@ void redrawTerminal() {
       int textPixelWidth = c * CHAR_WIDTH;
       if (textPixelWidth < TFT_WIDTH_DRAW) {
         if (MATRIX_ACTIVE) {
-          bgCanvas.fillRect(textPixelWidth, r * CHAR_HEIGHT, TFT_WIDTH_DRAW - textPixelWidth, CHAR_HEIGHT, TFT_BLACK);
+          bgCanvas.fillRect(textPixelWidth, r * CHAR_HEIGHT, TFT_WIDTH_DRAW - textPixelWidth, CHAR_HEIGHT, currentActiveBgPaletteId);
 	} else {
-          tft.fillRect(textPixelWidth, r * CHAR_HEIGHT, TFT_WIDTH_DRAW - textPixelWidth, CHAR_HEIGHT, TFT_BLACK);
+          tft.fillRect(textPixelWidth, r * CHAR_HEIGHT, TFT_WIDTH_DRAW - textPixelWidth, CHAR_HEIGHT, getPaletteColor(currentActiveBgPaletteId));
 	}
       }
     } else {
       if (MATRIX_ACTIVE) {
-        bgCanvas.fillRect(0, r * CHAR_HEIGHT, TFT_WIDTH_DRAW, CHAR_HEIGHT, TFT_BLACK);
+        bgCanvas.fillRect(0, r * CHAR_HEIGHT, TFT_WIDTH_DRAW, CHAR_HEIGHT, currentActiveBgPaletteId);
       } else {
-        tft.fillRect(0, r * CHAR_HEIGHT, TFT_WIDTH_DRAW, CHAR_HEIGHT, TFT_BLACK);
+        tft.fillRect(0, r * CHAR_HEIGHT, TFT_WIDTH_DRAW, CHAR_HEIGHT, getPaletteColor(currentActiveBgPaletteId));
       }
     }
   }
@@ -1973,16 +1979,17 @@ void terminalPrintAt(int x, int y, const char* text) {
   }
 
   uint16_t activeFontColor = getPaletteColor(currentActivePaletteId);
+  uint16_t activeBgColor = getPaletteColor(currentActiveBgPaletteId);
 
   if (MATRIX_ACTIVE) {
-    bgCanvas.setTextColor(activeFontColor, TFT_BLACK);
+    bgCanvas.setTextColor(currentActivePaletteId, currentActiveBgPaletteId);
     bgCanvas.setCursor(pixelX, pixelY);
     bgCanvas.print(text);
 
     bgCanvas.pushSprite(0, 0);
   }
   else {
-    tft.setTextColor(activeFontColor, TFT_BLACK);
+    tft.setTextColor(activeFontColor, activeBgColor);
     tft.setCursor(pixelX, pixelY);
     tft.print(text);
 
@@ -2038,7 +2045,7 @@ void drawKeyboard() {
 #if defined(BOARD_JC3248)
      canvas_bridge->flush();
 #endif
-  tft.setTextColor(currentActivePaletteId, TFT_BLACK);
+  tft.setTextColor(currentActivePaletteId, currentActiveBgPaletteId);
 }
 
 void renderFullWrappedInputLine() {
@@ -3518,11 +3525,11 @@ void processCommand(const char* rawCmd) {
     terminalPrintln("SYS:  FREE, HELP, LIST, NEW, RUN");
     terminalPrintln("DOS:  DIR, LOAD, LOAD$, SAVE, SAVE$,");
     terminalPrintln("      DELETE");
-    terminalPrintln("CODE: BEEP, CIRCLE, CLEAR, COLOR, COS(,");
+    terminalPrintln("CODE: BEEP, BGCOLOR, CIRCLE, CLEAR, COLOR,");
 #if defined(ENABLE_PICOC)
-    terminalPrintln("      CRUN, DELAY, DUMP, DUMPS, EDIT,");
+    terminalPrintln("      COS(, CRUN, DELAY, DUMP, DUMPS, EDIT,");
 #else
-    terminalPrintln("      DELAY, DUMP, DUMPS, EDIT,");
+    terminalPrintln("      COS(, DELAY, DUMP, DUMPS, EDIT,");
 #endif
     terminalPrintln("      EXEC, FALSE, FILLCIRCLE, FILLRECT,");
 #if defined(ENABLE_JPEG)
@@ -3743,7 +3750,16 @@ bool runSingleLine(const char* rawLine, int &currentLineIdx) {
     trimCString(arg);
     int colorId = evaluateExpression(arg);
 
-    kernelAPI.color(colorId);
+    kernelAPI.setTextColor(colorId);
+    return true;
+  }
+
+  if (strncmp(line, "BGCOLOR ", 8) == 0) {
+    char* arg = line + 8;
+    trimCString(arg);
+    int colorId = evaluateExpression(arg);
+
+    kernelAPI.setBgColor(colorId);
     return true;
   }
 
@@ -4634,10 +4650,10 @@ void api_setup() {
     cursorX = 0;
     cursorY = 0;
     if (MATRIX_ACTIVE) {
-      bgCanvas.fillRect(0,0,TFT_WIDTH_DRAW,TFT_HEIGHT_DRAW,TFT_BLACK);
+      bgCanvas.fillRect(0,0,TFT_WIDTH_DRAW,TFT_HEIGHT_DRAW,currentActiveBgPaletteId);
       bgCanvas.pushSprite(0, 0);
     } else {
-      tft.fillRect(0,0,TFT_WIDTH_DRAW,TFT_HEIGHT_DRAW,TFT_BLACK);
+      tft.fillRect(0,0,TFT_WIDTH_DRAW,TFT_HEIGHT_DRAW,getPaletteColor(currentActiveBgPaletteId));
     }
     redrawTerminal();
   };
@@ -4658,8 +4674,35 @@ void api_setup() {
     return (int)foundKey;
   };
 
-  kernelAPI.color = [] (int colorId) {
+  kernelAPI.setTextColor = [] (int colorId) {
     currentActivePaletteId = colorId;
+  };
+
+  kernelAPI.setBgColor = [] (int colorId) {
+    currentActiveBgPaletteId = colorId;
+  };
+
+  kernelAPI.getTextColor = [] () -> int {
+    return currentActivePaletteId;
+  };
+
+  kernelAPI.getBgColor = [] () -> int {
+    return currentActiveBgPaletteId;
+  };
+
+  kernelAPI.getKeyboardShift = [] () -> int {
+    if (shiftPressed)
+      return 1;
+    else
+      return 0;
+  };
+
+  kernelAPI.setKeyboardShift = [] (int state) {
+    if (state < 1)
+      shiftPressed = false;
+    else
+      shiftPressed = true;
+    drawKeyboard();
   };
 
   kernelAPI.plot = [] (int x, int y, int colorId) {
@@ -5309,7 +5352,8 @@ void api_setup() {
       bgCanvas.createSprite(TFT_WIDTH_DRAW, TFT_HEIGHT_DRAW);
       bgCanvas.createPalette((uint16_t*)ramOSPalette);
     }
-    bgCanvas.fillSprite(TFT_BLACK);
+    kernelAPI.clear();
+    bgCanvas.fillSprite(currentActiveBgPaletteId);
     bgCanvas.pushSprite(0, 0);
     return 1;
   };

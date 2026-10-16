@@ -15,6 +15,7 @@ void IncludeInit(Picoc *pc)
     IncludeRegister(pc, "stdbool.h", &StdboolSetupFunc, NULL, StdboolDefs);
     IncludeRegister(pc, "stdio.h", &StdioSetupFunc, &StdioFunctions[0], StdioDefs);
     IncludeRegister(pc, "stdlib.h", &StdlibSetupFunc, &StdlibFunctions[0], NULL);
+    IncludeRegister(pc, "dirent.h", &DirentSetupFunc, &DirentFunctions[0], DirentDefs);
     IncludeRegister(pc, "string.h", &StringSetupFunc, &StringFunctions[0], NULL);
     IncludeRegister(pc, "sys/stat.h", &StatSetupFunc, &StatFunctions[0], StatDefs);
     IncludeRegister(pc, "time.h", &StdTimeSetupFunc, &StdTimeFunctions[0], StdTimeDefs);

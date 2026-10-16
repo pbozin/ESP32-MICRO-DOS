@@ -26,7 +26,12 @@ typedef struct MicroDosAPI_t {
   void (*beep)(int freq, int ms);
   void (*delay)(int ms);
   int  (*inkey)();
-  void (*color)(int colorId);
+  void (*setTextColor)(int colorId);
+  int (*getTextColor)();
+  void (*setBgColor)(int colorId);
+  int (*getBgColor)();
+  void (*setKeyboardShift)(int state);
+  int (*getKeyboardShift)();
   void (*plot)(int x, int y, int colorId);
   void (*drawLine)(int x1, int y1, int x2, int y2, int colorId);
   void (*drawRect)(int x, int y, int w, int h, int colorId);
