@@ -123,9 +123,11 @@ void draw_interface() {
         int color = (activePanel == 0 && leftIndex - leftSkip == i) ? BLACK : WHITE;
         if (activePanel == 0 && leftIndex - leftSkip == i) {
             fillRect(1, (filesStartY + i) * charH - (charH / 4), (panelW - 2), charH, CYAN);
+            setBgColor(CYAN);
         }
         setTextColor(color);
         printAt(2, filesStartY + i, leftFiles[i+leftSkip]);
+        setBgColor(BLUE);
     }
 
     fillRect(panelW, 0, panelW, (canvasH - 1), BLUE);
@@ -141,9 +143,11 @@ void draw_interface() {
         int color = (activePanel == 1 && rightIndex - rightSkip == i) ? BLACK : WHITE;
         if (activePanel == 1 && rightIndex - rightSkip == i) {
             fillRect((panelW + 1), (filesStartY + i) * charH - (charH / 4), (panelW - 2), charH, CYAN);
+            setBgColor(CYAN);
         }
         setTextColor(color);
         printAt((int)(panelW/charW) + 2, filesStartY + i, rightFiles[i+rightSkip]);
+        setBgColor(BLUE);
     }
 }
 
@@ -177,9 +181,9 @@ void main() {
     canvasH = termH;
 
     setFKeys("  <", "  >", "  v", "  ^", " QUIT");
-    initGameMatrix();
     int origBgColor = getBgColor();
     int origTextColor = getTextColor();
+    setBgColor(BLUE);
     clearScreen();
 
     strcpy(leftPath, "/sd/");
@@ -191,10 +195,8 @@ void main() {
     char ch;
     int exitFlag = 0;
 
-
     while (!exitFlag) {
         draw_interface();
-	flushGameMatrix();
         ch = getchar();
 
         switch(ch) {
@@ -242,7 +244,6 @@ void main() {
         delay(30);
     }
 
-    clearGameMatrix();
     clearFKeys();
     setTextColor(origTextColor);
     setBgColor(origBgColor);
