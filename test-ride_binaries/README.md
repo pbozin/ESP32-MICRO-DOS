@@ -1,4 +1,4 @@
-# Precompiled Firmware Releases [version 2026-10-16] 🚀
+# Precompiled Firmware Releases [version 2026-10-18] 🚀
 
 This directory contains fully merged, production-ready factory images for **ESP32-MICRO-DOS**. 
 
