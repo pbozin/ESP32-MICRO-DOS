@@ -5551,7 +5551,6 @@ void api_setup() {
     int stride = bgCanvas.width();
     int w = x2 - x1, h = y2 - y1;
 
-    //uint8_t* map = (uint8_t*)malloc(finalCols * finalRows);
     if (!map) return 0;
 
     const int W[9] = {

@@ -2,8 +2,8 @@ import os
 import struct
 from PIL import Image
 
-INPUT_DIR = "raw_pngs"
-OUTPUT_DIR = "4bit"
+INPUT_DIR = "assets/raw_pngs"
+OUTPUT_DIR = "assets/4bit"
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
