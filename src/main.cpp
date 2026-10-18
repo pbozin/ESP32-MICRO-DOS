@@ -19,7 +19,7 @@ extern jmp_buf HostExitBuf;
 #define KEY_REPEAT_DELAY 300
 #define KEY_FRAME_TIME 33
 
-#define SYSTEM_RAM_SIZE 256
+#define SYSTEM_RAM_SIZE 320
 
 #define MAX_VAR_NAME_LEN 12
 #define MAX_STR_LEN 100
@@ -660,8 +660,10 @@ static TFT_eSprite tempSprite = TFT_eSprite(&tft);
 
 struct OSSprite_t {
     bool isOnScreen = false;
-    uint8_t* rawSprite = NULL;
-    size_t rawSize = 0;
+    uint8_t** rawFrames = NULL;
+    size_t* frameSizes = NULL;
+    int totalFrames = 1;
+    int currentFrame = 0;
     uint8_t* backupSprite = NULL;
     size_t backupSize = 0;
     size_t spriteSize = 0;
@@ -806,7 +808,7 @@ typedef struct MicroDosAPI_t {
   void* (*malloc)(unsigned int size);
   void (*free)(void* ptr);
   uint32_t (*createSprite)(const char* filename, int spriteSize);
-  void (*drawSprite)(uint32_t spriteHandle, int x, int y);
+  void (*drawSprite)(uint32_t spriteHandle, int x, int y, int color, int frame);
   void (*clearSprite)(uint32_t spriteHandle);
   void (*freeSprite)(uint32_t spriteHandle);
   int  (*initGameMatrix)();
@@ -823,6 +825,7 @@ typedef struct MicroDosAPI_t {
   uint32_t (*sdRead)(void* fileHandle, void* buffer, uint32_t size, uint32_t count);
   uint32_t (*sdWrite)(void* fileHandle, const void* buffer, uint32_t size, uint32_t count);
   void (*sdClose)(void* filehandle);
+  uint32_t (*createCollisionMap)(int x, int y, int w, int h, int color, int finalCols, int finalRows, int* map);
 } MicroDosAPI;
 #endif
 
@@ -1260,8 +1263,14 @@ uint8_t getClosestPaletteIndex(uint16_t color) {
 
 void convert16BitTo4Bit(const uint16_t* input, uint32_t numPixels, uint8_t* output) {
     for (uint32_t i = 0; i < numPixels; i += 2) {
-        uint8_t p1 = getClosestPaletteIndex(input[i]);
-        uint8_t p2 = (i + 1 < numPixels) ? getClosestPaletteIndex(input[i + 1]) : 0;
+        uint16_t pixel1 = (input[i] << 8) | (input[i] >> 8);
+        uint8_t p1 = getClosestPaletteIndex(pixel1);
+
+        uint16_t pixel2 = 0;
+        if (i + 1 < numPixels) {
+            pixel2 = (input[i + 1] << 8) | (input[i + 1] >> 8);
+        }
+        uint8_t p2 = getClosestPaletteIndex(pixel2);
 
         output[i / 2] = (p1 << 4) | (p2 & 0x0F);
     }
@@ -4630,6 +4639,32 @@ void host_sysDebugDump(const char* label, const void* memoryAddress, unsigned in
 #endif
 }
 
+void getCell3x3Topology(const uint8_t* buffer, int cellX, int cellY, int cellW, int cellH, int stride, int targetColor, uint8_t out3x3[3][3]) {
+    int subW = cellW / 3;
+    int subH = cellH / 3;
+    if (subW < 1) subW = 1;
+    if (subH < 1) subH = 1;
+
+    for (int subRow = 0; subRow < 3; subRow++) {
+        for (int subCol = 0; subCol < 3; subCol++) {
+            int startX = cellX + (subCol * subW);
+            int startY = cellY + (subRow * subH);
+
+            int wallCount = 0;
+            int totalPixels = subW * subH;
+
+            for (int y = startY; y < startY + subH; y++) {
+                for (int x = startX; x < startX + subW; x++) {
+                    uint32_t idx = (y * stride) + x;
+                    uint8_t colorIdx = (idx % 2 == 0) ? (buffer[idx / 2] >> 4) & 0x0F : buffer[idx / 2] & 0x0F;
+                    if (colorIdx == targetColor) wallCount++;
+                }
+            }
+            out3x3[subRow][subCol] = ((wallCount * 100) / totalPixels > 20) ? 1 : 0;
+        }
+    }
+}
+
 void api_setup() {
   kernelAPI.print   = [] (const char* t) {
     if (t) terminalPrint(t);
@@ -5188,7 +5223,7 @@ void api_setup() {
   };
 
   kernelAPI.createSprite = [](const char* filename, int spriteSize) -> uint32_t {
-    if (!filename || filename[0] == '\0' || !sdAvailable()) return 0;
+    if (!filename || filename[0] == '\0' || !sdAvailable() || spriteSize <= 0) return 0;
 
     char safePath[64];
     if (filename[0] != '/') {
@@ -5200,41 +5235,129 @@ void api_setup() {
 
     if (!SD.exists(safePath)) return 0;
 
-    OSSprite_t* spr = (OSSprite_t*)malloc(sizeof(OSSprite_t));
-    if (!spr) return 0;
-
     File f = SD.open(safePath, FILE_READ);
-    tempSprite.deleteSprite();
-    tempSprite.setColorDepth(COLOR_DEPTH);
-    tempSprite.createSprite(spriteSize, spriteSize);
-    tempSprite.createPalette((uint16_t*)ramOSPalette);
-    f.read((uint8_t*)tempSprite.frameBuffer(0), ((spriteSize * spriteSize) / (8 / COLOR_DEPTH)));
-    f.close();
+    if (!f) return 0;
 
-    spr->backupSize = (spriteSize * spriteSize) / (8 / COLOR_DEPTH) / 2;
-    spr->backupSprite = (uint8_t*)malloc(spr->backupSize);
+    size_t fileSize = f.size();
+    size_t bytesPerFrame = (spriteSize * spriteSize) / 2;
 
-    spr->spriteSize = spriteSize;
-    size_t exactSize = getCompressedSize4BitRLE((uint8_t*)tempSprite.frameBuffer(0), spr->spriteSize);
-    spr->rawSprite = (uint8_t*)malloc(exactSize);
-    spr->rawSize = compress4BitRLE((uint8_t*)tempSprite.frameBuffer(0), (uint8_t*)spr->rawSprite, spr->spriteSize);
-    spr->lastX = 0; spr->lastY = 0;
+    int framesFound = fileSize / bytesPerFrame;
+    if (framesFound <= 0) { f.close(); return 0; }
+
+    uint8_t* rawFrameBuffer = (uint8_t*)malloc(bytesPerFrame);
+    if (!rawFrameBuffer) { f.close(); return 0; }
+
+    size_t* calculatedSizes = (size_t*)malloc(sizeof(size_t) * framesFound);
+    if (!calculatedSizes) { free(rawFrameBuffer); f.close(); return 0; }
+
+    size_t totalCompressedBytesPool = 0;
+    for (int i = 0; i < framesFound; i++) {
+        f.read(rawFrameBuffer, bytesPerFrame);
+        calculatedSizes[i] = getCompressedSize4BitRLE(rawFrameBuffer, spriteSize);
+        totalCompressedBytesPool += calculatedSizes[i];
+    }
+
+    OSSprite_t* spr = (OSSprite_t*)malloc(sizeof(OSSprite_t));
+    uint8_t** framePointerTable = (uint8_t**)malloc(sizeof(uint8_t*) * framesFound);
+    size_t* finalSizesTable = (size_t*)malloc(sizeof(size_t) * framesFound);
+
+    uint8_t* masterFrameDataPool = (uint8_t*)malloc(totalCompressedBytesPool);
+
+    if (!spr || !framePointerTable || !finalSizesTable || !masterFrameDataPool) {
+        if (spr) free(spr);
+        if (framePointerTable) free(framePointerTable);
+        if (finalSizesTable) free(finalSizesTable);
+        if (masterFrameDataPool) free(masterFrameDataPool);
+        free(calculatedSizes); free(rawFrameBuffer); f.close();
+        return 0;
+    }
+
     spr->isOnScreen = false;
+    spr->spriteSize = spriteSize;
+    spr->totalFrames = framesFound;
+    spr->currentFrame = 0;
+    spr->lastX = 0;
+    spr->lastY = 0;
+    spr->rawFrames = framePointerTable;
+    spr->frameSizes = finalSizesTable;
 
+    size_t currentPoolOffset = 0;
+    for (int i = 0; i < framesFound; i++) {
+        spr->frameSizes[i] = calculatedSizes[i];
+        spr->rawFrames[i] = masterFrameDataPool + currentPoolOffset;
+        currentPoolOffset += calculatedSizes[i];
+    }
+    free(calculatedSizes);
+
+    f.seek(0);
+    for (int i = 0; i < framesFound; i++) {
+        f.read(rawFrameBuffer, bytesPerFrame);
+        compress4BitRLE(rawFrameBuffer, spr->rawFrames[i], spr->spriteSize);
+    }
+    free(rawFrameBuffer);
+
+    spr->backupSize = (spriteSize * spriteSize) / 2 / 2;
+    spr->backupSprite = (uint8_t*)malloc(spr->backupSize);
+    if (spr->backupSprite) memset(spr->backupSprite, 0, spr->backupSize);
+
+    f.close();
     return (uint32_t)spr;
   };
 
-  kernelAPI.drawSprite = [](uint32_t spriteHandle, int x, int y) {
+  kernelAPI.drawSprite = [](uint32_t spriteHandle, int x, int y, int color, int frame) {
     OSSprite_t* spr = (OSSprite_t*)spriteHandle;
     if (!spr) return;
+
+    if (spr->totalFrames <= 1) {
+        spr->currentFrame = 0;
+    } else if (frame > -1) {
+        spr->currentFrame = frame % spr->totalFrames;
+    }
 
     tempSprite.deleteSprite();
     tempSprite.setColorDepth(COLOR_DEPTH);
     tempSprite.createSprite(spr->spriteSize, spr->spriteSize);
     tempSprite.createPalette((uint16_t*)ramOSPalette);
+
     if (spr->isOnScreen) {
       if (MATRIX_ACTIVE) {
-        decompressRLEToCanvas(&tempSprite, 0, 0, (uint8_t*)spr->backupSprite, spr->backupSize, spr->spriteSize);
+        if (color > -1) {
+            decompressRLEToCanvas(&tempSprite, 0, 0, (uint8_t*)spr->rawFrames[spr->currentFrame], spr->frameSizes[spr->currentFrame], spr->spriteSize);
+
+            uint8_t* in = (uint8_t*)tempSprite.frameBuffer(0);
+            uint8_t* out = (uint8_t*)renderSprite.frameBuffer(0);
+            int totalPackedBytes = (spr->spriteSize * spr->spriteSize) / 2;
+
+            for (int c = 0; c < totalPackedBytes; c++) {
+              uint8_t inByte = in[c];
+              uint8_t highIn = (inByte >> 4) & 0x0F;
+              uint8_t lowIn  = inByte & 0x0F;
+
+              uint8_t highOut = (highIn != 15) ? (color & 0x0F) : 15;
+              uint8_t lowOut  = (lowIn  != 15) ? (color & 0x0F) : 15;
+
+              out[c] = (highOut << 4) | lowOut;
+            }
+
+            uint8_t* bgBackup = (uint8_t*)tempSprite.frameBuffer(0);
+            decompressRLEToCanvas(&tempSprite, 0, 0, (uint8_t*)spr->backupSprite, spr->backupSize, spr->spriteSize);
+
+            for (int c = 0; c < totalPackedBytes; c++) {
+              uint8_t maskByte = out[c];
+              uint8_t highMask = (maskByte >> 4) & 0x0F;
+              uint8_t lowMask  = maskByte & 0x0F;
+
+              uint8_t highBg = (bgBackup[c] >> 4) & 0x0F;
+              uint8_t lowBg  = bgBackup[c] & 0x0F;
+
+              if (highMask != 15) highBg = highMask;
+              if (lowMask  != 15) lowBg  = lowMask;
+
+              bgBackup[c] = (highBg << 4) | lowBg;
+            }
+        } else {
+            decompressRLEToCanvas(&tempSprite, 0, 0, (uint8_t*)spr->backupSprite, spr->backupSize, spr->spriteSize);
+        }
         tempSprite.pushSprite(spr->lastX, spr->lastY);
       }
       spr->isOnScreen = false;
@@ -5281,7 +5404,10 @@ void api_setup() {
     }
     spr->backupSize = compress4BitRLE((uint8_t*)tempSprite.frameBuffer(0), (uint8_t*)spr->backupSprite, spr->spriteSize);
 
-    decompressRLEToCanvas(&tempSprite, 0, 0, (uint8_t*)spr->rawSprite, spr->rawSize, spr->spriteSize);
+    uint8_t* compressedFrame = spr->rawFrames[spr->currentFrame];
+    size_t compressedSize = spr->frameSizes[spr->currentFrame];
+
+    decompressRLEToCanvas(&tempSprite, 0, 0, compressedFrame, compressedSize, spr->spriteSize);
 
     uint8_t* in = (uint8_t*)tempSprite.frameBuffer(0);
     uint8_t* out = (uint8_t*)renderSprite.frameBuffer(0);
@@ -5308,35 +5434,34 @@ void api_setup() {
     spr->isOnScreen = true;
 
     renderSprite.pushSprite(x, y);
+
+    if (frame == -1 && spr->totalFrames > 1) {
+        spr->currentFrame = (spr->currentFrame + 1) % spr->totalFrames;
+    }
   };
 
   kernelAPI.clearSprite = [](uint32_t spriteHandle) {
     OSSprite_t* spr = (OSSprite_t*)spriteHandle;
-    if (!spr) return;
-    if (!spr->isOnScreen) return;
+    if (!spr || !spr->isOnScreen || !MATRIX_ACTIVE) return;
     spr->isOnScreen = false;
-    if (!MATRIX_ACTIVE) return;
 
-    tempSprite.deleteSprite();
-    tempSprite.setColorDepth(COLOR_DEPTH);
-    tempSprite.createSprite(spr->spriteSize, spr->spriteSize);
-    tempSprite.createPalette((uint16_t*)ramOSPalette);
-    decompressRLEToCanvas(&tempSprite, 0, 0, (uint8_t*)spr->backupSprite, spr->backupSize, spr->spriteSize);
-    tempSprite.pushSprite(spr->lastX, spr->lastY);
+    if (spr->backupSprite) {
+        decompressRLEToCanvas(&renderSprite, spr->lastX, spr->lastY, (uint8_t*)spr->backupSprite, spr->backupSize, spr->spriteSize);
+        renderSprite.pushSprite(spr->lastX, spr->lastY);
+    }
   };
 
   kernelAPI.freeSprite = [](uint32_t spriteHandle) {
     OSSprite_t* spr = (OSSprite_t*)spriteHandle;
-    if (spr) {
-      if (spr->isOnScreen && MATRIX_ACTIVE) {
-        decompressRLEToCanvas(&tempSprite, 0, 0, (uint8_t*)spr->backupSprite, spr->backupSize, spr->spriteSize);
-        tempSprite.pushSprite(spr->lastX, spr->lastY);
-        spr->isOnScreen = false;
-      }
-      if (spr->rawSprite != NULL) {free(spr->rawSprite); spr->rawSprite = NULL; }
-      if (spr->backupSprite != NULL) {free(spr->backupSprite); spr->backupSprite = NULL; }
-      free(spr);
+    if (!spr) return;
+
+    if (spr->rawFrames) {
+        if (spr->rawFrames[0]) free(spr->rawFrames[0]);
+        free(spr->rawFrames);
     }
+    if (spr->frameSizes) free(spr->frameSizes);
+    if (spr->backupSprite) free(spr->backupSprite);
+    free(spr);
   };
 
   kernelAPI.initGameMatrix = []() -> int {
@@ -5416,6 +5541,56 @@ void api_setup() {
       FILE* f = (FILE*)fileHandle;
       fclose(f);
     }
+  };
+
+  kernelAPI.createCollisionMap = [](int x1, int y1, int x2, int y2, int color, int finalCols, int finalRows, int* map) -> uint32_t {
+    if (!MATRIX_ACTIVE) return 0;
+    uint8_t* inb = (uint8_t*)bgCanvas.frameBuffer(0);
+    if (!inb) return 0;
+
+    int stride = bgCanvas.width();
+    int w = x2 - x1, h = y2 - y1;
+
+    //uint8_t* map = (uint8_t*)malloc(finalCols * finalRows);
+    if (!map) return 0;
+
+    const int W[9] = {
+        2, 3, 2,
+        3, 4, 3,
+        2, 3, 2
+    };
+
+    for (int r = 0; r < finalRows; r++) {
+        int sy = y1 + ((r * h) / finalRows);
+        int ey = y1 + (((r + 1) * h) / finalRows);
+
+        for (int c = 0; c < finalCols; c++) {
+            int sx = x1 + ((c * w) / finalCols);
+            int ex = x1 + (((c + 1) * w) / finalCols);
+
+            uint8_t S[3][3] = { {0,0,0}, {0,0,0}, {0,0,0} };
+
+            getCell3x3Topology(inb, sx, sy, (ex - sx), (ey - sy), stride, color, S);
+
+            int structuralDotProduct = 0;
+            uint8_t* flatS = &S[0][0];
+            for (int i = 0; i < 9; i++) {
+                structuralDotProduct += flatS[i] * W[i];
+            }
+
+            map[(r * finalCols) + c] = (structuralDotProduct < 1) ? 1 : 0;
+        }
+    }
+
+#if defined(SERIAL_DEBUG)
+    for (int r = 0; r < finalRows; r++) {
+        if (r < 10) Serial.print("0");
+        Serial.print(r); Serial.print(" | ");
+        for (int c = 0; c < finalCols; c++) Serial.print(map[(r * finalCols) + c] == 0 ? "██" : "  ");
+        Serial.println();
+    }
+#endif
+    return (uint32_t)map;
   };
 
 }

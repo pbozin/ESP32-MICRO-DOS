@@ -474,7 +474,7 @@ INLINE ALWAYS void refreshBoard() {
 
                   uint32_t handle = pieceSprites[spriteIdx];
                   if (handle != 0) {
-                    drawSprite(handle, c * fSize, r * fSize);
+                    drawSprite(handle, c * fSize, r * fSize, -1, -1);
                   }
             }
         }

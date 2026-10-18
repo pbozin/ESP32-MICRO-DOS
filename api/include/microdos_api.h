@@ -110,7 +110,7 @@ typedef struct MicroDosAPI_t {
 
   // --- Sprite Engine ---
   uint32_t (*createSprite)(const char* filename, int spriteSize);
-  void  (*drawSprite)(uint32_t spriteHandle, int x, int y);
+  void  (*drawSprite)(uint32_t spriteHandle, int x, int y, int color, int frame);
   void  (*clearSprite)(uint32_t spriteHandle);
   void  (*freeSprite)(uint32_t spriteHandle);
   int  (*initGameMatrix)();
@@ -136,6 +136,7 @@ typedef struct MicroDosAPI_t {
   uint32_t (*sdRead)(void* fileHandle, void* buffer, uint32_t size, uint32_t count);
   uint32_t (*sdWrite)(void* fileHandle, const void* buffer, uint32_t size, uint32_t count);
   void (*sdClose)(void* filehandle);
+  uint32_t (*createCollisionMap)(int x, int y, int w, int h, int color, int finalCols, int finalRows, int* map);
 } MicroDosAPI;
 
 // Tracking pointer instance to link standard malloc lodops cleanly
@@ -244,7 +245,9 @@ ALWAYS INLINE void drawJpeg(const char* filename, int x, int y)    { kernel()->d
 // --- AUTONOMOUS SPRITE ENGINE WRAPPERS ---
 ALWAYS INLINE void drawSprite(uint32_t spr,
 		              int x,
-			      int y)            { kernel()->drawSprite(spr, x, y); }
+			      int y,
+			      int color,
+			      int frame)        { kernel()->drawSprite(spr, x, y, color, frame); }
 ALWAYS INLINE uint32_t createSprite(const char* file,
 		                    int size)   { return kernel()->createSprite(file, size); }
 ALWAYS INLINE void clearSprite(uint32_t spr)    { kernel()->clearSprite(spr); }
@@ -289,6 +292,11 @@ ALWAYS INLINE void kernelDebug(const char* lbl,
                                         kernel()->sysDebugDump(lbl, ptr, len, vAddr);
                                    }
                                }
+
+ALWAYS INLINE uint32_t createCollisionMap(int x, int y, int w, int h, int color, int finalCols, int finalRows, int* map) {
+	                       return kernel()->createCollisionMap(x, y, w, h, color, finalCols, finalRows, map);
+                               }
+
 // Main entry point
 int _start(int argc, char** argv, MicroDosAPI* api);
 

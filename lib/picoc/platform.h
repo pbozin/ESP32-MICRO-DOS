@@ -65,7 +65,7 @@ typedef struct MicroDosAPI_t {
   void* (*malloc)(unsigned int size);
   void (*free)(void* ptr);
   uint32_t (*createSprite)(const char* filename, int spriteSize);
-  void (*drawSprite)(uint32_t spriteHandle, int x, int y);
+  void (*drawSprite)(uint32_t spriteHandle, int x, int y, int color, int frame);
   void (*clearSprite)(uint32_t spriteHandle);
   void (*freeSprite)(uint32_t spriteHandle);
   int  (*initGameMatrix)();
@@ -82,6 +82,7 @@ typedef struct MicroDosAPI_t {
   uint32_t (*sdRead)(void* fileHandle, void* buffer, uint32_t size, uint32_t count);
   uint32_t (*sdWrite)(void* fileHandle, const void* buffer, uint32_t size, uint32_t count);
   void (*sdClose)(void* filehandle);
+  uint32_t (*createCollisionMap)(int x, int y, int w, int h, int color, int finalCols, int finalRows, int* map);
 } MicroDosAPI;
 
 extern MicroDosAPI kernelAPI;
