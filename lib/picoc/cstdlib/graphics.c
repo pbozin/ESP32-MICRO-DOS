@@ -88,7 +88,7 @@ void GraphicsCreateSprite(struct ParseState *Parser, struct Value *ReturnValue, 
 
 void GraphicsDrawSprite(struct ParseState *Parser, struct Value *ReturnValue, struct Value **Param, int NumArgs)
 {
-    kernelAPI.drawSprite(Param[0]->Val->Integer, Param[1]->Val->Integer, Param[2]->Val->Integer);
+    kernelAPI.drawSprite(Param[0]->Val->Integer, Param[1]->Val->Integer, Param[2]->Val->Integer, Param[3]->Val->Integer, Param[4]->Val->Integer);
 }
 
 void GraphicsClearSprite(struct ParseState *Parser, struct Value *ReturnValue, struct Value **Param, int NumArgs)
@@ -151,6 +151,11 @@ void GraphicsDrawJpeg(struct ParseState *Parser, struct Value *ReturnValue, stru
     kernelAPI.drawJpeg(Param[0]->Val->Pointer, Param[1]->Val->Integer, Param[2]->Val->Integer);
 }
 
+void GraphicsCreateCollisionMap(struct ParseState *Parser, struct Value *ReturnValue, struct Value **Param, int NumArgs)
+{
+    ReturnValue->Val->Integer = kernelAPI.createCollisionMap(Param[0]->Val->Integer, Param[1]->Val->Integer, Param[2]->Val->Integer, Param[3]->Val->Integer, Param[4]->Val->Integer, Param[5]->Val->Integer, Param[6]->Val->Integer, Param[7]->Val->Pointer);
+}
+
 /* all graphics.h functions */
 struct LibraryFunction GraphicsFunctions[] =
 {
@@ -178,13 +183,14 @@ struct LibraryFunction GraphicsFunctions[] =
     { GraphicsDrawJpeg,        "void     drawJpeg(char* filename, int x, int y);" },
 
     { GraphicsCreateSprite,    "int      createSprite(char* filename, int spriteSize);" },
-    { GraphicsDrawSprite,      "void     drawSprite(int spriteHandle, int x, int y);" },
+    { GraphicsDrawSprite,      "void     drawSprite(int spriteHandle, int x, int y, int color, int frame);" },
     { GraphicsClearSprite,     "void     clearSprite(int spriteHandle);" },
     { GraphicsFreeSprite,      "void     freeSprite(int spriteHandle);" },
 
     { GraphicsInitGameMatrix,  "int      initGameMatrix();" },
     { GraphicsFlushGameMatrix, "void     flushGameMatrix();" },
     { GraphicsCloseGameMatrix, "void     closeGameMatrix();" },
+    { GraphicsCreateCollisionMap,"int    createCollisionMap(int x, int y, int w, int h, int color, int finalCols, int finalRows, int* map);" },
 
     { NULL,                    NULL }
 };

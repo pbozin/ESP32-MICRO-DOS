@@ -28,7 +28,7 @@ NEW_STRING(system_prompt,
     "void fillCircle(int x, int y, int r, int colorId); "
     "void drawJpeg(char* filename, int x, int y); "
     "int createSprite(char* filename, int spriteSize); "
-    "void drawSprite(int spriteHandle, int x, int y); "
+    "void drawSprite(int spriteHandle, int x, int y, int frame); "
     "void clearSprite(int spriteHandle); "
     "void freeSprite(int spriteHandle); "
     "int initGameMatrix(); "
