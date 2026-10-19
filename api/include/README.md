@@ -1,4 +1,5 @@
 ## 📚 Table of Contents
+---
 
 - [📁 Group 1: Console, Terminal & Text Operations](#-group 1-console-terminal--text-operations)
 - [🎨 Group 2: Low-Level Vector Graphics](#-group-2-low-level-vector-graphics)
@@ -654,13 +655,22 @@ Analyzes coordinate space parameters inside a specific bounded region to look fo
 * Returns a verification token status value confirming map validation properties.
 
 ---
-
 ## 🔌 Group 7: Hardware Serial Port Communications (UART2) & Storage Management
 
-This section covers functions for managing the secondary hardware serial port (UART2) and storage operations (SD card file handling). For detailed function signatures and usage instructions, please refer to the documentation at {Link: Documentation Source https://example.com}.
+This section covers functions for managing the secondary hardware serial port (UART2) and storage operations (SD card file handling).
 
-* **Serial Functions:** `serialOpen`, `serialWrite`, `serialRead`, and `serialClose` handle initialization, data transmission, non-blocking reading, and resource release for the UART2 interface.
-* **Storage Functions:** `sdOpen`, `sdRead`, `sdWrite`, and `sdClose` manage file streams, reading, writing, and proper closure/flushing on SD media.
+### Functions Overview
+#### **Serial Functions:** `serialOpen`, `serialWrite`, `serialRead`, and `serialClose` handle initialization, data transmission, non-blocking reading, and resource release for the UART2 interface.
+* **`serialOpen(uint32_t baud, int txPin, int rxPin)`**: Initializes UART2 with specified speed and pins, returning `0` on success or `-1` if protected.
+* **`serialWrite(const uint8_t* buffer, unsigned int length)`**: Transmits raw binary data arrays over the active UART connection.
+* **`serialRead(uint8_t* buffer, unsigned int maxLength)`**: Non-blocking read from the UART input queue, returning the byte count, `0`, or `-1` on error.
+* **`serialClose()`**: Shuts down the secondary UART module and frees pins back to GPIO.
+
+#### **Storage Functions:** `sdOpen`, `sdRead`, `sdWrite`, and `sdClose` manage file streams, reading, writing, and proper closure/flushing on SD media.
+* **`sdOpen(const char* filename, const char* mode)`**: Opens an asset path on mounted storage, returning a file handle or null (`0`) on failure.
+* **`sdRead(void* fileHandle, void* buffer, uint32_t size, uint32_t count)`**: Reads data blocks from an open file stream into a destination buffer.
+* **`sdWrite(void* fileHandle, const void* buffer, uint32_t size, uint32_t count)`**: Writes data blocks from a buffer to the storage media file stream.
+* **`sdClose(void* filehandle)`**: Flushes data, saves metrics, and closes the active file stream.
 
 ---
 
