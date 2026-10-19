@@ -81,13 +81,13 @@ Run these commands directly inside the interactive touch console interface:
 
 You can develop high-performance native apps for MicroDOS inside standard IDEs (like VS Code) using the provided PlatformIO SDK layout structure.
 
-### 1. App SDK Framework (`api/inlude/microdos_api.h`)
+### 1. App SDK Framework (`api/inlude/microdos_api.h`)(docs/README_api.md)
 Native applications interface with the operating system through a unified BIOS jump table vector map. It features all needed overrides to ensure you can use standard memory structures safely without bloating the heap or running into alignment erorrs:
 
-### 2. 3D Drawing Helpers (`api/include/microdos_3d.h`)
+### 2. 3D Drawing Helpers (`api/include/microdos_3d.h`)(docs/README_3d.md)
 Helpers for rendering, scaling and morphing or wireframe objects.
 
-### 3. String Utilities (`api/include/microdos_util.h`)
+### 3. String Utilities (`api/include/microdos_util.h`)(docs/README_util.md)
 String utilities, replacement for missing standard library functions.
 
 ### 4. **[DEPRECATED]** Integer Math Helpers (`api/include/microdos_math.h`)
