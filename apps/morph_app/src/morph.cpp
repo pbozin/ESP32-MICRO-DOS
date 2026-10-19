@@ -13,13 +13,19 @@ static const Vector3D cubeLayout[8] __attribute__((aligned(4))) = {
     {-1.0f,  1.0f,  1.0f}
 };
 
-// --- Shape 2: An Octahedron (Collapsed Cube) ---
+// --- Shape 2: An Octahedron ---
 static const Vector3D octaLayout[8] __attribute__((aligned(4))) = {
-    { 0.0f,  0.0f, -1.414f}, { 1.414f, 0.0f,  0.0f}, { 0.0f,  0.0f,  1.414f}, {-1.414f, 0.0f,  0.0f},
-    { 0.0f,  0.0f, -1.414f}, { 0.0f, -1.414f, 0.0f}, { 0.0f,  0.0f,  1.414f}, { 0.0f,  1.414f, 0.0f}
+    { 0.0f, -1.414f,  0.0f}, // 0: Bottom mid
+    { 1.414f,  0.0f,  0.0f}, // 1: Right mid
+    { 0.0f,  1.414f,  0.0f}, // 2: Top mid
+    {-1.414f,  0.0f,  0.0f}, // 3: Left mid
+    { 0.0f,  0.0f, -1.414f}, // 4: Front tip
+    { 1.414f,  0.0f,  0.0f}, // 5: Right mid (Shared with 1)
+    { 0.0f,  0.0f,  1.414f}, // 6: Back tip
+    {-1.414f,  0.0f,  0.0f}  // 7: Left mid (Shared with 3)
 };
 
-// --- Shape 3: A Tetrahedron (Cube collapsed into 4 nodes) ---
+// --- Shape 3: A Tetrahedron ---
 static const Vector3D tetraLayout[8] __attribute__((aligned(4))) = {
     {-1.2f, -1.2f, -1.2f}, // (Node A)
     { 1.2f,  1.2f, -1.2f}, // (Node B)
@@ -89,9 +95,7 @@ int _start(int argc, char** argv, MicroDosAPI* api) {
 
         fillRect(0, 0, getTermWidth(), getTermHeight(), BLACK);
 
-        int strokeColor = CYAN;
-        if (currentGlobalState > 1.0f)     strokeColor = GREEN;
-        else if (currentGlobalState > 0.5f) strokeColor = MAGENTA;
+        int strokeColor = MAGENTA;
 
         for (int i = 0; i < 12; i++) {
             uint8_t a = wireframeTopology[i].p1;
