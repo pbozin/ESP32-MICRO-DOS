@@ -84,7 +84,7 @@ Run these commands directly inside the interactive touch console interface:
 
 ---
 
-<img width="720" alt="help" src="https://github.com/user-attachments/assets/12d66286-9711-44ba-9187-09ea3d00282d" />
+<img width="720" alt="help" src="https://github.com/user-attachments/assets/f00c9d37-d9c1-4132-8c63-5d2700cf5482" />
 
 ---
 
