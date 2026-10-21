@@ -1520,7 +1520,7 @@ char getKeyPress(bool blocking) {
 
     if (triggeredLongPress) {
       captureScreenshot();
-    } 
+    }
   }
 
   if (tft.getTouch(&touchX, &touchY)) {
@@ -3098,6 +3098,12 @@ void processCommand(const char* rawCmd) {
         int startScreenX = 74 + (cx * cellSize);
         int startScreenY = 50 + (cy * cellSize);
 
+        if (TFT_WIDTH < 320) {
+            cellSize = 160 / currentW;
+            startScreenX = 54 + (cx * cellSize);
+            startScreenY = 50 + (cy * cellSize);
+        }
+
         kernelAPI.fillRect(startScreenX, startScreenY, cellSize, cellSize, hwColor);
         if (hasCursor) {
             uint16_t borderCol = (hwColor == 1) ? 3 : 1;
@@ -3107,6 +3113,11 @@ void processCommand(const char* rawCmd) {
 
     auto drawSidePalette = [&]() {
 	int pSize = 30;
+
+        if (TFT_WIDTH < 320) {
+	    pSize = 20;
+	}
+
         for (int i = 0; i < 16; i++) {
             int col = i % 2;
             int row = i / 2;
@@ -3140,7 +3151,12 @@ void processCommand(const char* rawCmd) {
             kernelAPI.println(headerMsg);
 
             int cellSize = 240 / currentW;
-            kernelAPI.drawRect(73, 49, cellSize * currentW + 2, cellSize * currentH + 2, 15);
+            if (TFT_WIDTH < 320) {
+                cellSize = 160 / currentW;
+                kernelAPI.drawRect(53, 49, cellSize * currentW + 2, cellSize * currentH + 2, 15);
+	    } else {
+                kernelAPI.drawRect(73, 49, cellSize * currentW + 2, cellSize * currentH + 2, 15);
+	    }
 	    drawSidePalette();
             for (int y = 0; y < currentH; y++) {
                 for (int x = 0; x < currentW; x++) {
@@ -3156,21 +3172,55 @@ void processCommand(const char* rawCmd) {
             int tx = touchState.x;
             int ty = touchState.y;
 
-            if (tx >= 1 && tx <= 60 && ty >= 50 && ty <= 274) {
-                int col = (tx - 1) / 28;
-                int row = (ty - 50) / 28;
+	    int tX = 1;
+	    int TX = 60;
+	    int tY = 50;
+	    int TY = 300;
+
+            if (TFT_WIDTH < 320) {
+	        tX = 1;
+	        TX = 40;
+	        tY = 50;
+	        TY = 220;
+	    }
+            if (tx >= tX && tx <= TX && ty >= tY && ty <= TY) {
+                int col = (tx - 1) / 30;
+                int row = (ty - 50) / 30;
                 int selectedColor = (row * 2) + col;
+
+                if (TFT_WIDTH < 320) {
+                    col = (tx - 1) / 20;
+                    row = (ty - 50) / 20;
+                    selectedColor = (row * 2) + col;
+		}
 
                 if (selectedColor >= 0 && selectedColor < 16 && selectedColor != activeColorIdx) {
                     activeColorIdx = selectedColor;
                     drawSidePalette();
                 }
             }
-            else if (tx >= 70 && tx <= 310 && ty >= 50 && ty <= 290) {
+            else {
+              if (TFT_WIDTH < 320) {
+	        tX = 50;
+	        TX = 220;
+	        tY = 50;
+	        TY = 220;
+	      } else {
+	        tX = 70;
+	        TX = 320;
+	        tY = 50;
+	        TY = 300;
+	      }
+	      if (tx >= tX && tx <= TX && ty >= tY && ty <= TY) {
                 int cellSize = 240 / currentW;
                 int cellX = (tx - 70) / cellSize;
                 int cellY = (ty - 50) / cellSize;
 
+                if (TFT_WIDTH < 320) {
+                    cellSize = 160 / currentW;
+                    cellX = (tx - 50) / cellSize;
+                    cellY = (ty - 50) / cellSize;
+		}
                 if (cellX >= 0 && cellX < currentW && cellY >= 0 && cellY < currentH) {
                     uint8_t oldColor = getPixel(currentFrame, cellX, cellY);
                     if (oldColor != activeColorIdx) {
@@ -3180,6 +3230,7 @@ void processCommand(const char* rawCmd) {
                         drawGraphicCellAt(cellX, cellY, isCursor);
                     }
                 }
+	      }
             }
         }
 
