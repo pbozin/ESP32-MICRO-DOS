@@ -1488,9 +1488,6 @@ char getKeyPress(bool blocking) {
   char pressedKey = 0;
   int maxDelay = KEY_FRAME_TIME;
 
-          if (digitalRead(HARD_BREAK_PIN) == LOW) {
-		  captureScreenshot();
-	  }
   if (tft.getTouch(&touchX, &touchY)) {
 
     if (touchX < 1)
