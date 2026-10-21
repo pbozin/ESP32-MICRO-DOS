@@ -1,4 +1,4 @@
-# Precompiled Firmware Releases [version 2026-10-18] 🚀
+# Precompiled Firmware Releases [version 2026-10-21] 🚀
 
 This directory contains fully merged, production-ready factory images for **ESP32-MICRO-DOS**. 
 
@@ -9,21 +9,21 @@ Unlike standard firmware files, these `.factory.bin` images are monolithic. They
 Please select the specific binary that matches your exact display hardware:
 
 ### 🖥️ Resistive Display Architecture (Classic SPI)
-*   **`ESP32-2432S028R.firmware.factory.bin`**
+*   **`CYD_ILI9341.firmware.factory.bin`**
     *   Target: ESP32-WROOM **ESP32 Cheap Yellow Display (CYD)** 2.8" Resistive Touch Screen.
     *   Display Controller: ST7789 (SPI).
     *   Backlight pin 21
-*   **`E32R40T.firmware.factory.bin`**
+*   **`CYD_ST7796.firmware.factory.bin`**
     *   Target: ESP32-DOWD 4.0" variant boards utilizing resistive touch mapping.
     *   Display Controller: ST7796 (SPI).
     *   Backlight pin 27
-*   **`E32R32P.firmware.factory.bin`**
+*   **`CYD_ST7789.firmware.factory.bin`**
     *   Target: ESP32-DOWD 3.2" variant boards utilizing resistive touch mapping.
     *   Display Controller: ST7789 (SPI).
     *   Backlight pin 27
 
 ### 📱 Capacitive Display Architecture (High-Res QSPI)
-*   **`JC3248W535C.firmware.factory.bin`**
+*   **`JC3248.firmware.factory.bin`**
     *   Target: ESP32-S3 3.5" Smart Display module.
     *   Display Controller: AXS15231B interface running over an I2C capacitive multi-touch grid.
     *   Backlight pin 1 
@@ -38,7 +38,7 @@ Please select the specific binary that matches your exact display hardware:
 If you have `esptool.py` installed via Python or PlatformIO, connect your board via USB and execute the following command (replace with your specific filename):
 
 ```bash
-esptool.py write_flash 0x0 ESP32-2432S028R.firmware.factory.bin
+esptool.py write_flash 0x0 CYD_ILI9341.firmware.factory.bin
 ```
 
 ### Method 2: Graphical User Interface (GUI)
