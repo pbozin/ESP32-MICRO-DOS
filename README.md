@@ -90,7 +90,8 @@ Run these commands directly inside the interactive touch console interface:
 ---
 
 <p align="center">
-<img width="360" alt="help" src="https://github.com/user-attachments/assets/f00c9d37-d9c1-4132-8c63-5d2700cf5482" />
+<img width="360" alt="help" src="https://github.com/user-attachments/assets/f00c9d37-d9c1-4132-8c63-5d2700cf5482" /> &nbsp;
+<img width="360" alt="console" src="https://github.com/user-attachments/assets/d4507cff-4386-4385-8cde-92a2d9c32316" />
 </p>
 
 ---
