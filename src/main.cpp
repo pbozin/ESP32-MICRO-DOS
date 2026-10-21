@@ -174,6 +174,30 @@ const uint16_t ramOSPalette[16] = {
     TFT_DARKGREY    // Index 15  <- Chroma key or dark grey
 };
 
+uint8_t getClosestPaletteIndex(uint16_t color) {
+    int r = (color >> 11) & 0x1F;
+    int g = (color >> 5)  & 0x3F;
+    int b = color         & 0x1F;
+
+    int minDistance = 0x7FFFFFFF;
+    uint8_t closestIndex = 0;
+
+    for (uint8_t i = 0; i < 16; i++) {
+        uint16_t pColor = ramOSPalette[i];
+        int dr = r - ((pColor >> 11) & 0x1F);
+        int dg = g - ((pColor >> 5)  & 0x3F);
+        int db = b - (pColor         & 0x1F);
+
+        int distance = (dr * dr) + (dg * dg) + (db * db);
+        if (distance < minDistance) {
+            minDistance = distance;
+            closestIndex = i;
+            if (distance == 0) break;
+        }
+    }
+    return closestIndex;
+}
+
 #define TERM_COLS   int(TFT_WIDTH / CHAR_WIDTH)
 #define TERM_ROWS   int(TFT_WIDTH / CHAR_HEIGHT)
 
@@ -466,10 +490,24 @@ const uint16_t ramOSPalette[16] = {
       for (int16_t row = 0; row < h; row++) {
         for (int16_t col = 0; col < w; col++) {
           uint16_t color = bitmap[row * w + col];
-          uint8_t closestIndex = 0;
-          drawPixel(x + col, y + row, closestIndex);
+          drawPixel(x + col, y + row, color);
         }
       }
+    }
+
+    void pushPacked4BitImage(int16_t x, int16_t y, int16_t w, int16_t h, const uint8_t* packedBitmap) {
+        if (!_fb) return;
+
+        int totalPixels = w * h;
+        for (int i = 0; i < totalPixels; i++) {
+            int localX = i % w;
+            int localY = i / w;
+            int targetX = x + localX;
+            int targetY = y + localY;
+            if (targetX < 0 || targetX >= _w || targetY < 0 || targetY >= _h) continue;
+            uint8_t colorIndex = (i % 2 == 0) ? (packedBitmap[i / 2] >> 4) : (packedBitmap[i / 2] & 0x0F);
+            drawPixel(targetX, targetY, colorIndex);
+        }
     }
 
     void pushSprite(int16_t x, int16_t y) {
@@ -496,6 +534,12 @@ const uint16_t ramOSPalette[16] = {
   };
 
 #endif
+
+static TFT_eSprite bgCanvas = TFT_eSprite(&tft);
+static TFT_eSprite renderSprite = TFT_eSprite(&tft);
+static TFT_eSprite tempSprite = TFT_eSprite(&tft);
+
+#define MATRIX_ACTIVE (bgCanvas.frameBuffer(0) != nullptr)
 
 #ifndef ENABLE_PICOC
 typedef struct TouchState_t { bool isPressed; int x; int y; } TouchState;
@@ -651,12 +695,6 @@ static int scrollOffset = 0;
 static int activeRowIndex = 0;
 
 static bool symbolModeActive = false;
-
-static TFT_eSprite bgCanvas = TFT_eSprite(&tft);
-static TFT_eSprite renderSprite = TFT_eSprite(&tft);
-static TFT_eSprite tempSprite = TFT_eSprite(&tft);
-
-#define MATRIX_ACTIVE (bgCanvas.frameBuffer(0) != nullptr)
 
 struct OSSprite_t {
     bool isOnScreen = false;
@@ -1237,30 +1275,6 @@ void drawStatusBar() {
 }
 
 #if defined(ENABLE_JPEG)
-uint8_t getClosestPaletteIndex(uint16_t color) {
-    int r = (color >> 11) & 0x1F;
-    int g = (color >> 5)  & 0x3F;
-    int b = color         & 0x1F;
-
-    int minDistance = 0x7FFFFFFF;
-    uint8_t closestIndex = 0;
-
-    for (uint8_t i = 0; i < 16; i++) {
-        uint16_t pColor = ramOSPalette[i];
-        int dr = r - ((pColor >> 11) & 0x1F);
-        int dg = g - ((pColor >> 5)  & 0x3F);
-        int db = b - (pColor         & 0x1F);
-
-        int distance = (dr * dr) + (dg * dg) + (db * db);
-        if (distance < minDistance) {
-            minDistance = distance;
-            closestIndex = i;
-            if (distance == 0) break;
-        }
-    }
-    return closestIndex;
-}
-
 void convert16BitTo4Bit(const uint16_t* input, uint32_t numPixels, uint8_t* output) {
     for (uint32_t i = 0; i < numPixels; i += 2) {
         uint16_t pixel1 = (input[i] << 8) | (input[i] >> 8);
@@ -1282,7 +1296,11 @@ bool tft_output(int16_t x, int16_t y, uint16_t w, uint16_t h, uint16_t* bitmap) 
   if (MATRIX_ACTIVE) {
     uint8_t *convmap = (uint8_t*)malloc((w*h)/2);
     convert16BitTo4Bit(bitmap, w*h, convmap);
+#if defined(BOARD_JC3248)
+    bgCanvas.pushPacked4BitImage(x, y, w, h, convmap);
+#else
     bgCanvas.pushImage(x, y, w, h, (uint16_t*)convmap);
+#endif
     free(convmap);
   } else {
     tft.pushImage(x, y, w, h, bitmap);
@@ -1317,6 +1335,9 @@ void loadJpegToScreen(const char* filename, int16_t xOut, int16_t yOut) {
   if (MATRIX_ACTIVE) {
     bgCanvas.pushSprite(0, 0);
   }
+#if defined(BOARD_JC3248)
+  canvas_bridge->flush();
+#endif
 
   uint32_t duration = millis() - startTime;
 }
@@ -2936,6 +2957,311 @@ void processCommand(const char* rawCmd) {
     }
     return;
   }
+  if (strncmp(cmd, "SPREDIT", 7) == 0) {
+    char filename[FILENAME_SIZE];
+    memset(filename, 0, sizeof(filename));
+
+    if (strlen(cmd) > 8 && cmd[7] == ' ') {
+        strncpy(filename, cmd + 8, FILENAME_SIZE - 1);
+        trimCString(filename);
+        memset(fixedFilename, 0, FILENAME_SIZE);
+        if (filename[0] != '/') {
+          snprintf(fixedFilename, FILENAME_SIZE, "/%s", filename);
+        } else {
+          strncpy(fixedFilename, filename, FILENAME_SIZE);
+          fixedFilename[FILENAME_SIZE - 1] = '\0';
+      }
+    }
+
+    uint16_t savedFgColor = currentActivePaletteId;
+
+    int currentW = 8;
+    int currentH = 8;
+    const int maxDim = 40;
+    const int maxFrames = 12;
+
+    int cursorX = 0, cursorY = 0;
+    int prevCursorX = 0, prevCursorY = 0;
+    bool forceFullRedraw = true;
+
+    int menuTogglePage = 0;
+    kernelAPI.setFKeys(" <", " >", " ^", " v", " MENU");
+
+    int currentFrame = 1;
+    int totalFrames = 1;
+
+    uint8_t* memoryStripBuffer = (uint8_t*)malloc(maxFrames * (maxDim * maxDim / 2));
+    memset(memoryStripBuffer, 0, (maxFrames * (maxDim * maxDim / 2)));
+
+    auto getPixel = [&](int fIdx, int x, int y) -> uint8_t {
+        int frameOffset = (fIdx - 1) * (maxDim * maxDim / 2);
+        int pixelIdx = (y * maxDim) + x;
+        int byteIdx = frameOffset + (pixelIdx >> 1);
+        if ((pixelIdx & 1) == 0) return (memoryStripBuffer[byteIdx] >> 4) & 0x0F;
+        else return memoryStripBuffer[byteIdx] & 0x0F;
+    };
+
+    auto setPixel = [&](int fIdx, int x, int y, uint8_t color) {
+        int frameOffset = (fIdx - 1) * (maxDim * maxDim / 2);
+        int pixelIdx = (y * maxDim) + x;
+        int byteIdx = frameOffset + (pixelIdx >> 1);
+        if ((pixelIdx & 1) == 0) {
+            memoryStripBuffer[byteIdx] = (memoryStripBuffer[byteIdx] & 0x0F) | ((color & 0x0F) << 4);
+        } else {
+            memoryStripBuffer[byteIdx] = (memoryStripBuffer[byteIdx] & 0xF0) | (color & 0x0F);
+        }
+    };
+
+    if (strlen(fixedFilename) > 0 && sdAvailable() && SD.exists(fixedFilename)) {
+        File f = SD.open(fixedFilename, FILE_READ);
+        if (f) {
+            size_t fileSize = f.size();
+            bool dimensionsFound = false;
+
+            if (fileSize > 0) {
+                for (int testDim = maxDim; testDim >= 2; testDim -= 2) {
+                    int bytesPerFrame = testDim * (testDim / 2);
+
+                    if (fileSize % bytesPerFrame == 0) {
+                        int deducedFrames = fileSize / bytesPerFrame;
+
+                        if (deducedFrames <= maxFrames) {
+                            currentW = testDim;
+                            currentH = testDim;
+                            totalFrames = deducedFrames;
+                            dimensionsFound = true;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if (dimensionsFound) {
+                for (int frm = 1; frm <= totalFrames; frm++) {
+                    for (int y = 0; y < currentH; y++) {
+                        for (int x = 0; x < currentW; x += 2) {
+                            if (f.available()) {
+                                uint8_t b = f.read();
+                                setPixel(frm, x, y, (b >> 4) & 0x0F);
+                                if (x + 1 < currentW) {
+                                    setPixel(frm, x + 1, y, b & 0x0F);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            f.close();
+        }
+    }
+
+    auto drawGraphicCellAt = [&](int cx, int cy, bool hasCursor) {
+        uint8_t colorIdx = getPixel(currentFrame, cx, cy);
+        uint16_t hwColor = colorIdx;
+
+        int cellSize = 240 / currentW;
+        int startScreenX = 40 + (cx * cellSize);
+        int startScreenY = 50 + (cy * cellSize);
+
+        kernelAPI.fillRect(startScreenX, startScreenY, cellSize, cellSize, hwColor);
+        if (hasCursor) {
+            uint16_t borderCol = (hwColor == 1) ? 3 : 1;
+            kernelAPI.drawRect(startScreenX, startScreenY, cellSize, cellSize, borderCol);
+        }
+    };
+    bool editing = true;
+    bool shouldSave = false;
+
+    while(editing) {
+        if (forceFullRedraw) {
+            kernelAPI.clear();
+            kernelAPI.setTextColor(1);
+
+            char headerMsg[64];
+            snprintf(headerMsg, sizeof(headerMsg), "FILE:  %s\nDIM:   %dx%d px\nFRAME: %d/%d",
+                     (strlen(fixedFilename) > 0 ? fixedFilename : "UNNAMED.SPR"), currentW, currentH, currentFrame, totalFrames);
+            kernelAPI.println(headerMsg);
+
+            int cellSize = 240 / currentW;
+            kernelAPI.drawRect(39, 49, cellSize * currentW + 2, cellSize * currentH + 2, 15);
+            for (int y = 0; y < currentH; y++) {
+                for (int x = 0; x < currentW; x++) {
+                    drawGraphicCellAt(x, y, (x == cursorX && y == cursorY));
+                }
+            }
+            forceFullRedraw = false;
+        }
+
+        char key = kernelAPI.inkey();
+        if (key != 0) {
+            prevCursorX = cursorX;
+            prevCursorY = cursorY;
+            bool valueUpdated = false;
+
+            if (key >= '0' && key <= '9') {
+                setPixel(currentFrame, cursorX, cursorY, key - '0');
+                valueUpdated = true;
+            } else if (key >= 'A' && key <= 'F') {
+                setPixel(currentFrame, cursorX, cursorY, 10 + (key - 'A'));
+                valueUpdated = true;
+            } else if (key >= 'a' && key <= 'f') {
+                setPixel(currentFrame, cursorX, cursorY, 10 + (key - 'a'));
+                valueUpdated = true;
+            }
+
+            if (menuTogglePage == 0) {
+                // PAGE 0: NAVIGATION & DYNAMIC GROW CONTROLS
+                switch(key) {
+                    case '\x11': if (cursorX > 0) cursorX--; break; // F1: Left Arrow
+                    case '\x12': // F2: Right Arrow + Expansion (+2 Grid Size)
+                        if (cursorX < currentW - 1) cursorX++;
+                        else if (currentW + 2 <= maxDim) {
+                            currentW += 2; currentH += 2; cursorX++;
+                            forceFullRedraw = true;
+                        }
+                        break;
+                    case '\x13': if (cursorY > 0) cursorY--; break; // F3: Up Arrow
+                    case '\x14': // F4: Down Arrow + Expansion (+2 Grid Size)
+                        if (cursorY < currentH - 1) cursorY++;
+                        else if (currentH + 2 <= maxDim) {
+                            currentW += 2; currentH += 2; cursorY++;
+                            forceFullRedraw = true;
+                        }
+                        break;
+                    case '\x15': // F5: Step forward into File Action Utilities menu
+                        menuTogglePage = 1;
+                        kernelAPI.setFKeys(" SAVE", " TRIM", " ESC", " ANIM", " MENU");
+                        break;
+                }
+            } else if (menuTogglePage == 1) {
+                // PAGE 1: SYSTEM FILE UTILITIES LAYOUT
+                switch(key) {
+                    case '\x11': // F1: Confirm Save Changes & Exit
+                        shouldSave = true;
+                        editing = false;
+                        break;
+                    case '\x12': // F2: Trim Canvas Bounds Downward (-2 Matrix Step Size)
+                        if (currentW > 4 && currentH > 4) {
+                            currentW -= 2; currentH -= 2;
+                            if (cursorX >= currentW) cursorX = currentW - 1;
+                            if (cursorY >= currentH) cursorY = currentH - 1;
+                            forceFullRedraw = true;
+                        }
+                        break;
+                    case '\x13': // F3: Direct Discard Exit
+                        shouldSave = false;
+                        editing = false;
+                        break;
+                    case '\x14': // F4: Hard Clear Active Frame Memory Canvas
+                        for(int y = 0; y < currentH; y++) {
+                            for(int x = 0; x < currentW; x++) setPixel(currentFrame, x, y, 0);
+                        }
+                        forceFullRedraw = true;
+                        break;
+                    case '\x15': // F5: Advance to Animation Management sub-menu
+                        menuTogglePage = 2;
+                        kernelAPI.setFKeys("<FRAME", "FRAME>", "FRAME-", "FRAME+", " MENU");
+                        break;
+                }
+            } else if (menuTogglePage == 2) {
+                // PAGE 2: ANIMATION LAYER CONTROL PIPELINE
+                switch(key) {
+                    case '\x11': // F1: Jump backward one frame instance (<FRAME)
+                        if (currentFrame > 1) {
+                            currentFrame--;
+                            forceFullRedraw = true;
+                        }
+                        break;
+                    case '\x12': // F2: Advance forward one frame instance (FRAME>)
+                        if (currentFrame < totalFrames) {
+                            currentFrame++;
+                            forceFullRedraw = true;
+                        }
+                        break;
+                    case '\x13': // F3: Trim/Delete the trailing frame block out of RAM sequence (FRAME-)
+                        if (totalFrames > 1) {
+                            totalFrames--;
+                            if (currentFrame > totalFrames) currentFrame = totalFrames;
+                            forceFullRedraw = true;
+                        }
+                        break;
+                    case '\x14': // F4: Append a new empty duplicate frame context at the end (FRAME+)
+                        if (totalFrames < maxFrames) {
+                            totalFrames++;
+                            currentFrame = totalFrames;
+                            for(int y = 0; y < maxDim; y++) {
+                                for(int x = 0; x < maxDim; x++) setPixel(currentFrame, x, y, 0);
+                            }
+                            forceFullRedraw = true;
+                        }
+                        break;
+                    case '\x15': // F5: Cycle back down cleanly into original Page 0 navigation keys
+                        menuTogglePage = 0;
+                        kernelAPI.setFKeys(" <", " >", " ^", " v", " MENU");
+                        break;
+                }
+            }
+
+            if (!forceFullRedraw) {
+                if (prevCursorX != cursorX || prevCursorY != cursorY || valueUpdated) {
+                    drawGraphicCellAt(prevCursorX, prevCursorY, false);
+                }
+                drawGraphicCellAt(cursorX, cursorY, true);
+            }
+            delay(200);
+        }
+        delay(KEY_FRAME_TIME);
+    }
+
+    kernelAPI.clearFKeys();
+    kernelAPI.clear();
+
+    if (shouldSave) {
+        if (strlen(fixedFilename) == 0) {
+            kernelAPI.setTextColor(5);
+            kernelAPI.println("Save Sprite? Enter filename (blank to discard):");
+            char userInputBuf[INPUT_BUF_SIZE];
+            memset(userInputBuf, 0, sizeof(userInputBuf));
+
+            kernelAPI.inputStr("> ", userInputBuf, FILENAME_SIZE - 1);
+            if (userInputBuf[0] != '/') {
+              snprintf(fixedFilename, FILENAME_SIZE, "/%s", userInputBuf);
+	    } else {
+              strncpy(fixedFilename, userInputBuf, FILENAME_SIZE - 1);
+	    }
+            trimCString(fixedFilename);
+        }
+
+        if (strlen(fixedFilename) > 0 && sdAvailable()) {
+            File f = SD.open(fixedFilename, FILE_WRITE);
+            if (f) {
+                for (int frm = 1; frm <= totalFrames; frm++) {
+                    for (int y = 0; y < currentH; y++) {
+                        for (int x = 0; x < currentW; x += 2) {
+                            uint8_t p1 = getPixel(frm, x, y);
+                            uint8_t p2 = (x + 1 < currentW) ? getPixel(frm, x + 1, y) : 0;
+                            uint8_t packedByte = (p1 << 4) | (p2 & 0x0F);
+                            f.write(packedByte);
+                        }
+                    }
+                }
+                f.close();
+                terminalPrintln("Raw multi-frame sprite strip saved successfully.");
+            } else {
+                terminalPrintln("Error: Failed to write output file onto SD media storage.");
+            }
+        } else {
+            terminalPrintln("Changes discarded.");
+        }
+    } else {
+        terminalPrintln("Sprite editor closed.\nChanges discarded.\nReady.");
+    }
+
+    free(memoryStripBuffer);
+    currentActivePaletteId = savedFgColor;
+    kernelAPI.setTextColor(currentActivePaletteId);
+    return;
+  }
   else if (strcmp(firstToken, "EDIT") == 0) {
     strncpy(previousPrompt, currentPrompt, PROMPT_SIZE - 1);
     previousPrompt[PROMPT_SIZE - 1] = '\0';
@@ -3528,27 +3854,21 @@ void processCommand(const char* rawCmd) {
     return;
   }
   else if (strcmp(firstToken, "HELP") == 0) {
-    terminalPrintln("SYS:  FREE, HELP, LIST, NEW, RUN");
-    terminalPrintln("DOS:  DIR, LOAD, LOAD$, SAVE, SAVE$,");
-    terminalPrintln("      DELETE");
-    terminalPrintln("CODE: BEEP, BGCOLOR, CIRCLE, CLEAR, COLOR,");
-#if defined(ENABLE_PICOC)
-    terminalPrintln("      COS(, CRUN, DELAY, DUMP, DUMPS, EDIT,");
-#else
-    terminalPrintln("      COS(, DELAY, DUMP, DUMPS, EDIT,");
-#endif
-    terminalPrintln("      EXEC, FALSE, FILLCIRCLE, FILLRECT,");
-#if defined(ENABLE_JPEG)
+    terminalPrintln("DOS:  DIR, DUMP, DUMPS, LOAD, LOAD$,");
+    terminalPrintln("      SAVE, SAVE$, DELETE");
+    terminalPrintln("SYS:  CRUN, EDIT, EXEC, FREE, HELP,");
+    terminalPrintln("      LIST, MEMMAP, NEW, RUN, SPREDIT,");
+    terminalPrintln("      WIFIUP, WIFIDOWN");
+    terminalPrintln("CODE: BEEP, BGCOLOR, CIRCLE, CLEAR,");
+    terminalPrintln("      COLOR, COS(, DELAY,");
+    terminalPrintln("      FALSE, FILLCIRCLE, FILLRECT,");
     terminalPrintln("      GOSUB, GOTO, HIGH, IF, IMVIEW,");
-#else
-    terminalPrintln("      GOSUB, GOTO, HIGH, IF,");
-#endif
-    terminalPrintln("      INKEY, INPUT, INREAD, INT(");
-    terminalPrintln("      IOSET, KEY, LET, LINE, LN(, LOW,");
-    terminalPrintln("      MEMMAP, PEEK, PLOT, POKE, PRINT,");
+    terminalPrintln("      INKEY, INPUT, INREAD, INT(,");
+    terminalPrintln("      IOSET, KEY, LET, LINE, LN(,");
+    terminalPrintln("      LOW, PEEK, PLOT, POKE, PRINT,");
     terminalPrintln("      RECT, RETURN, RND, RND(, SIN(,");
     terminalPrintln("      SQR(, TERMHEIGHT, TERMWIDTH, TOUCH,");
-    terminalPrintln("      TRUE, VAL(, WIFIUP, WIFIDOWN");
+    terminalPrintln("      TRUE, VAL(");
     return;
   }
   else {
@@ -5483,7 +5803,6 @@ void api_setup() {
   kernelAPI.flushGameMatrix = []() {
     if (MATRIX_ACTIVE) {
       bgCanvas.pushSprite(0, 0);
-    } else {
 #if defined(BOARD_JC3248)
      canvas_bridge->flush();
 #endif
