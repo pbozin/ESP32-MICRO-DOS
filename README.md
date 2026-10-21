@@ -1,6 +1,8 @@
-<img width="240" alt="go" src="https://github.com/user-attachments/assets/b5eedcbd-db0d-42d9-9d5a-5e65efd00053" /> |
-<img width="240" alt="chess" src="https://github.com/user-attachments/assets/6d88283a-2952-4353-bf6d-665407f43529" /> |
+<p align="center">
+<img width="240" alt="go" src="https://github.com/user-attachments/assets/b5eedcbd-db0d-42d9-9d5a-5e65efd00053" /> &nbsp;
+<img width="240" alt="chess" src="https://github.com/user-attachments/assets/6d88283a-2952-4353-bf6d-665407f43529" /> &nbsp;
 <img width="240" alt="bricks" src="https://github.com/user-attachments/assets/097d9da4-8c6c-46db-b757-24c1f5410a33" />
+</p>
 
 ---
 
@@ -40,8 +42,10 @@ MicroDOS implements a lightweight token streaming state-machine that communicate
 
 ---
 
-<img width="360" alt="ollama_c" src="https://github.com/user-attachments/assets/1fdc3b57-a5eb-48b2-96aa-fba67de17762" /> |
+<p align="center">
+<img width="360" alt="ollama_c" src="https://github.com/user-attachments/assets/1fdc3b57-a5eb-48b2-96aa-fba67de17762" /> &nbsp;
 <img width="360" alt="ollama-basic" src="https://github.com/user-attachments/assets/8ec660be-5760-4863-8e8a-260bddc49c5b" />
+</p>
 
 ---
 
@@ -53,9 +57,10 @@ To maintain fluid, zero-flicker rendering loops under rigorous RAM constraints, 
 
 ---
 
-<img width="360" alt="spredit" src="https://github.com/user-attachments/assets/5a37ab89-8b3b-4764-abe2-6c72fa05ce1d" /> |
+<p align="center">
+<img width="360" alt="spredit" src="https://github.com/user-attachments/assets/5a37ab89-8b3b-4764-abe2-6c72fa05ce1d" /> &nbsp;
 <img width="360" alt="pac" src="https://github.com/user-attachments/assets/b366e877-a8fe-4d55-a399-ee08a986a43e" />
-
+</p>
 
 ---
 
@@ -84,7 +89,9 @@ Run these commands directly inside the interactive touch console interface:
 
 ---
 
-<img width="720" alt="help" src="https://github.com/user-attachments/assets/f00c9d37-d9c1-4132-8c63-5d2700cf5482" />
+<p align="center">
+<img width="360" alt="help" src="https://github.com/user-attachments/assets/f00c9d37-d9c1-4132-8c63-5d2700cf5482" />
+</p>
 
 ---
 
