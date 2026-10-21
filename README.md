@@ -4,12 +4,6 @@
 
 ---
 
-<img width="240" alt="help" src="https://github.com/user-attachments/assets/700286a4-7262-4814-be58-1e8195dc1a24" /> |
-<img width="240" alt="ollama_c" src="https://github.com/user-attachments/assets/1fdc3b57-a5eb-48b2-96aa-fba67de17762" /> |
-<img width="240" alt="ollama-basic" src="https://github.com/user-attachments/assets/8ec660be-5760-4863-8e8a-260bddc49c5b" />
-
----
-
 # ESP32 MicroDOS
 
 An advanced, retro-futuristic operating system and interactive environment designed for ESP32 boards with touch display, including: 
@@ -44,11 +38,22 @@ MicroDOS implements a lightweight token streaming state-machine that communicate
 * **JSON Stream Tunneling:** Instead of inflating the memory footprint with heavy JSON string parsers, it parses network socket buffers byte-by-byte, using a sliding memory footprint window (`memmove`) to roll old history lines outward once bounds thresholds fill up.
 * **Code Injection Hook:** When contextually bound to `coder` mode, the terminal monitors incoming markdown tags. Encountering a ````basic```` markdown code block causes the OS to dump active interpretation tracks, capture the coming AI stream verbatim, and automatically inject the code into memory line-by-line via `storeLine()`. **The AI can rewrite the terminal program while it runs.**
 
+---
+
+<img width="360" alt="ollama_c" src="https://github.com/user-attachments/assets/1fdc3b57-a5eb-48b2-96aa-fba67de17762" /> |
+<img width="360" alt="ollama-basic" src="https://github.com/user-attachments/assets/8ec660be-5760-4863-8e8a-260bddc49c5b" />
+
+---
+
 ### 6. 4-Bit Color Sprite & Game Matrix
 To maintain fluid, zero-flicker rendering loops under rigorous RAM constraints, MicroDOS includes a specialized graphics compositor:
 * **Indexed Color Compression:** Uses a 16-color global fixed-index palette matrix, shrinking active image requirements down to 4 bits per pixel.
 * **Dirty-Rect Eraser Engine:** Sprites track their historical coordinate intersections. Rather than wiping the display buffer on ticks, the system automatically uses hardware-accelerated RLE decompression to restore *only* the specific background slices altered by moving graphics before blitting new structures.
 * **Chroma-Key Transparency:** Absolute color block Index 15 (`TFT_DARKGREY`) behaves as a mask bypass. The blitter maps coming pixel indices sequentially, dropping operations on Index 15 coordinates to allow background transparency.
+
+---
+
+<img width="740" alt="spredit" src="https://github.com/user-attachments/assets/5a37ab89-8b3b-4764-abe2-6c72fa05ce1d" />
 
 ---
 
@@ -74,6 +79,10 @@ Run these commands directly inside the interactive touch console interface:
 | `EXEC <binary>`| Native | Commands the dynamic linker to resolve, relocate, inject, and launch native precompiled compiled applications. |
 | `DUMP / DUMPS` | Forensic | Emulates the classic hex-dump inspector, generating binary matrix hexadecimal tracks or readable printable ASCII sweeps. |
 | `IMVIEW <file>, x, y`| Multimedia | Displays 16bit or 4bit color JPEG file from the micro SD card straight onto display buffers. |
+
+---
+
+<img width="740" alt="help" src="https://github.com/user-attachments/assets/700286a4-7262-4814-be58-1e8195dc1a24" />
 
 ---
 
