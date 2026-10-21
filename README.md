@@ -53,7 +53,9 @@ To maintain fluid, zero-flicker rendering loops under rigorous RAM constraints, 
 
 ---
 
-<img width="740" alt="spredit" src="https://github.com/user-attachments/assets/5a37ab89-8b3b-4764-abe2-6c72fa05ce1d" />
+<img width="360" alt="spredit" src="https://github.com/user-attachments/assets/5a37ab89-8b3b-4764-abe2-6c72fa05ce1d" /> |
+<img width="360" alt="pac" src="https://github.com/user-attachments/assets/b366e877-a8fe-4d55-a399-ee08a986a43e" />
+
 
 ---
 
