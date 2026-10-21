@@ -13,6 +13,7 @@ extern "C" {
 #include "picoc.h"
 extern jmp_buf HostExitBuf;
 }
+Picoc pc;
 #endif
 
 
@@ -1076,8 +1077,14 @@ String get_next_screenshot_name() {
     return String("/CAP_OVERFLOW.BMP");
 }
 
+bool screenshotCaptureInProgress = false;
+
 #if defined(BOARD_JC3248)
 bool captureScreenshot() {
+    if (screenshotCaptureInProgress) {
+	    return false;
+    }
+    screenshotCaptureInProgress = true;
     String targetPath = get_next_screenshot_name();
     const char * path = targetPath.c_str();
     int w = TFT_WIDTH;
@@ -1087,6 +1094,7 @@ bool captureScreenshot() {
 #if defined(SERIAL_DEBUG)
         Serial.println("Error: Sprite framebuffer pointer is null!");
 #endif
+        screenshotCaptureInProgress = false;
         return false;
     }
 
@@ -1099,6 +1107,7 @@ bool captureScreenshot() {
 #if defined(SERIAL_DEBUG)
         Serial.println("Failed to open file for writing!");
 #endif
+        screenshotCaptureInProgress = false;
         return false;
     }
 
@@ -1131,12 +1140,17 @@ bool captureScreenshot() {
 #if defined(SERIAL_DEBUG)
     Serial.println("Screen capture saved.");
 #endif
+    screenshotCaptureInProgress = false;
     return true;
 }
 
 #else
 
 bool captureScreenshot() {
+    if (screenshotCaptureInProgress) {
+	    return false;
+    }
+    screenshotCaptureInProgress = true;
     String targetPath = get_next_screenshot_name();
     const char * path = targetPath.c_str();
     int w = TFT_WIDTH;
@@ -1154,6 +1168,7 @@ bool captureScreenshot() {
 #if defined(SERIAL_DEBUG)
         Serial.println("Failed to open file for writing!");
 #endif
+        screenshotCaptureInProgress = false;
         return false;
     }
 
@@ -1162,7 +1177,10 @@ bool captureScreenshot() {
     uint8_t paddingBytes[3] = {0, 0, 0};
 
     uint8_t* ptr4Bit = (uint8_t*)bgCanvas.frameBuffer(0);
-    if (ptr4Bit == nullptr) return false;
+    if (ptr4Bit == nullptr) {
+      screenshotCaptureInProgress = false;
+      return false;
+    }
 
     for (int y = 0; y < h; y++) {
         for (int x = 0; x < w; x++) {
@@ -1197,6 +1215,7 @@ bool captureScreenshot() {
 #if defined(SERIAL_DEBUG)
     Serial.println("Screen capture saved.");
 #endif
+    screenshotCaptureInProgress = false;
     return true;
 }
 #endif
@@ -1487,6 +1506,22 @@ char getKeyPress(bool blocking) {
   uint16_t touchX = 0, touchY = 0;
   char pressedKey = 0;
   int maxDelay = KEY_FRAME_TIME;
+
+  if (digitalRead(HARD_BREAK_PIN) == LOW) {
+    unsigned long pressStartTime = millis();
+    bool triggeredLongPress = false;
+
+    while (digitalRead(HARD_BREAK_PIN) == LOW) {
+      if (!triggeredLongPress && (millis() - pressStartTime >= 2000)) {
+        triggeredLongPress = true;
+      }
+      delay(10);
+    }
+
+    if (triggeredLongPress) {
+      captureScreenshot();
+    } 
+  }
 
   if (tft.getTouch(&touchX, &touchY)) {
 
@@ -2550,9 +2585,9 @@ void printMemoryMap(bool showVars) {
 }
 
 #if defined(ENABLE_PICOC)
+
 void verifyCBuffer(const char* c_source, char* errorBuf, int errorBufSize) {
 
-    Picoc pc;
     PicocInitialize(&pc, 16 * 1024);
     PicocIncludeAllSystemHeaders(&pc);
 
@@ -2567,7 +2602,6 @@ void verifyCBuffer(const char* c_source, char* errorBuf, int errorBufSize) {
 int executeCBuffer(const char* c_source) {
     int runStatus = 0;
 
-    Picoc pc;
     PicocInitialize(&pc, 16 * 1024);
     PicocIncludeAllSystemHeaders(&pc);
 
@@ -2585,7 +2619,6 @@ int executeCBuffer(const char* c_source) {
 }
 
 void executeCProgram(const char* filename) {
-    Picoc pc;
     if (filename[0] == '\0') {
         PicocInitialize(&pc, 16 * 1024);
         PicocIncludeAllSystemHeaders(&pc);
