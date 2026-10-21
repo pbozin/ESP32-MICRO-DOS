@@ -3055,12 +3055,14 @@ void processCommand(const char* rawCmd) {
         }
     }
 
+    uint8_t activeColorIdx = 1;
+
     auto drawGraphicCellAt = [&](int cx, int cy, bool hasCursor) {
         uint8_t colorIdx = getPixel(currentFrame, cx, cy);
         uint16_t hwColor = colorIdx;
 
         int cellSize = 240 / currentW;
-        int startScreenX = 40 + (cx * cellSize);
+        int startScreenX = 74 + (cx * cellSize);
         int startScreenY = 50 + (cy * cellSize);
 
         kernelAPI.fillRect(startScreenX, startScreenY, cellSize, cellSize, hwColor);
@@ -3069,21 +3071,44 @@ void processCommand(const char* rawCmd) {
             kernelAPI.drawRect(startScreenX, startScreenY, cellSize, cellSize, borderCol);
         }
     };
+
+    auto drawSidePalette = [&]() {
+	int pSize = 30;
+        for (int i = 0; i < 16; i++) {
+            int col = i % 2;
+            int row = i / 2;
+
+            int bx = 1 + (col * pSize);
+            int by = 50 + (row * pSize);
+
+            kernelAPI.fillRect(bx, by, pSize, pSize, i);
+            kernelAPI.drawRect(bx, by, pSize, pSize, 15);
+
+            if (i == activeColorIdx) {
+                uint16_t cursorBorder = (i == 1) ? 3 : 1;
+                kernelAPI.drawRect(bx+1, by+1, pSize-2, pSize-2, cursorBorder);
+                kernelAPI.drawRect(bx+2, by+2, pSize-4, pSize-4, cursorBorder);
+            }
+        }
+    };
+
     bool editing = true;
     bool shouldSave = false;
+    TouchState touchState;
 
     while(editing) {
         if (forceFullRedraw) {
             kernelAPI.clear();
             kernelAPI.setTextColor(1);
 
-            char headerMsg[64];
+            char headerMsg[128];
             snprintf(headerMsg, sizeof(headerMsg), "FILE:  %s\nDIM:   %dx%d px\nFRAME: %d/%d",
                      (strlen(fixedFilename) > 0 ? fixedFilename : "UNNAMED.SPR"), currentW, currentH, currentFrame, totalFrames);
             kernelAPI.println(headerMsg);
 
             int cellSize = 240 / currentW;
-            kernelAPI.drawRect(39, 49, cellSize * currentW + 2, cellSize * currentH + 2, 15);
+            kernelAPI.drawRect(73, 49, cellSize * currentW + 2, cellSize * currentH + 2, 15);
+	    drawSidePalette();
             for (int y = 0; y < currentH; y++) {
                 for (int x = 0; x < currentW; x++) {
                     drawGraphicCellAt(x, y, (x == cursorX && y == cursorY));
@@ -3093,6 +3118,38 @@ void processCommand(const char* rawCmd) {
         }
 
         char key = kernelAPI.inkey();
+        kernelAPI.getTouch(&touchState);
+        if (touchState.isPressed) {
+            int tx = touchState.x;
+            int ty = touchState.y;
+
+            if (tx >= 1 && tx <= 60 && ty >= 50 && ty <= 274) {
+                int col = (tx - 1) / 28;
+                int row = (ty - 50) / 28;
+                int selectedColor = (row * 2) + col;
+
+                if (selectedColor >= 0 && selectedColor < 16 && selectedColor != activeColorIdx) {
+                    activeColorIdx = selectedColor;
+                    drawSidePalette();
+                }
+            }
+            else if (tx >= 70 && tx <= 310 && ty >= 50 && ty <= 290) {
+                int cellSize = 240 / currentW;
+                int cellX = (tx - 70) / cellSize;
+                int cellY = (ty - 50) / cellSize;
+
+                if (cellX >= 0 && cellX < currentW && cellY >= 0 && cellY < currentH) {
+                    uint8_t oldColor = getPixel(currentFrame, cellX, cellY);
+                    if (oldColor != activeColorIdx) {
+                        setPixel(currentFrame, cellX, cellY, activeColorIdx);
+
+                        bool isCursor = (cellX == cursorX && cellY == cursorY);
+                        drawGraphicCellAt(cellX, cellY, isCursor);
+                    }
+                }
+            }
+        }
+
         if (key != 0) {
             prevCursorX = cursorX;
             prevCursorY = cursorY;
@@ -3130,7 +3187,7 @@ void processCommand(const char* rawCmd) {
                         break;
                     case '\x15': // F5: Step forward into File Action Utilities menu
                         menuTogglePage = 1;
-                        kernelAPI.setFKeys(" SAVE", " TRIM", " ESC", " ANIM", " MENU");
+                        kernelAPI.setFKeys(" SAVE", " TRIM", " ESC", "CLEAR", " MENU");
                         break;
                 }
             } else if (menuTogglePage == 1) {
@@ -3185,12 +3242,17 @@ void processCommand(const char* rawCmd) {
                             forceFullRedraw = true;
                         }
                         break;
-                    case '\x14': // F4: Append a new empty duplicate frame context at the end (FRAME+)
+                    case '\x14': // F4: Append New Frame with Data Duplication (FRAME+)
                         if (totalFrames < maxFrames) {
+                            int sourceFrame = totalFrames;
                             totalFrames++;
                             currentFrame = totalFrames;
-                            for(int y = 0; y < maxDim; y++) {
-                                for(int x = 0; x < maxDim; x++) setPixel(currentFrame, x, y, 0);
+
+                            for (int y = 0; y < currentH; y++) {
+                                for (int x = 0; x < currentW; x++) {
+                                    uint8_t pixelColor = getPixel(sourceFrame, x, y);
+                                    setPixel(currentFrame, x, y, pixelColor);
+                                }
                             }
                             forceFullRedraw = true;
                         }
@@ -3856,19 +3918,27 @@ void processCommand(const char* rawCmd) {
   else if (strcmp(firstToken, "HELP") == 0) {
     terminalPrintln("DOS:  DIR, DUMP, DUMPS, LOAD, LOAD$,");
     terminalPrintln("      SAVE, SAVE$, DELETE");
+#if defined(ENABLE_PICOC)
     terminalPrintln("SYS:  CRUN, EDIT, EXEC, FREE, HELP,");
+#else
+    terminalPrintln("SYS:  EDIT, EXEC, FREE, HELP,");
+#endif
     terminalPrintln("      LIST, MEMMAP, NEW, RUN, SPREDIT,");
     terminalPrintln("      WIFIUP, WIFIDOWN");
     terminalPrintln("CODE: BEEP, BGCOLOR, CIRCLE, CLEAR,");
     terminalPrintln("      COLOR, COS(, DELAY,");
     terminalPrintln("      FALSE, FILLCIRCLE, FILLRECT,");
+#if defined(ENABLE_JPEG)
     terminalPrintln("      GOSUB, GOTO, HIGH, IF, IMVIEW,");
+#else
+    terminalPrintln("      GOSUB, GOTO, HIGH, IF,");
+#endif
     terminalPrintln("      INKEY, INPUT, INREAD, INT(,");
     terminalPrintln("      IOSET, KEY, LET, LINE, LN(,");
     terminalPrintln("      LOW, PEEK, PLOT, POKE, PRINT,");
     terminalPrintln("      RECT, RETURN, RND, RND(, SIN(,");
-    terminalPrintln("      SQR(, TERMHEIGHT, TERMWIDTH, TOUCH,");
-    terminalPrintln("      TRUE, VAL(");
+    terminalPrintln("      SQR(, TERMHEIGHT, TERMWIDTH,");
+    terminalPrintln("      TOUCH, TRUE, VAL(");
     return;
   }
   else {
