@@ -3269,7 +3269,7 @@ void processCommand(const char* rawCmd) {
                             forceFullRedraw = true;
                         }
                         break;
-                    case '\x15': // F5: Step forward into File Action Utilities menu
+		    case '\x15': // F5: Next Menu
                         menuTogglePage = 1;
                         kernelAPI.setFKeys(" SAVE", " TRIM", " ESC", "CLEAR", " MENU");
                         break;
@@ -3293,13 +3293,13 @@ void processCommand(const char* rawCmd) {
                         shouldSave = false;
                         editing = false;
                         break;
-                    case '\x14': // F4: Hard Clear Active Frame Memory Canvas
+                    case '\x14': // F4: Clear Active Frame
                         for(int y = 0; y < currentH; y++) {
                             for(int x = 0; x < currentW; x++) setPixel(currentFrame, x, y, 0);
                         }
                         forceFullRedraw = true;
                         break;
-                    case '\x15': // F5: Advance to Animation Management sub-menu
+		    case '\x15': // F5: Next Menu
                         menuTogglePage = 2;
                         kernelAPI.setFKeys("<FRAME", "FRAME>", "FRAME-", "FRAME+", " MENU");
                         break;
@@ -3319,16 +3319,16 @@ void processCommand(const char* rawCmd) {
                             forceFullRedraw = true;
                         }
                         break;
-                    case '\x13': // F3: Trim/Delete the trailing frame block out of RAM sequence (FRAME-)
+                    case '\x13': // F3: Delete the last frame (FRAME-)
                         if (totalFrames > 1) {
                             totalFrames--;
                             if (currentFrame > totalFrames) currentFrame = totalFrames;
                             forceFullRedraw = true;
                         }
                         break;
-                    case '\x14': // F4: Append New Frame with Data Duplication (FRAME+)
+                    case '\x14': // F4: Append a new frame containing currentFrame data (FRAME+)
                         if (totalFrames < maxFrames) {
-                            int sourceFrame = totalFrames;
+                            int sourceFrame = currentFrame;
                             totalFrames++;
                             currentFrame = totalFrames;
 
@@ -3341,7 +3341,7 @@ void processCommand(const char* rawCmd) {
                             forceFullRedraw = true;
                         }
                         break;
-                    case '\x15': // F5: Cycle back down cleanly into original Page 0 navigation keys
+		    case '\x15': // F5: Next Menu
                         menuTogglePage = 0;
                         kernelAPI.setFKeys(" <", " >", " ^", " v", " MENU");
                         break;
