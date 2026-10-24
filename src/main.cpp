@@ -20,7 +20,7 @@ Picoc pc;
 #define KEY_REPEAT_DELAY 300
 #define KEY_FRAME_TIME 33
 
-#define SYSTEM_RAM_SIZE 128 
+#define SYSTEM_RAM_SIZE 128
 
 #define MAX_VAR_NAME_LEN 12
 #define MAX_STR_LEN 100
@@ -2685,45 +2685,221 @@ void executeCProgram(const char* filename) {
 }
 #endif
 
+#if defined(ENABLE_VI)
+long virtualFileTotalLines = 0;
+long windowStartLineFileIdx = 0;
+char openFilename[64] = "";
+
+bool process_swap_line(long targetLine, char* buffer, bool writeMode) {
+    if (!sdAvailable()) return false;
+
+    File src = SD.open("/.swap.tmp", FILE_READ);
+    if (!src) return false;
+
+    long currentLine = 0;
+    while (currentLine < targetLine && src.available()) {
+        char c = src.read();
+        if (c == '\n') currentLine++;
+    }
+
+    if (currentLine != targetLine) {
+        src.close();
+        if (!writeMode) buffer[0] = '\0';
+        return false;
+    }
+
+    if (!writeMode) {
+        int idx = 0;
+        while (src.available() && idx < TERM_COLS) {
+            char c = src.read();
+            if (c == '\r') continue;
+            if (c == '\n') break;
+            buffer[idx++] = c;
+        }
+        buffer[idx] = '\0';
+        src.close();
+        return true;
+    } else {
+        unsigned long editPos = src.position();
+        src.close();
+
+        File dest = SD.open("/.swap2.tmp", FILE_WRITE);
+        src = SD.open("/.swap.tmp", FILE_READ);
+
+        for (unsigned long i = 0; i < editPos; i++) {
+            dest.write(src.read());
+        }
+
+        while (src.available()) {
+            char c = src.read();
+            if (c == '\n') break;
+        }
+
+        dest.println(buffer);
+
+        while (src.available()) {
+            dest.write(src.read());
+        }
+
+        src.close();
+        dest.close();
+
+        SD.remove("/.swap.tmp");
+        SD.rename("/.swap2.tmp", "/.swap.tmp");
+        return true;
+    }
+}
+
+void virtual_flush_row_to_temp(int bufferIdx, long absoluteFileLine) {
+    process_swap_line(absoluteFileLine, terminalBuffer[bufferIdx], true);
+}
+
+bool virtual_delete_line(long targetFileLine) {
+    if (!sdAvailable() || virtualFileTotalLines <= 1) {
+        if (virtualFileTotalLines <= 1) {
+            terminalBuffer[0][0] = '\0';
+            virtual_flush_row_to_temp(0, 0);
+            redrawTerminal();
+        }
+        return false;
+    }
+
+    File src = SD.open("/.swap.tmp", FILE_READ);
+    File dest = SD.open("/.swap2.tmp", FILE_WRITE);
+    if (!src || !dest) {
+        if (src) src.close();
+        if (dest) dest.close();
+        return false;
+    }
+
+    long currentLine = 0;
+
+    while (currentLine < targetFileLine && src.available()) {
+        char c = src.read();
+        dest.write(c);
+        if (c == '\n') currentLine++;
+    }
+
+    while (src.available()) {
+        char c = src.read();
+        if (c == '\n') {
+            currentLine++;
+            break;
+        }
+    }
+
+    while (src.available()) {
+        dest.write(src.read());
+    }
+
+    src.close();
+    dest.close();
+
+    SD.remove("/.swap.tmp");
+    SD.rename("/.swap2.tmp", "/.swap.tmp");
+
+    virtualFileTotalLines--;
+    return true;
+}
+
+void handleVirtualVerticalScroll(bool scrollDown) {
+    if (scrollDown) {
+        virtual_flush_row_to_temp(0, windowStartLineFileIdx);
+
+        for (int r = 0; r < TOTAL_ROWS - 1; r++) {
+            strcpy(terminalBuffer[r], terminalBuffer[r + 1]);
+        }
+
+        windowStartLineFileIdx++;
+        long targetNextLine = windowStartLineFileIdx + (TOTAL_ROWS - 1);
+
+        process_swap_line(targetNextLine, terminalBuffer[TOTAL_ROWS - 1], false);
+    }
+    else {
+        if (windowStartLineFileIdx > 0) {
+            virtual_flush_row_to_temp(TOTAL_ROWS - 1, windowStartLineFileIdx + (TOTAL_ROWS - 1));
+
+            for (int r = TOTAL_ROWS - 1; r > 0; r--) {
+                strcpy(terminalBuffer[r], terminalBuffer[r - 1]);
+            }
+
+            windowStartLineFileIdx--;
+            process_swap_line(windowStartLineFileIdx, terminalBuffer[0], false);
+        }
+    }
+}
+
+bool virtual_insert_blank_line(long targetFileLine) {
+    if (!sdAvailable()) return false;
+
+    File src = SD.open("/.swap.tmp", FILE_READ);
+    File dest = SD.open("/.swap2.tmp", FILE_WRITE);
+    if (!src || !dest) {
+        if (src) src.close();
+        if (dest) dest.close();
+        return false;
+    }
+
+    long currentLine = 0;
+    unsigned long splitPos = 0;
+
+    while (currentLine < targetFileLine && src.available()) {
+        char c = src.read();
+        dest.write(c);
+        if (c == '\n') currentLine++;
+    }
+    splitPos = src.position();
+
+    dest.println("");
+    virtualFileTotalLines++;
+
+    while (src.available()) {
+        dest.write(src.read());
+    }
+
+    src.close();
+    dest.close();
+
+    SD.remove("/.swap.tmp");
+    SD.rename("/.swap2.tmp", "/.swap.tmp");
+    return true;
+}
+
+void cleanupEditorWorkspace() {
+    if (sdAvailable()) {
+        if (SD.exists("/.swap.tmp")) {
+            SD.remove("/.swap.tmp");
+        }
+        if (SD.exists("/.swap2.tmp")) {
+            SD.remove("/.swap2.tmp");
+        }
+    }
+}
+
 void drawEditorCursor() {
-    redrawTerminal();
-    kernelAPI.drawRect(cursorX*CHAR_WIDTH, ((cursorY*CHAR_HEIGHT) + (CHAR_HEIGHT/2) + 1) - (scrollOffset*CHAR_HEIGHT), CHAR_WIDTH, 2, 1);
+    int screenRow = activeRowIndex - scrollOffset;
+
+    if (screenRow >= 0 && screenRow < TERM_ROWS) {
+        int pixelX = cursorX * CHAR_WIDTH;
+        int pixelY = (screenRow * CHAR_HEIGHT) + CHAR_HEIGHT - 4;
+
+        kernelAPI.drawRect(pixelX, pixelY, CHAR_WIDTH, 2, 1);
+    }
 }
 
 void clearEditorCursor() {
-    kernelAPI.drawRect(cursorX*CHAR_WIDTH, ((cursorY*CHAR_HEIGHT) + (CHAR_HEIGHT/2) + 1) - (scrollOffset*CHAR_HEIGHT), CHAR_WIDTH, 2, 0);
+    int screenRow = activeRowIndex - scrollOffset;
+    if (screenRow >= 0 && screenRow < TERM_ROWS) {
+        int pixelX = cursorX * CHAR_WIDTH;
+        int pixelY = (screenRow * CHAR_HEIGHT) + CHAR_HEIGHT - 4;
+        kernelAPI.drawRect(pixelX, pixelY, CHAR_WIDTH, 2, 0);
+    }
 }
 
 void handleViKeys(char key, bool isInsertMode) {
     int lineLen = strlen(terminalBuffer[activeRowIndex]);
 
     switch (key) {
-      // Left Navigation F-Key
-      case TKN_F1:
-        if (cursorX > 0) {
-	    clearEditorCursor();
-            cursorX--;
-        }
-        break;
-
-      // Right Navigation F-Key
-      case TKN_F2:
-        if (cursorX < lineLen) {
-	    clearEditorCursor();
-            cursorX++;
-        }
-        break;
-
-      // Backspace F-Key (Destructive Backspace)
-      case TKN_F5:
-        if (cursorX > 0) {
-	    clearEditorCursor();
-            int elementsToShift = lineLen - cursorX + 1;
-            memmove(&terminalBuffer[activeRowIndex][cursorX - 1], &terminalBuffer[activeRowIndex][cursorX], elementsToShift);
-            cursorX--;
-        }
-        break;
-
       // Shift modifier key layout toggle
       case '\t':
         shiftPressed = !shiftPressed;
@@ -2731,43 +2907,83 @@ void handleViKeys(char key, bool isInsertMode) {
         delay(300);
         break;
 
-      // Delete F-Key (Insert Mode) OR Down F-Key (Nav Mode)
-      case TKN_F4:
-        if (isInsertMode) {
-            // Act as Forward DELETE key
-            if (cursorX < lineLen) {
-                int elementsToShift = lineLen - cursorX;
-                memmove(&terminalBuffer[activeRowIndex][cursorX], &terminalBuffer[activeRowIndex][cursorX + 1], elementsToShift);
-            }
-        } else {
-	    clearEditorCursor();
-            // Act as DOWN arrow
-            if (cursorY < TERM_ROWS - 1) {
-		cursorY++;
-	        activeRowIndex++;
-            } else {
-		if (scrollOffset < TOTAL_ROWS)
-		    scrollOffset++;
-		if (activeRowIndex < TOTAL_ROWS)
-	            activeRowIndex++;
-	    }
+      // Left Navigation F-Key
+      case TKN_F1:
+        if (cursorX > 0) {
+            clearEditorCursor();
+            cursorX--;
+        }
+        break;
+
+      // Right Navigation F-Key
+      case TKN_F2:
+        if (cursorX < lineLen) {
+            clearEditorCursor();
+            cursorX++;
         }
         break;
 
       // Up Navigation F-Key (Nav Mode only)
       case TKN_F3:
         if (!isInsertMode) {
-            if (cursorY > 0) {
-	        clearEditorCursor();
-		cursorY--;
-		if (activeRowIndex > 0)
-	            activeRowIndex--;
-            } else {
-		if (scrollOffset > 0)
-		    scrollOffset--;
-		if (activeRowIndex > 0)
-	            activeRowIndex--;
-	    }
+            if (activeRowIndex > 0) {
+                clearEditorCursor();
+                activeRowIndex--;
+
+                if ((activeRowIndex - scrollOffset) < 0) {
+                    scrollOffset--;
+                    redrawTerminal();
+                }
+
+                int prevLineLen = strlen(terminalBuffer[activeRowIndex]);
+                if (cursorX > prevLineLen) cursorX = prevLineLen;
+            }
+            else if (windowStartLineFileIdx > 0) {
+                clearEditorCursor();
+                handleVirtualVerticalScroll(false);
+                redrawTerminal();
+            }
+        }
+        break;
+
+      // Delete F-Key (Insert Mode) OR Down F-Key (Nav Mode)
+      case TKN_F4:
+        if (isInsertMode) {
+            if (cursorX < lineLen) {
+                int elementsToShift = lineLen - cursorX;
+                memmove(&terminalBuffer[activeRowIndex][cursorX], &terminalBuffer[activeRowIndex][cursorX + 1], elementsToShift);
+                redrawTerminal();
+            }
+        } else {
+            // DOWN Line Selection Mode Router
+            if (activeRowIndex < TOTAL_ROWS - 1) {
+                clearEditorCursor();
+                activeRowIndex++;
+
+                if ((activeRowIndex - scrollOffset) >= TERM_ROWS) {
+                    scrollOffset++;
+                    redrawTerminal();
+                }
+            }
+            else if (windowStartLineFileIdx + TOTAL_ROWS < virtualFileTotalLines) {
+                clearEditorCursor();
+                handleVirtualVerticalScroll(true);
+                redrawTerminal();
+            }
+
+            int currentLineLen = strlen(terminalBuffer[activeRowIndex]);
+            if (cursorX > currentLineLen) cursorX = currentLineLen;
+        }
+        break;
+
+      // Backspace F-Key (Destructive Backspace)
+      case TKN_F5:
+        if (cursorX > 0) {
+            clearEditorCursor();
+            int elementsToShift = lineLen - cursorX + 1;
+            memmove(&terminalBuffer[activeRowIndex][cursorX - 1], &terminalBuffer[activeRowIndex][cursorX], elementsToShift);
+            cursorX--;
+            redrawTerminal();
         }
         break;
 
@@ -2778,32 +2994,45 @@ void handleViKeys(char key, bool isInsertMode) {
 
 void visual_editor(const char* filename) {
     int editLineCount = 1;
-
     bool editorModeNav = true;
     bool insertMode = false;
 
     kernelAPI.clear();
 
     if (filename[0] != '\0' && sdAvailable()) {
-        File f = SD.open(filename, FILE_READ);
-        if (f) {
-            int r = 0;
-            while (f.available() && r < TOTAL_ROWS) {
-                String line = f.readStringUntil('\n');
-                line.replace("\r", "");
-                terminalPrintln(line.c_str());
-                r++;
+        strncpy(openFilename, filename, 63);
+
+        File srcFile = SD.open(filename, FILE_READ);
+        File swapFile = SD.open("/.swap.tmp", FILE_WRITE);
+
+        virtualFileTotalLines = 0;
+        if (srcFile && swapFile) {
+            while (srcFile.available()) {
+                char c = srcFile.read();
+                swapFile.write(c);
+                if (c == '\n') virtualFileTotalLines++;
             }
-            editLineCount = (r == 0) ? 1 : r;
-            f.close();
+            if (virtualFileTotalLines == 0) virtualFileTotalLines = 1;
+            srcFile.close();
+            swapFile.close();
         }
+
+        for (int r = 0; r < TOTAL_ROWS; r++) {
+            process_swap_line(r, terminalBuffer[r], false);
+        }
+        windowStartLineFileIdx = 0;
     }
-    cursorY = activeRowIndex;
+
+    activeRowIndex = 0;
+    scrollOffset = 0;
     cursorX = 0;
     bool editing = true;
+    bool dPressed = false;
 
+    redrawTerminal();
     kernelAPI.setFKeys("  <", "  >", "  ^", "  v", " <X");
     drawEditorCursor();
+
     while (editing) {
         char key = getKeyPress(true);
         if (key == 0) continue;
@@ -2816,33 +3045,123 @@ void visual_editor(const char* filename) {
         if (insertMode) {
             if (key == TKN_F3) { // "ESC" F-Key shortcut
                 insertMode = false;
-	        clearEditorCursor();
+                clearEditorCursor();
                 if (cursorX > 0) { cursorX--; }
-                drawEditorCursor();
+
                 kernelAPI.setFKeys("  <", "  >", "  ^", "  v", " <X");
+                redrawTerminal();
+                drawEditorCursor();
                 delay(KEY_REPEAT_DELAY);
                 continue;
             }
 
             handleViKeys(key, true);
+            lineLen = strlen(terminalBuffer[activeRowIndex]);
 
             if (key == '\n') {
-                // Future implementation: Splitting rows manually via Enter
-	        clearEditorCursor();
+                clearEditorCursor();
+                long currentFileIndex = windowStartLineFileIdx + activeRowIndex;
+
+                virtual_flush_row_to_temp(activeRowIndex, currentFileIndex);
+
+                if (virtual_insert_blank_line(currentFileIndex + 1)) {
+                    if (activeRowIndex < TOTAL_ROWS - 1) {
+                        for (int r = TOTAL_ROWS - 1; r > activeRowIndex + 1; r--) {
+                            strcpy(terminalBuffer[r], terminalBuffer[r - 1]);
+                        }
+                        activeRowIndex++;
+                        terminalBuffer[activeRowIndex][0] = '\0';
+
+                        if ((activeRowIndex - scrollOffset) >= TERM_ROWS) {
+                            scrollOffset++;
+                        }
+                    } else {
+                        windowStartLineFileIdx++;
+                        for (int r = 0; r < TOTAL_ROWS - 1; r++) {
+                            strcpy(terminalBuffer[r], terminalBuffer[r + 1]);
+                        }
+                        terminalBuffer[TOTAL_ROWS - 1][0] = '\0';
+                    }
+                    cursorX = 0;
+                    redrawTerminal();
+                }
             }
             else if (key >= 32 && key <= 126) {
-                if (lineLen < TERM_COLS) {
-	            clearEditorCursor();
+                if (lineLen >= TERM_COLS) {
+                    clearEditorCursor();
+                    long currentFileIndex = windowStartLineFileIdx + activeRowIndex;
+                    virtual_flush_row_to_temp(activeRowIndex, currentFileIndex);
+
+                    if (virtual_insert_blank_line(currentFileIndex + 1)) {
+                        if (activeRowIndex < TOTAL_ROWS - 1) {
+                            for (int r = TOTAL_ROWS - 1; r > activeRowIndex + 1; r--) {
+                                strcpy(terminalBuffer[r], terminalBuffer[r - 1]);
+                            }
+                            activeRowIndex++;
+
+                            terminalBuffer[activeRowIndex][0] = key;
+                            terminalBuffer[activeRowIndex][1] = '\0';
+
+                            if ((activeRowIndex - scrollOffset) >= TERM_ROWS) {
+                                scrollOffset++;
+                            }
+                        } else {
+                            windowStartLineFileIdx++;
+                            for (int r = 0; r < TOTAL_ROWS - 1; r++) {
+                                strcpy(terminalBuffer[r], terminalBuffer[r + 1]);
+                            }
+                            terminalBuffer[TOTAL_ROWS - 1][0] = key;
+                            terminalBuffer[TOTAL_ROWS - 1][1] = '\0';
+                        }
+                        cursorX = 1;
+                        redrawTerminal();
+                    }
+                } else {
+                    clearEditorCursor();
                     memmove(&terminalBuffer[activeRowIndex][cursorX + 1], &terminalBuffer[activeRowIndex][cursorX], lineLen - cursorX + 1);
                     terminalBuffer[activeRowIndex][cursorX] = key;
                     cursorX++;
+                    redrawTerminal();
                 }
             }
         }
-        // ==========================================
-        // ROUTER 2: VISUAL COMMAND NAVIGATION MODE
-        // ==========================================
         else if (editorModeNav) {
+            long absoluteLineNum = windowStartLineFileIdx + activeRowIndex;
+
+            if (dPressed) {
+                dPressed = false;
+                clearEditorCursor();
+
+                if (key == 'd' || key == 'D') {
+                    if (virtual_delete_line(absoluteLineNum)) {
+
+                        for (int r = activeRowIndex; r < TOTAL_ROWS - 1; r++) {
+                            strcpy(terminalBuffer[r], terminalBuffer[r + 1]);
+                        }
+
+                        long tailFileIdx = windowStartLineFileIdx + TOTAL_ROWS - 1;
+                        if (tailFileIdx < virtualFileTotalLines) {
+                            process_swap_line(tailFileIdx, terminalBuffer[TOTAL_ROWS - 1], false);
+                        } else {
+                            terminalBuffer[TOTAL_ROWS - 1][0] = '\0';
+                        }
+
+                        if (activeRowIndex >= virtualFileTotalLines && activeRowIndex > 0) {
+                            activeRowIndex--;
+                            if (scrollOffset > 0 && (activeRowIndex - scrollOffset) < 0) {
+                                scrollOffset--;
+                            }
+                        }
+
+                        lineLen = strlen(terminalBuffer[activeRowIndex]);
+                        if (cursorX > lineLen) cursorX = lineLen;
+
+                        redrawTerminal();
+                    }
+                    continue;
+                }
+            }
+
             switch (key) {
                 case 'I':
                 case 'i':
@@ -2854,8 +3173,51 @@ void visual_editor(const char* filename) {
                     cursorX = lineLen;
                     insertMode = true;
                     break;
-		case ':': case 'W': case 'w':
-		case 'Q': case 'q':
+                case 'd': // First 'd' caught: Flag sequence arming status state tracker
+                    dPressed = true;
+                    continue;
+
+                case 'o': // Vim lowercase 'o': Open fresh blank line *below* current line
+                    clearEditorCursor();
+                    virtual_flush_row_to_temp(activeRowIndex, absoluteLineNum);
+                    if (virtual_insert_blank_line(absoluteLineNum + 1)) {
+                        if (activeRowIndex < TOTAL_ROWS - 1) {
+                            for (int r = TOTAL_ROWS - 1; r > activeRowIndex + 1; r--) {
+                                strcpy(terminalBuffer[r], terminalBuffer[r - 1]);
+                            }
+                            activeRowIndex++;
+                            terminalBuffer[activeRowIndex][0] = '\0';
+                            if ((activeRowIndex - scrollOffset) >= TERM_ROWS) scrollOffset++;
+                        } else {
+                            windowStartLineFileIdx++;
+                            for (int r = 0; r < TOTAL_ROWS - 1; r++) {
+                                strcpy(terminalBuffer[r], terminalBuffer[r + 1]);
+                            }
+                            terminalBuffer[TOTAL_ROWS - 1][0] = '\0';
+                        }
+                        cursorX = 0;
+                        insertMode = true;
+                        redrawTerminal();
+                    }
+                    continue;
+
+                case 'O': // Vim uppercase 'O': Open fresh blank line *above* current line
+                    clearEditorCursor();
+                    virtual_flush_row_to_temp(activeRowIndex, absoluteLineNum);
+                    if (virtual_insert_blank_line(absoluteLineNum)) {
+                        for (int r = TOTAL_ROWS - 1; r > activeRowIndex; r--) {
+                            strcpy(terminalBuffer[r], terminalBuffer[r - 1]);
+                        }
+                        terminalBuffer[activeRowIndex][0] = '\0';
+                        cursorX = 0;
+                        insertMode = true;
+                        redrawTerminal();
+                    }
+                    continue;
+
+                case ':': case 'W': case 'w':
+                case 'Q': case 'q':
+                    clearEditorCursor();
                     editorModeNav = false;
                     break;
                 default:
@@ -2869,30 +3231,35 @@ void visual_editor(const char* filename) {
         else {
             switch (key) {
                 case TKN_F1: // " SAVE"
-                    if (filename[0] != '\0' && sdAvailable()) {
-                        File f = SD.open(filename, FILE_WRITE);
-                        if (f) {
-                            for (int r = 0; r < TOTAL_ROWS; r++) {
-                                if (strlen(terminalBuffer[r]) > 0 || r == 0) {
-                                    f.println(terminalBuffer[r]);
-                                }
-                            }
-                            f.close();
-                            playBeep(1000, 40);
+                    if (openFilename[0] != '\0' && sdAvailable()) {
+                        for (int r = 0; r < TOTAL_ROWS; r++) {
+                            virtual_flush_row_to_temp(r, windowStartLineFileIdx + r);
+                        }
+
+                        SD.remove(openFilename);
+
+                        File src = SD.open("/.swap.tmp", FILE_READ);
+                        File dest = SD.open(openFilename, FILE_WRITE);
+                        if (src && dest) {
+                            while (src.available()) dest.write(src.read());
+                            src.close(); dest.close();
                         }
                     }
                     editorModeNav = true;
                     break;
+
                 case TKN_F2: // " LOAD"
                     clearEditorCursor();
                     insertMode = false;
                     editorModeNav = true;
+		    cleanupEditorWorkspace();
                     visual_editor(filename);
                     kernelAPI.clearFKeys();
                     kernelAPI.clear();
                     return;
                 case TKN_F3: // "ESC" (returns to Nav)
                     editorModeNav = true;
+                    redrawTerminal();
                     break;
                 case TKN_F4: // "QUIT"
                     editing = false;
@@ -2902,6 +3269,7 @@ void visual_editor(const char* filename) {
                     break;
             }
         }
+
         if (insertMode) {
             kernelAPI.setFKeys("  <", "  >", " ESC", " DEL", " <X");
         } else if (editorModeNav) {
@@ -2912,10 +3280,11 @@ void visual_editor(const char* filename) {
 
         drawEditorCursor();
     }
-
+    cleanupEditorWorkspace();
     kernelAPI.clearFKeys();
     kernelAPI.clear();
 }
+#endif
 
 void processCommand(const char* rawCmd) {
  char cmd[MAX_LINE_LEN];
@@ -3640,6 +4009,7 @@ void processCommand(const char* rawCmd) {
     kernelAPI.setTextColor(currentActivePaletteId);
     return;
   }
+#if defined(ENABLE_VI)
   if (strncmp(rawCmd, "VI", 2) == 0) {
     char targetFile[FILENAME_SIZE];
     memset((char*)targetFile, 0, FILENAME_SIZE);
@@ -3656,6 +4026,7 @@ void processCommand(const char* rawCmd) {
     visual_editor(targetFile);
     return;
   }
+#endif
   else if (strcmp(firstToken, "EDIT") == 0) {
     strncpy(previousPrompt, currentPrompt, PROMPT_SIZE - 1);
     previousPrompt[PROMPT_SIZE - 1] = '\0';
@@ -4256,7 +4627,11 @@ void processCommand(const char* rawCmd) {
     terminalPrintln("SYS:  EDIT, EXEC, FREE, HELP,");
 #endif
     terminalPrintln("      LIST, MEMMAP, NEW, RUN, SPREDIT,");
+#if defined(ENABLE_VI)
+    terminalPrintln("      VI, WIFIUP, WIFIDOWN");
+#else
     terminalPrintln("      WIFIUP, WIFIDOWN");
+#endif
     terminalPrintln("CODE: BEEP, BGCOLOR, CIRCLE, CLEAR,");
     terminalPrintln("      COLOR, COS(, DELAY,");
     terminalPrintln("      FALSE, FILLCIRCLE, FILLRECT,");
