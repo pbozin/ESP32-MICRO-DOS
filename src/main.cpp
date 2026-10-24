@@ -20,7 +20,7 @@ Picoc pc;
 #define KEY_REPEAT_DELAY 300
 #define KEY_FRAME_TIME 33
 
-#define SYSTEM_RAM_SIZE 320
+#define SYSTEM_RAM_SIZE 128 
 
 #define MAX_VAR_NAME_LEN 12
 #define MAX_STR_LEN 100
@@ -37,7 +37,7 @@ Picoc pc;
 #define KEY_COLS 10
 
 #define CHAR_WIDTH 6
-#define CHAR_HEIGHT 16
+#define CHAR_HEIGHT 12
 
 #define COLOR_DEPTH 4
 
@@ -2685,6 +2685,238 @@ void executeCProgram(const char* filename) {
 }
 #endif
 
+void drawEditorCursor() {
+    redrawTerminal();
+    kernelAPI.drawRect(cursorX*CHAR_WIDTH, ((cursorY*CHAR_HEIGHT) + (CHAR_HEIGHT/2) + 1) - (scrollOffset*CHAR_HEIGHT), CHAR_WIDTH, 2, 1);
+}
+
+void clearEditorCursor() {
+    kernelAPI.drawRect(cursorX*CHAR_WIDTH, ((cursorY*CHAR_HEIGHT) + (CHAR_HEIGHT/2) + 1) - (scrollOffset*CHAR_HEIGHT), CHAR_WIDTH, 2, 0);
+}
+
+void handleViKeys(char key, bool isInsertMode) {
+    int lineLen = strlen(terminalBuffer[activeRowIndex]);
+
+    switch (key) {
+      // Left Navigation F-Key
+      case TKN_F1:
+        if (cursorX > 0) {
+	    clearEditorCursor();
+            cursorX--;
+        }
+        break;
+
+      // Right Navigation F-Key
+      case TKN_F2:
+        if (cursorX < lineLen) {
+	    clearEditorCursor();
+            cursorX++;
+        }
+        break;
+
+      // Backspace F-Key (Destructive Backspace)
+      case TKN_F5:
+        if (cursorX > 0) {
+	    clearEditorCursor();
+            int elementsToShift = lineLen - cursorX + 1;
+            memmove(&terminalBuffer[activeRowIndex][cursorX - 1], &terminalBuffer[activeRowIndex][cursorX], elementsToShift);
+            cursorX--;
+        }
+        break;
+
+      // Shift modifier key layout toggle
+      case '\t':
+        shiftPressed = !shiftPressed;
+        drawKeyboard();
+        delay(300);
+        break;
+
+      // Delete F-Key (Insert Mode) OR Down F-Key (Nav Mode)
+      case TKN_F4:
+        if (isInsertMode) {
+            // Act as Forward DELETE key
+            if (cursorX < lineLen) {
+                int elementsToShift = lineLen - cursorX;
+                memmove(&terminalBuffer[activeRowIndex][cursorX], &terminalBuffer[activeRowIndex][cursorX + 1], elementsToShift);
+            }
+        } else {
+	    clearEditorCursor();
+            // Act as DOWN arrow
+            if (cursorY < TERM_ROWS - 1) {
+		cursorY++;
+	        activeRowIndex++;
+            } else {
+		if (scrollOffset < TOTAL_ROWS)
+		    scrollOffset++;
+		if (activeRowIndex < TOTAL_ROWS)
+	            activeRowIndex++;
+	    }
+        }
+        break;
+
+      // Up Navigation F-Key (Nav Mode only)
+      case TKN_F3:
+        if (!isInsertMode) {
+            if (cursorY > 0) {
+	        clearEditorCursor();
+		cursorY--;
+		if (activeRowIndex > 0)
+	            activeRowIndex--;
+            } else {
+		if (scrollOffset > 0)
+		    scrollOffset--;
+		if (activeRowIndex > 0)
+	            activeRowIndex--;
+	    }
+        }
+        break;
+
+      default:
+        break;
+    }
+}
+
+void visual_editor(const char* filename) {
+    int editLineCount = 1;
+
+    bool editorModeNav = true;
+    bool insertMode = false;
+
+    kernelAPI.clear();
+
+    if (filename[0] != '\0' && sdAvailable()) {
+        File f = SD.open(filename, FILE_READ);
+        if (f) {
+            int r = 0;
+            while (f.available() && r < TOTAL_ROWS) {
+                String line = f.readStringUntil('\n');
+                line.replace("\r", "");
+                terminalPrintln(line.c_str());
+                r++;
+            }
+            editLineCount = (r == 0) ? 1 : r;
+            f.close();
+        }
+    }
+    cursorY = activeRowIndex;
+    cursorX = 0;
+    bool editing = true;
+
+    kernelAPI.setFKeys("  <", "  >", "  ^", "  v", " <X");
+    drawEditorCursor();
+    while (editing) {
+        char key = getKeyPress(true);
+        if (key == 0) continue;
+
+        int lineLen = strlen(terminalBuffer[activeRowIndex]);
+
+        // ==========================================
+        // ROUTER 1: INSERT / APPEND WORKING MODE
+        // ==========================================
+        if (insertMode) {
+            if (key == TKN_F3) { // "ESC" F-Key shortcut
+                insertMode = false;
+	        clearEditorCursor();
+                if (cursorX > 0) { cursorX--; }
+                drawEditorCursor();
+                kernelAPI.setFKeys("  <", "  >", "  ^", "  v", " <X");
+                delay(KEY_REPEAT_DELAY);
+                continue;
+            }
+
+            handleViKeys(key, true);
+
+            if (key == '\n') {
+                // Future implementation: Splitting rows manually via Enter
+	        clearEditorCursor();
+            }
+            else if (key >= 32 && key <= 126) {
+                if (lineLen < TERM_COLS) {
+	            clearEditorCursor();
+                    memmove(&terminalBuffer[activeRowIndex][cursorX + 1], &terminalBuffer[activeRowIndex][cursorX], lineLen - cursorX + 1);
+                    terminalBuffer[activeRowIndex][cursorX] = key;
+                    cursorX++;
+                }
+            }
+        }
+        // ==========================================
+        // ROUTER 2: VISUAL COMMAND NAVIGATION MODE
+        // ==========================================
+        else if (editorModeNav) {
+            switch (key) {
+                case 'I':
+                case 'i':
+                    insertMode = true;
+                    break;
+                case 'A':
+                case 'a':
+                    clearEditorCursor();
+                    cursorX = lineLen;
+                    insertMode = true;
+                    break;
+		case ':': case 'W': case 'w':
+		case 'Q': case 'q':
+                    editorModeNav = false;
+                    break;
+                default:
+                    break;
+            }
+            handleViKeys(key, false);
+        }
+        // ==========================================
+        // ROUTER 3: DISK MANAGEMENT / SAVE OPERATIONS
+        // ==========================================
+        else {
+            switch (key) {
+                case TKN_F1: // " SAVE"
+                    if (filename[0] != '\0' && sdAvailable()) {
+                        File f = SD.open(filename, FILE_WRITE);
+                        if (f) {
+                            for (int r = 0; r < TOTAL_ROWS; r++) {
+                                if (strlen(terminalBuffer[r]) > 0 || r == 0) {
+                                    f.println(terminalBuffer[r]);
+                                }
+                            }
+                            f.close();
+                            playBeep(1000, 40);
+                        }
+                    }
+                    editorModeNav = true;
+                    break;
+                case TKN_F2: // " LOAD"
+                    clearEditorCursor();
+                    insertMode = false;
+                    editorModeNav = true;
+                    visual_editor(filename);
+                    kernelAPI.clearFKeys();
+                    kernelAPI.clear();
+                    return;
+                case TKN_F3: // "ESC" (returns to Nav)
+                    editorModeNav = true;
+                    break;
+                case TKN_F4: // "QUIT"
+                    editing = false;
+                    clearEditorCursor();
+                    break;
+                default:
+                    break;
+            }
+        }
+        if (insertMode) {
+            kernelAPI.setFKeys("  <", "  >", " ESC", " DEL", " <X");
+        } else if (editorModeNav) {
+            kernelAPI.setFKeys("  <", "  >", "  ^", "  v", " <X");
+        } else {
+            kernelAPI.setFKeys(" SAVE", " LOAD", " ESC", " QUIT", " <X");
+        }
+
+        drawEditorCursor();
+    }
+
+    kernelAPI.clearFKeys();
+    kernelAPI.clear();
+}
+
 void processCommand(const char* rawCmd) {
  char cmd[MAX_LINE_LEN];
  strncpy(cmd, rawCmd, MAX_LINE_LEN);
@@ -3406,6 +3638,22 @@ void processCommand(const char* rawCmd) {
     free(memoryStripBuffer);
     currentActivePaletteId = savedFgColor;
     kernelAPI.setTextColor(currentActivePaletteId);
+    return;
+  }
+  if (strncmp(rawCmd, "VI", 2) == 0) {
+    char targetFile[FILENAME_SIZE];
+    memset((char*)targetFile, 0, FILENAME_SIZE);
+    if (strlen(rawCmd) > 3 and rawCmd[2] == ' ') {
+      const char* filenameParam = rawCmd + 3;
+      if (filenameParam[0] != '/') {
+        snprintf(targetFile, FILENAME_SIZE, "/%s", filenameParam);
+      } else {
+        strncpy(targetFile, filenameParam, FILENAME_SIZE - 1);
+        targetFile[FILENAME_SIZE - 1] = '\0';
+      }
+      trimCString(targetFile);
+    }
+    visual_editor(targetFile);
     return;
   }
   else if (strcmp(firstToken, "EDIT") == 0) {
