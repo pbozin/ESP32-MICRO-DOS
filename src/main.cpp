@@ -667,8 +667,8 @@ static char cachedServer[32] = "";
 static char cachedModel[32] = "";
 #endif
 
-static char terminalBuffer[TOTAL_ROWS][TERM_COLS + 1];
-static uint8_t colorBuffer[TOTAL_ROWS][TERM_COLS];
+static char terminalBuffer[TOTAL_ROWS][MAX_LINE_LEN + 1];
+static uint8_t colorBuffer[TOTAL_ROWS][MAX_LINE_LEN];
 
 static int inputCursorPos = 0;
 
@@ -693,6 +693,7 @@ static bool fKeysOverlayActive = false;
 static bool shiftPressed = true;
 
 static int scrollOffset = 0;
+static int scrollOffsetX = 0;
 static int activeRowIndex = 0;
 
 static bool symbolModeActive = false;
@@ -1910,38 +1911,46 @@ void redrawTerminal() {
     int targetMemoryRow = scrollOffset + r;
 
     if (targetMemoryRow < TOTAL_ROWS && terminalBuffer[targetMemoryRow][0] != '\0') {
-      int c = 0;
-      while (terminalBuffer[targetMemoryRow][c] != '\0' && c < TERM_COLS) {
-        int charColorId = colorBuffer[targetMemoryRow][c];
-        if (charColorId == 0) {
-	  if (MATRIX_ACTIVE) {
-            bgCanvas.setTextColor(currentActivePaletteId, currentActiveBgPaletteId);
-	  } else {
-            tft.setTextColor(getPaletteColor(currentActivePaletteId), getPaletteColor(currentActiveBgPaletteId));
-	  }
-        } else {
-	  if (MATRIX_ACTIVE) {
-            bgCanvas.setTextColor(charColorId, currentActiveBgPaletteId);
-	  } else {
-            tft.setTextColor(getPaletteColor(charColorId), getPaletteColor(currentActiveBgPaletteId));
-	  }
-        }
 
-        if (MATRIX_ACTIVE) {
-          bgCanvas.print(terminalBuffer[targetMemoryRow][c]);
-	} else {
-          tft.print(terminalBuffer[targetMemoryRow][c]);
-	}
-        c++;
+      int startX = scrollOffsetX;
+      int lineLen = strlen(terminalBuffer[targetMemoryRow]);
+      int printedCharsCount = 0;
+
+      if (startX < lineLen) {
+        int c = startX;
+        while (terminalBuffer[targetMemoryRow][c] != '\0' && (c - startX) < TERM_COLS) {
+          int charColorId = colorBuffer[targetMemoryRow][c];
+          if (charColorId == 0) {
+            if (MATRIX_ACTIVE) {
+              bgCanvas.setTextColor(currentActivePaletteId, currentActiveBgPaletteId);
+            } else {
+              tft.setTextColor(getPaletteColor(currentActivePaletteId), getPaletteColor(currentActiveBgPaletteId));
+            }
+          } else {
+            if (MATRIX_ACTIVE) {
+              bgCanvas.setTextColor(charColorId, currentActiveBgPaletteId);
+            } else {
+              tft.setTextColor(getPaletteColor(charColorId), getPaletteColor(currentActiveBgPaletteId));
+            }
+          }
+
+          if (MATRIX_ACTIVE) {
+            bgCanvas.print(terminalBuffer[targetMemoryRow][c]);
+          } else {
+            tft.print(terminalBuffer[targetMemoryRow][c]);
+          }
+          c++;
+          printedCharsCount++;
+        }
       }
 
-      int textPixelWidth = c * CHAR_WIDTH;
+      int textPixelWidth = printedCharsCount * CHAR_WIDTH;
       if (textPixelWidth < TFT_WIDTH_DRAW) {
         if (MATRIX_ACTIVE) {
           bgCanvas.fillRect(textPixelWidth, r * CHAR_HEIGHT, TFT_WIDTH_DRAW - textPixelWidth, CHAR_HEIGHT, currentActiveBgPaletteId);
-	} else {
+        } else {
           tft.fillRect(textPixelWidth, r * CHAR_HEIGHT, TFT_WIDTH_DRAW - textPixelWidth, CHAR_HEIGHT, getPaletteColor(currentActiveBgPaletteId));
-	}
+        }
       }
     } else {
       if (MATRIX_ACTIVE) {
@@ -2685,32 +2694,28 @@ void executeCProgram(const char* filename) {
 }
 #endif
 
+
 #if defined(ENABLE_VI)
+
+#define MAX_INDEX_LINES 1000
+
+unsigned long lineOffsets[MAX_INDEX_LINES] = {0};
+
 long virtualFileTotalLines = 0;
 long windowStartLineFileIdx = 0;
 char openFilename[64] = "";
+char yankBuffer[TERM_COLS + 1] = {0};
 
 bool process_swap_line(long targetLine, char* buffer, bool writeMode) {
-    if (!sdAvailable()) return false;
-
-    File src = SD.open("/.swap.tmp", FILE_READ);
-    if (!src) return false;
-
-    long currentLine = 0;
-    while (currentLine < targetLine && src.available()) {
-        char c = src.read();
-        if (c == '\n') currentLine++;
-    }
-
-    if (currentLine != targetLine) {
-        src.close();
-        if (!writeMode) buffer[0] = '\0';
-        return false;
-    }
+    if (!sdAvailable() || targetLine >= virtualFileTotalLines) return false;
 
     if (!writeMode) {
+        File src = SD.open("/.swap.tmp", FILE_READ);
+        if (!src) return false;
+        src.seek(lineOffsets[targetLine]);
+
         int idx = 0;
-        while (src.available() && idx < TERM_COLS) {
+        while (src.available() && idx < MAX_LINE_LEN) {
             char c = src.read();
             if (c == '\r') continue;
             if (c == '\n') break;
@@ -2719,26 +2724,33 @@ bool process_swap_line(long targetLine, char* buffer, bool writeMode) {
         buffer[idx] = '\0';
         src.close();
         return true;
-    } else {
-        unsigned long editPos = src.position();
-        src.close();
-
+    }
+    else {
         File dest = SD.open("/.swap2.tmp", FILE_WRITE);
-        src = SD.open("/.swap.tmp", FILE_READ);
+        File src = SD.open("/.swap.tmp", FILE_READ);
+        if (!src || !dest) { if(src) src.close(); if(dest) dest.close(); return false; }
 
-        for (unsigned long i = 0; i < editPos; i++) {
-            dest.write(src.read());
+        unsigned long editPos = lineOffsets[targetLine];
+
+        uint8_t copyBuf[256];
+        unsigned long bytesToCopy = editPos;
+        while (bytesToCopy > 0) {
+            size_t chunk = (bytesToCopy > sizeof(copyBuf)) ? sizeof(copyBuf) : bytesToCopy;
+            src.read(copyBuf, chunk);
+            dest.write(copyBuf, chunk);
+            bytesToCopy -= chunk;
         }
 
+        src.seek(editPos);
         while (src.available()) {
-            char c = src.read();
-            if (c == '\n') break;
+            if (src.read() == '\n') break;
         }
 
         dest.println(buffer);
 
         while (src.available()) {
-            dest.write(src.read());
+            size_t chunk = src.read(copyBuf, sizeof(copyBuf));
+            dest.write(copyBuf, chunk);
         }
 
         src.close();
@@ -2746,6 +2758,25 @@ bool process_swap_line(long targetLine, char* buffer, bool writeMode) {
 
         SD.remove("/.swap.tmp");
         SD.rename("/.swap2.tmp", "/.swap.tmp");
+
+        File reindex = SD.open("/.swap.tmp", FILE_READ);
+        if (reindex) {
+            unsigned long currentBytePos = editPos;
+            reindex.seek(editPos);
+            long currentLine = targetLine;
+
+            while (reindex.available() && currentLine < MAX_INDEX_LINES) {
+                char c = reindex.read();
+                currentBytePos++;
+                if (c == '\n') {
+                    currentLine++;
+                    if (currentLine < MAX_INDEX_LINES) {
+                        lineOffsets[currentLine] = currentBytePos;
+                    }
+                }
+            }
+            reindex.close();
+        }
         return true;
     }
 }
@@ -2878,9 +2909,10 @@ void cleanupEditorWorkspace() {
 
 void drawEditorCursor() {
     int screenRow = activeRowIndex - scrollOffset;
+    int screenCol = cursorX - scrollOffsetX;
 
-    if (screenRow >= 0 && screenRow < TERM_ROWS) {
-        int pixelX = cursorX * CHAR_WIDTH;
+    if (screenRow >= 0 && screenRow < TERM_ROWS && screenCol >= 0 && screenCol < TERM_COLS) {
+        int pixelX = screenCol * CHAR_WIDTH;
         int pixelY = (screenRow * CHAR_HEIGHT) + CHAR_HEIGHT - 4;
 
         kernelAPI.drawRect(pixelX, pixelY, CHAR_WIDTH, 2, 1);
@@ -2889,8 +2921,10 @@ void drawEditorCursor() {
 
 void clearEditorCursor() {
     int screenRow = activeRowIndex - scrollOffset;
-    if (screenRow >= 0 && screenRow < TERM_ROWS) {
-        int pixelX = cursorX * CHAR_WIDTH;
+    int screenCol = cursorX - scrollOffsetX;
+
+    if (screenRow >= 0 && screenRow < TERM_ROWS && screenCol >= 0 && screenCol < TERM_COLS) {
+        int pixelX = screenCol * CHAR_WIDTH;
         int pixelY = (screenRow * CHAR_HEIGHT) + CHAR_HEIGHT - 4;
         kernelAPI.drawRect(pixelX, pixelY, CHAR_WIDTH, 2, 0);
     }
@@ -2912,6 +2946,11 @@ void handleViKeys(char key, bool isInsertMode) {
         if (cursorX > 0) {
             clearEditorCursor();
             cursorX--;
+
+            if (cursorX < scrollOffsetX) {
+                scrollOffsetX--;
+                redrawTerminal();
+            }
         }
         break;
 
@@ -2920,6 +2959,11 @@ void handleViKeys(char key, bool isInsertMode) {
         if (cursorX < lineLen) {
             clearEditorCursor();
             cursorX++;
+
+            if ((cursorX - scrollOffsetX) >= TERM_COLS) {
+                scrollOffsetX++;
+                redrawTerminal();
+            }
         }
         break;
 
@@ -2990,6 +3034,17 @@ void handleViKeys(char key, bool isInsertMode) {
       default:
         break;
     }
+
+    int targetLineLen = strlen(terminalBuffer[activeRowIndex]);
+    if (cursorX > targetLineLen) cursorX = targetLineLen;
+
+    if (cursorX < scrollOffsetX) {
+        scrollOffsetX = cursorX;
+        redrawTerminal();
+    } else if ((cursorX - scrollOffsetX) >= TERM_COLS) {
+        scrollOffsetX = cursorX - TERM_COLS + 1;
+        redrawTerminal();
+    }
 }
 
 void visual_editor(const char* filename) {
@@ -3006,28 +3061,41 @@ void visual_editor(const char* filename) {
         File swapFile = SD.open("/.swap.tmp", FILE_WRITE);
 
         virtualFileTotalLines = 0;
+        unsigned long currentBytePos = 0;
+
         if (srcFile && swapFile) {
+            lineOffsets[0] = 0;
+            virtualFileTotalLines = 1;
+
             while (srcFile.available()) {
                 char c = srcFile.read();
                 swapFile.write(c);
-                if (c == '\n') virtualFileTotalLines++;
+                currentBytePos++;
+
+                if (c == '\n') {
+                    if (virtualFileTotalLines < MAX_INDEX_LINES) {
+                        lineOffsets[virtualFileTotalLines] = currentBytePos;
+                    }
+                    virtualFileTotalLines++;
+                }
             }
-            if (virtualFileTotalLines == 0) virtualFileTotalLines = 1;
             srcFile.close();
             swapFile.close();
         }
 
+        windowStartLineFileIdx = 0;
         for (int r = 0; r < TOTAL_ROWS; r++) {
             process_swap_line(r, terminalBuffer[r], false);
         }
-        windowStartLineFileIdx = 0;
     }
 
     activeRowIndex = 0;
     scrollOffset = 0;
+    scrollOffsetX = 0;
     cursorX = 0;
     bool editing = true;
     bool dPressed = false;
+    bool yPressed = false;
 
     redrawTerminal();
     kernelAPI.setFKeys("  <", "  >", "  ^", "  v", " <X");
@@ -3087,7 +3155,7 @@ void visual_editor(const char* filename) {
                 }
             }
             else if (key >= 32 && key <= 126) {
-                if (lineLen >= TERM_COLS) {
+                if (lineLen >= MAX_LINE_LEN) {
                     clearEditorCursor();
                     long currentFileIndex = windowStartLineFileIdx + activeRowIndex;
                     virtual_flush_row_to_temp(activeRowIndex, currentFileIndex);
@@ -3121,38 +3189,42 @@ void visual_editor(const char* filename) {
                     memmove(&terminalBuffer[activeRowIndex][cursorX + 1], &terminalBuffer[activeRowIndex][cursorX], lineLen - cursorX + 1);
                     terminalBuffer[activeRowIndex][cursorX] = key;
                     cursorX++;
+	            if ((cursorX - scrollOffsetX) >= TERM_COLS) {
+                        scrollOffsetX++;
+                    }
                     redrawTerminal();
                 }
             }
         }
+        // ==========================================
+        // ROUTER 2: VISUAL COMMAND NAVIGATION MODE
+        // ==========================================
         else if (editorModeNav) {
             long absoluteLineNum = windowStartLineFileIdx + activeRowIndex;
 
+            // ----------------------------------------------------
+            // SECTION A: DOUBLE-KEY SEQUENCE MATCHER TRACKERS
+            // ----------------------------------------------------
             if (dPressed) {
                 dPressed = false;
                 clearEditorCursor();
-
                 if (key == 'd' || key == 'D') {
-                    if (virtual_delete_line(absoluteLineNum)) {
+                    strcpy(yankBuffer, terminalBuffer[activeRowIndex]);
 
+                    if (virtual_delete_line(absoluteLineNum)) {
                         for (int r = activeRowIndex; r < TOTAL_ROWS - 1; r++) {
                             strcpy(terminalBuffer[r], terminalBuffer[r + 1]);
                         }
-
                         long tailFileIdx = windowStartLineFileIdx + TOTAL_ROWS - 1;
                         if (tailFileIdx < virtualFileTotalLines) {
                             process_swap_line(tailFileIdx, terminalBuffer[TOTAL_ROWS - 1], false);
                         } else {
                             terminalBuffer[TOTAL_ROWS - 1][0] = '\0';
                         }
-
                         if (activeRowIndex >= virtualFileTotalLines && activeRowIndex > 0) {
                             activeRowIndex--;
-                            if (scrollOffset > 0 && (activeRowIndex - scrollOffset) < 0) {
-                                scrollOffset--;
-                            }
+                            if (scrollOffset > 0 && (activeRowIndex - scrollOffset) < 0) scrollOffset--;
                         }
-
                         lineLen = strlen(terminalBuffer[activeRowIndex]);
                         if (cursorX > lineLen) cursorX = lineLen;
 
@@ -3162,22 +3234,63 @@ void visual_editor(const char* filename) {
                 }
             }
 
+            if (yPressed) {
+                yPressed = false;
+                if (key == 'y' || key == 'Y') {
+                    strcpy(yankBuffer, terminalBuffer[activeRowIndex]);
+                    continue;
+                }
+            }
+
+            // ----------------------------------------------------
+            // SECTION B: STANDARD COMMAND SELECT ROUTERS
+            // ----------------------------------------------------
             switch (key) {
-                case 'I':
-                case 'i':
+                case 'I': case 'i':
                     insertMode = true;
                     break;
-                case 'A':
-                case 'a':
+                case 'A': case 'a':
                     clearEditorCursor();
                     cursorX = lineLen;
                     insertMode = true;
                     break;
-                case 'd': // First 'd' caught: Flag sequence arming status state tracker
+		case 'd': case 'D': // Arm deletion sequence tracker
                     dPressed = true;
                     continue;
+		case 'y': case 'Y': // Arm yank/copy sequence tracker
+                    yPressed = true;
+                    continue;
 
-                case 'o': // Vim lowercase 'o': Open fresh blank line *below* current line
+                case 'p': case 'P': // Vim Paste Operator (Inserts yanked row BELOW current row)
+                    if (yankBuffer[0] != '\0' || strlen(yankBuffer) == 0) {
+                        clearEditorCursor();
+                        virtual_flush_row_to_temp(activeRowIndex, absoluteLineNum);
+
+                        if (virtual_insert_blank_line(absoluteLineNum + 1)) {
+                            if (activeRowIndex < TOTAL_ROWS - 1) {
+                                for (int r = TOTAL_ROWS - 1; r > activeRowIndex + 1; r--) {
+                                    strcpy(terminalBuffer[r], terminalBuffer[r - 1]);
+                                }
+                                activeRowIndex++;
+                                strcpy(terminalBuffer[activeRowIndex], yankBuffer);
+                                if ((activeRowIndex - scrollOffset) >= TERM_ROWS) scrollOffset++;
+                            } else {
+                                windowStartLineFileIdx++;
+                                for (int r = 0; r < TOTAL_ROWS - 1; r++) {
+                                    strcpy(terminalBuffer[r], terminalBuffer[r + 1]);
+                                }
+                                strcpy(terminalBuffer[TOTAL_ROWS - 1], yankBuffer);
+                            }
+
+                            virtual_flush_row_to_temp(activeRowIndex, absoluteLineNum + 1);
+
+                            cursorX = 0;
+                            redrawTerminal();
+                        }
+                    }
+                    break;
+
+		case 'o': case 'O': // Open fresh line below
                     clearEditorCursor();
                     virtual_flush_row_to_temp(activeRowIndex, absoluteLineNum);
                     if (virtual_insert_blank_line(absoluteLineNum + 1)) {
@@ -3199,23 +3312,56 @@ void visual_editor(const char* filename) {
                         insertMode = true;
                         redrawTerminal();
                     }
-                    continue;
-
-                case 'O': // Vim uppercase 'O': Open fresh blank line *above* current line
+                    break;
+                // ==========================================
+                // VIM SINGLE CHAR DELETE ('x') OPERATOR
+                // ==========================================
+                case 'x': case 'X':
                     clearEditorCursor();
-                    virtual_flush_row_to_temp(activeRowIndex, absoluteLineNum);
-                    if (virtual_insert_blank_line(absoluteLineNum)) {
-                        for (int r = TOTAL_ROWS - 1; r > activeRowIndex; r--) {
-                            strcpy(terminalBuffer[r], terminalBuffer[r - 1]);
+                    if (cursorX < lineLen) {
+                        handleViKeys(TKN_F5, true);
+                    }
+                    break;
+
+                // ==========================================
+                // VIM PAGE DOWN OPERATOR ('F' / Ctrl+D equivalent)
+                // ==========================================
+                case 'f': case 'F':
+                    if (windowStartLineFileIdx + TOTAL_ROWS + TERM_ROWS < virtualFileTotalLines) {
+                        clearEditorCursor();
+
+                        windowStartLineFileIdx += TERM_ROWS;
+
+                        for (int r = 0; r < TOTAL_ROWS; r++) {
+                            process_swap_line(windowStartLineFileIdx + r, terminalBuffer[r], false);
                         }
-                        terminalBuffer[activeRowIndex][0] = '\0';
+
                         cursorX = 0;
-                        insertMode = true;
                         redrawTerminal();
                     }
-                    continue;
+                    break;
 
-                case ':': case 'W': case 'w':
+                // ==========================================
+                // VIM PAGE UP OPERATOR ('b' / 'B')
+                // ==========================================
+                case 'b': case 'B':
+                    if (windowStartLineFileIdx > 0) {
+                        clearEditorCursor();
+
+                        windowStartLineFileIdx -= TERM_ROWS;
+                        if (windowStartLineFileIdx < 0) windowStartLineFileIdx = 0;
+
+                        for (int r = 0; r < TOTAL_ROWS; r++) {
+                            process_swap_line(windowStartLineFileIdx + r, terminalBuffer[r], false);
+                        }
+
+                        cursorX = 0;
+                        redrawTerminal();
+                    }
+                    break;
+
+                case ':':
+                case 'W': case 'w':
                 case 'Q': case 'q':
                     clearEditorCursor();
                     editorModeNav = false;
@@ -3225,6 +3371,7 @@ void visual_editor(const char* filename) {
             }
             handleViKeys(key, false);
         }
+
         // ==========================================
         // ROUTER 3: DISK MANAGEMENT / SAVE OPERATIONS
         // ==========================================
@@ -3233,16 +3380,20 @@ void visual_editor(const char* filename) {
                 case TKN_F1: // " SAVE"
                     if (openFilename[0] != '\0' && sdAvailable()) {
                         for (int r = 0; r < TOTAL_ROWS; r++) {
-                            virtual_flush_row_to_temp(r, windowStartLineFileIdx + r);
+                            process_swap_line(windowStartLineFileIdx + r, terminalBuffer[r], true);
                         }
 
                         SD.remove(openFilename);
-
                         File src = SD.open("/.swap.tmp", FILE_READ);
                         File dest = SD.open(openFilename, FILE_WRITE);
                         if (src && dest) {
-                            while (src.available()) dest.write(src.read());
+                            uint8_t ioBuf[256];
+                            while (src.available()) {
+                                size_t len = src.read(ioBuf, sizeof(ioBuf));
+                                dest.write(ioBuf, len);
+                            }
                             src.close(); dest.close();
+                            playBeep(1000, 40);
                         }
                     }
                     editorModeNav = true;
@@ -3253,18 +3404,22 @@ void visual_editor(const char* filename) {
                     insertMode = false;
                     editorModeNav = true;
 		    cleanupEditorWorkspace();
+                    scrollOffsetX = 0;
                     visual_editor(filename);
                     kernelAPI.clearFKeys();
                     kernelAPI.clear();
                     return;
+
                 case TKN_F3: // "ESC" (returns to Nav)
                     editorModeNav = true;
                     redrawTerminal();
                     break;
+
                 case TKN_F4: // "QUIT"
                     editing = false;
                     clearEditorCursor();
                     break;
+
                 default:
                     break;
             }
@@ -3281,6 +3436,7 @@ void visual_editor(const char* filename) {
         drawEditorCursor();
     }
     cleanupEditorWorkspace();
+    scrollOffsetX = 0;
     kernelAPI.clearFKeys();
     kernelAPI.clear();
 }
