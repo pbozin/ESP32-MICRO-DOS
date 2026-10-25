@@ -3052,8 +3052,6 @@ void visual_editor(const char* filename) {
     bool editorModeNav = true;
     bool insertMode = false;
 
-    kernelAPI.clear();
-
     if (filename[0] != '\0' && sdAvailable()) {
         strncpy(openFilename, filename, 63);
 
@@ -3083,11 +3081,15 @@ void visual_editor(const char* filename) {
             swapFile.close();
         }
 
+        kernelAPI.clear();
         windowStartLineFileIdx = 0;
         for (int r = 0; r < TOTAL_ROWS; r++) {
             process_swap_line(r, terminalBuffer[r], false);
         }
+    } else {
+        kernelAPI.clear();
     }
+
 
     activeRowIndex = 0;
     scrollOffset = 0;
@@ -3324,19 +3326,28 @@ void visual_editor(const char* filename) {
                     break;
 
                 // ==========================================
-                // VIM PAGE DOWN OPERATOR ('F' / Ctrl+D equivalent)
+                // VIM PAGE DOWN OPERATOR ('f' / 'F')
                 // ==========================================
                 case 'f': case 'F':
-                    if (windowStartLineFileIdx + TOTAL_ROWS + TERM_ROWS < virtualFileTotalLines) {
+                    if (windowStartLineFileIdx + TERM_ROWS < virtualFileTotalLines) {
                         clearEditorCursor();
 
                         windowStartLineFileIdx += TERM_ROWS;
 
                         for (int r = 0; r < TOTAL_ROWS; r++) {
-                            process_swap_line(windowStartLineFileIdx + r, terminalBuffer[r], false);
+                            long targetLine = windowStartLineFileIdx + r;
+
+                            if (targetLine < virtualFileTotalLines) {
+                                process_swap_line(targetLine, terminalBuffer[r], false);
+                            } else {
+                                terminalBuffer[r][0] = '\0';
+                            }
                         }
 
+                        activeRowIndex = 0;
+                        scrollOffset = 0;
                         cursorX = 0;
+                        scrollOffsetX = 0;
                         redrawTerminal();
                     }
                     break;
@@ -3352,10 +3363,19 @@ void visual_editor(const char* filename) {
                         if (windowStartLineFileIdx < 0) windowStartLineFileIdx = 0;
 
                         for (int r = 0; r < TOTAL_ROWS; r++) {
-                            process_swap_line(windowStartLineFileIdx + r, terminalBuffer[r], false);
+                            long targetLine = windowStartLineFileIdx + r;
+
+                            if (targetLine < virtualFileTotalLines) {
+                                process_swap_line(targetLine, terminalBuffer[r], false);
+                            } else {
+                                terminalBuffer[r][0] = '\0';
+                            }
                         }
 
+                        activeRowIndex = 0;
+                        scrollOffset = 0;
                         cursorX = 0;
+                        scrollOffsetX = 0;
                         redrawTerminal();
                     }
                     break;
@@ -4179,6 +4199,7 @@ void processCommand(const char* rawCmd) {
       }
       trimCString(targetFile);
     }
+    terminalPrintln("STARTING VI...");
     visual_editor(targetFile);
     return;
   }
