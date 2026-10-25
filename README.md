@@ -86,6 +86,7 @@ Run these commands directly inside the interactive touch console interface:
 | `EXEC <binary>`| Native | Commands the dynamic linker to resolve, relocate, inject, and launch native precompiled compiled applications. |
 | `DUMP / DUMPS` | Forensic | Emulates the classic hex-dump inspector, generating binary matrix hexadecimal tracks or readable printable ASCII sweeps. |
 | `IMVIEW <file>, x, y`| Multimedia | Displays 16bit or 4bit color JPEG file from the micro SD card straight onto display buffers. |
+| `VI [file]`| Storage | Launches vi-like full-screen editor capable of editing large files. |
 
 ---
 
