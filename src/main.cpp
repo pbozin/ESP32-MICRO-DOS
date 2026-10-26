@@ -4369,7 +4369,7 @@ void processCommand(const char* rawCmd) {
           }
 
           char tempPrompt[PROMPT_SIZE] = "";
-          strncpy(tempPrompt, (String(fileLineCount + 1) + "% ").c_str(), PROMPT_SIZE);
+          strncpy(tempPrompt, (String(insertionPoint + 1) + "% ").c_str(), PROMPT_SIZE);
           strncpy(currentPrompt, tempPrompt, PROMPT_SIZE - 1);
           currentPrompt[PROMPT_SIZE - 1] = '\0';
 	  terminalPrint(currentPrompt);
@@ -4415,7 +4415,7 @@ void processCommand(const char* rawCmd) {
             fileLineCount++;
             insertionPoint++;
 
-            strncpy(tempPrompt, (String(insertionPoint + 1) + "+ ").c_str(), PROMPT_SIZE);
+            strncpy(tempPrompt, (String(insertionPoint + 1) + "% ").c_str(), PROMPT_SIZE);
             strncpy(currentPrompt, tempPrompt, PROMPT_SIZE - 1);
             currentPrompt[PROMPT_SIZE - 1] = '\0';
             
