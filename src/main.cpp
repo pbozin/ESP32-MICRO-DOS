@@ -4228,7 +4228,8 @@ void processCommand(const char* rawCmd) {
 
       terminalPrint("EDITING: ");
       terminalPrintln(fixedFilename);
-      terminalPrintln("TYPE H FOR HEP, L TO LIST, A TO APPEND,");
+      terminalPrintln("TYPE H FOR HELP, L TO LIST, A TO APPEND,");
+      terminalPrintln("O TO OPEN NEW LINE BELOW THE LINE NUMBER,");
       terminalPrintln("E TO EDIT, S TO SAVE & EXIT, Q TO QUIT.");
 
       #define MAX_EDIT_LINES 250
@@ -4356,6 +4357,73 @@ void processCommand(const char* rawCmd) {
           }
 	  continue;
         }
+	else if (userEntry.substring(0, 2).equalsIgnoreCase("O ")) {
+          terminalPrintln("INSERTING NEW LINE. ENTER BLANK LINE TO EXIT.");
+
+          int insertionPoint = 0;
+          int spIdx = userEntry.indexOf(' ');
+          if (spIdx != -1) {
+            String args = userEntry.substring(spIdx + 1);
+            args.trim();
+            insertionPoint = args.toInt();
+          }
+
+          char tempPrompt[PROMPT_SIZE] = "";
+          strncpy(tempPrompt, (String(fileLineCount + 1) + "% ").c_str(), PROMPT_SIZE);
+          strncpy(currentPrompt, tempPrompt, PROMPT_SIZE - 1);
+          currentPrompt[PROMPT_SIZE - 1] = '\0';
+	  terminalPrint(currentPrompt);
+	  terminalPrint(cursor);
+
+          while (fileLineCount < MAX_EDIT_LINES) {
+            if (insertionPoint > fileLineCount) {
+                insertionPoint = fileLineCount;
+            }
+
+            if (activeRowIndex >= TERM_ROWS) scrollOffset = activeRowIndex - TERM_ROWS + 1;
+            
+            String appendLine = "";
+            memset(inputBuffer, 0, INPUT_BUF_SIZE);
+            bool readingLine = true;
+            
+            while (readingLine) {
+              char pressedKey = getKeyPress(true);
+              if (pressedKey > 0) {
+                handleKeyPress(pressedKey);
+                if (pressedKey == '\n') {
+                  readingLine = false;
+                  appendLine = String(inputBuffer);
+                  memset(inputBuffer, 0, INPUT_BUF_SIZE);
+                }
+              }
+              delay(10);
+            }
+
+            appendLine.trim();
+            
+            if (appendLine.length() == 0) {
+                strncpy(currentPrompt, "ED> ", PROMPT_SIZE - 1);
+                currentPrompt[PROMPT_SIZE - 1] = '\0';
+                break;
+            }
+
+            for (int i = fileLineCount; i > insertionPoint; i--) {
+                lines[i] = lines[i - 1];
+            }
+            
+            lines[insertionPoint] = appendLine;
+            fileLineCount++;
+            insertionPoint++;
+
+            strncpy(tempPrompt, (String(insertionPoint + 1) + "+ ").c_str(), PROMPT_SIZE);
+            strncpy(currentPrompt, tempPrompt, PROMPT_SIZE - 1);
+            currentPrompt[PROMPT_SIZE - 1] = '\0';
+            
+            terminalPrint(currentPrompt);
+            terminalPrint(cursor);
+          }
+          continue;
+	}
         else if (userEntry.equalsIgnoreCase("S")) {
           if (sdAvailable()) {
             SD.remove(fixedFilename);
@@ -4429,7 +4497,8 @@ void processCommand(const char* rawCmd) {
 	  continue;
         }
         else if (userEntry.equalsIgnoreCase("H")) {
-          terminalPrintln("TYPE H FOR HEP, L TO LIST, A TO APPEND,");
+          terminalPrintln("TYPE H FOR HELP, L TO LIST, A TO APPEND,");
+          terminalPrintln("O TO OPEN NEW LINE BELOW THE LINE NUMBER,");
           terminalPrintln("E TO EDIT, S TO SAVE & EXIT, Q TO QUIT.");
 	  continue;
 	}
